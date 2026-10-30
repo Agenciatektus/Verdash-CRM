@@ -66,6 +66,7 @@ import {
   type ErroDaEntregaDeAviso,
   type StatusDaEntregaDeAviso,
 } from "./vocabulario-do-aviso";
+import { rpc } from "@/lib/supabase/rpc";
 
 /** Os dois eventos deste consumidor — os MESMOS literais de `gatilho-caso.ts`. */
 export const EVENTO_CASO_ABERTO = "ai.case_opened";
@@ -884,10 +885,10 @@ export function createSupabaseAvisoDb(admin: SupabaseClient): AvisoDb {
     },
 
     async registraJidDoAviso(orgId, jid) {
-      const { error } = await admin.rpc("fn_registrar_jid_do_aviso" as never, {
+      const { error } = await rpc(admin, "fn_registrar_jid_do_aviso", {
         p_org: orgId,
         p_jid: jid,
-      } as never);
+      });
       if (error) throw new Error(error.message);
     },
 

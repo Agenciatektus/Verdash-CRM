@@ -32,6 +32,7 @@ import { audit } from "@/lib/audit";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   // teto e sobrou trabalho para a próxima.
   const total = { vencidas: 0, orfas: 0, expurgadas: 0, tandas: 0 };
   for (let i = 0; i < MAX_TANDAS; i++) {
-    const { data, error } = await admin.rpc("fn_enfileirar_midia_vencida" as never, { p_limite: TANDA } as never);
+    const { data, error } = await rpc(admin, "fn_enfileirar_midia_vencida", { p_limite: TANDA });
     if (error) {
       logger.error("[media-retention] a função falhou", { request_id: requestId, error: error.message });
       void audit({

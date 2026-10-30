@@ -29,11 +29,17 @@ import { marcadoresEscolhidos, modoDeEtiqueta } from "@/lib/inbox/marcador-da-co
 import { createClient } from "@/lib/supabase/server";
 import { ehTipoDeCanal, type TipoDeCanal } from "@/lib/inbox/tipo-de-canal";
 import { lerFiltrosDoAtendimento, parametrosDaContagem } from "@/lib/inbox/filtros-do-atendimento";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
 /** Um par pronto para virar predicado: coluna e valor. */
 export type FiltroDeContagem = readonly [coluna: string, valor: string | boolean];
+
+// O Map perde a correlação chave→valor da tupla; só texto vale como filtro.
+function textoOuNulo(v: unknown): string | null {
+  return typeof v === "string" ? v : null;
+}
 
 /**
  * Os filtros AUXILIARES que a lista aplicou e que a contagem tem de aplicar junto.
@@ -157,12 +163,12 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const automaticoDaOrg = await orgTemAutomatico(supabase, org);
 
-  const { data, error } = await supabase.rpc("fn_contagens_da_caixa" as never, {
+  const { data, error } = await rpc(supabase, "fn_contagens_da_caixa", {
     p_organizacao: org,
     p_comandos_da_fila: comandosDaFila(automaticoDaOrg),
     p_terminais: [...CONVERSATION_TERMINAL_STATUSES],
-    p_canal: auxiliares.get("channel_session_id") ?? null,
-    p_entrada: auxiliares.get("instagram_entrada") ?? null,
+    p_canal: textoOuNulo(auxiliares.get("channel_session_id")),
+    p_entrada: textoOuNulo(auxiliares.get("instagram_entrada")),
     p_so_nao_lidas: soNaoLidas,
     p_marcadores: marcadores,
     p_modo: modo,
@@ -170,7 +176,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     p_canal_tipo: canalTipo,
     p_grupos: contagemGrupos(sp),
     ...parametrosDaContagem(atendimento),
-  } as never);
+  });
   if (error) {
     return fail("internal_error", error.message, 500, { requestId });
   }

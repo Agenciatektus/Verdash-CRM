@@ -79,6 +79,7 @@ import {
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -255,7 +256,7 @@ async function handle(req: NextRequest): Promise<Response> {
       if (novos.length < casam.length) pular("ja_emitido", casam.length - novos.length);
 
       for (const candidato of novos) {
-        const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+        const { error: erroEvento } = await rpc(admin, "emit_event", {
           p_event_type: GATILHO_DE_DATA_DO_FUNIL,
           p_entity_kind: "crm_lead",
           p_entity_id: candidato.id,

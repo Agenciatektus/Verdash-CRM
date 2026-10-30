@@ -30,6 +30,7 @@ import { logger } from "@/lib/logger";
 import { findContactByExternalId, findLgpdRequest } from "@/lib/lgpd/repository";
 import { cascadeRedactContact } from "@/lib/lgpd/redact-cascade";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 const MAX_ATTEMPTS = 3;
 const TENANT_BATCH_SIZE = 100;
@@ -266,7 +267,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
         .eq("id", requestId);
 
       // Domain event — applied (consumed by SLA monitor / dashboards).
-      await admin.rpc("emit_event" as never, {
+      await rpc(admin, "emit_event", {
         p_event_type: "lgpd.redact_applied",
         p_entity_kind: "lgpd_request",
         p_entity_id: requestId,
@@ -278,7 +279,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
         },
         p_metadata: { source: "lgpd-redact-worker" },
         p_organization_id: orgId,
-      } as never);
+      });
 
       // Request-level audit (cascade RPC already wrote per-contact lgpd.redact_executed).
       await audit({
@@ -410,7 +411,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
         .eq("organization_id", orgId)
         .eq("id", requestId);
 
-      await admin.rpc("emit_event" as never, {
+      await rpc(admin, "emit_event", {
         p_event_type: "lgpd.redact_applied",
         p_entity_kind: "lgpd_request",
         p_entity_id: requestId,
@@ -423,7 +424,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
         },
         p_metadata: { source: "lgpd-redact-worker", emergency },
         p_organization_id: orgId,
-      } as never);
+      });
 
       await audit({
         action: "lgpd.tenant_redacted",
@@ -480,7 +481,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
       .eq("id", requestId);
 
     try {
-      await admin.rpc("emit_event" as never, {
+      await rpc(admin, "emit_event", {
         p_event_type: "lgpd.redact_failed",
         p_entity_kind: "lgpd_request",
         p_entity_id: requestId,
@@ -492,7 +493,7 @@ export async function processLgpdRedact(event: EventRow): Promise<HandlerResult>
         },
         p_metadata: { source: "lgpd-redact-worker" },
         p_organization_id: orgId,
-      } as never);
+      });
     } catch {
       // best-effort
     }

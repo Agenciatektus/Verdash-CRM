@@ -10,6 +10,7 @@ import {
   validaCamposExigidos,
 } from "@/lib/leads/campos-exigidos";
 import type { Transicao } from "@/lib/agenda/laco";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * Espelha a transição de um agendamento (`calendar_appointments.status`) no
@@ -232,7 +233,7 @@ export async function moverLeadParaEtapaDeAgendamento(
   // Mesmo evento que `agent-stage-sync.ts` e `handoff-stage-move.ts` emitem ao
   // mover o card — para que regras de automação e follow-up que escutam
   // `lead.stage_changed` reajam igual, seja qual for a mão que moveu o card.
-  const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+  const { error: erroEvento } = await rpc(admin, "emit_event", {
     p_event_type: "lead.stage_changed",
     p_entity_kind: "crm_lead",
     p_entity_id: leadRow.id,
@@ -245,7 +246,7 @@ export async function moverLeadParaEtapaDeAgendamento(
     },
     p_metadata: { actor_kind: "system", source: "appointment-stage-move", transicao: input.transicao },
     p_organization_id: input.organizationId,
-  } as never);
+  });
   if (erroEvento) {
     logger.error("[appointment-stage-move] emit_event lead.stage_changed falhou", {
       lead_id: leadRow.id,

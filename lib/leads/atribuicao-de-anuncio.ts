@@ -21,6 +21,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 export type PlataformaDeAnuncio = "meta_ads" | "google_ads";
 
@@ -78,7 +79,7 @@ export async function estamparAtribuicaoDoContato(
   contactId: string,
   atribuicao: AtribuicaoDeAnuncio,
 ): Promise<void> {
-  const { error } = await admin.rpc("fn_estampar_atribuicao_de_anuncio" as never, {
+  const { error } = await rpc(admin, "fn_estampar_atribuicao_de_anuncio", {
     p_org: organizationId,
     p_contact: contactId,
     p_platform: atribuicao.plataforma,
@@ -92,7 +93,7 @@ export async function estamparAtribuicaoDoContato(
       ad_raw: atribuicao.bruto,
       ad_captured_at: new Date().toISOString(),
     },
-  } as never);
+  });
 
   if (error) {
     // `logger.error`, não `console.error`: o DoD proíbe console em código

@@ -13,6 +13,7 @@ import type { Actor } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SerializedStep } from "./serialize";
+import { rpc } from "@/lib/supabase/rpc";
 
 export type RunStatus = "completed" | "failed" | "aborted" | "handoff";
 
@@ -71,7 +72,7 @@ export async function finalizeRun(input: FinalizeRunInput): Promise<void> {
         ? "ai_agent.handoff_triggered"
         : "ai_agent.run_failed";
 
-  await admin.rpc("emit_event" as never, {
+  await rpc(admin, "emit_event", {
     p_event_type: eventType,
     p_entity_kind: "ai_agent_run",
     p_entity_id: input.runId,
@@ -88,7 +89,7 @@ export async function finalizeRun(input: FinalizeRunInput): Promise<void> {
     },
     p_metadata: { source: "agent-runtime" },
     p_organization_id: input.organizationId,
-  } as never);
+  });
 
   // Audit log (fire-and-forget).
   const auditAction =

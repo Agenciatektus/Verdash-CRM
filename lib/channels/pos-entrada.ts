@@ -58,6 +58,7 @@ import { ehContatoDoNumeroInterno } from "@/lib/escalacao/numero-interno-de-avis
 import { acelerarFollowupDoInbound, drenarEventosDoInbound } from "@/lib/dev/kick-local-pipeline";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { casarCampanha, lerCampanhas } from "@/lib/ai/elegibilidade/campanha";
+import { rpc } from "@/lib/supabase/rpc";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -535,7 +536,7 @@ async function pedirDespachoDoAgente(admin: Admin, entrada: EntradaDeMensagem): 
     });
   }
 
-  const { error } = await admin.rpc("emit_event" as never, {
+  const { error } = await rpc(admin, "emit_event", {
     p_event_type: "ai_agent.dispatch_requested",
     p_entity_kind: "message",
     p_entity_id: entrada.messageId,
@@ -548,7 +549,7 @@ async function pedirDespachoDoAgente(admin: Admin, entrada: EntradaDeMensagem): 
     },
     p_metadata: { source: entrada.origem, request_id: entrada.requestId },
     p_organization_id: entrada.organizationId,
-  } as never);
+  });
 
   if (error) {
     logger.warn("pos-entrada: emit ai_agent.dispatch_requested falhou", {

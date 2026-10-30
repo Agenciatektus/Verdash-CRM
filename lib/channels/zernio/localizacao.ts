@@ -24,6 +24,7 @@ import { lerLocalizacao, type Localizacao } from "@/lib/messaging/localizacao";
 
 import { resolveZernioCreds, type ZernioCredentials } from "./credentials";
 import type { ZernioInboundMessage } from "./webhook";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * O texto que o provedor põe no lugar do pino: `📍 Location` para a localização
@@ -161,8 +162,9 @@ export async function pedirNovaBuscaDoPino(
   messageId: string,
   msg: ZernioInboundMessage,
 ): Promise<void> {
-  const { error } = await admin.rpc(
-    "emit_event" as never,
+  const { error } = await rpc(
+    admin,
+    "emit_event",
     {
       p_event_type: EVENTO_NOVA_BUSCA_DO_PINO,
       p_entity_kind: "message",
@@ -175,7 +177,7 @@ export async function pedirNovaBuscaDoPino(
       },
       p_metadata: { source: "zernio_webhook" },
       p_organization_id: organizationId,
-    } as never,
+    },
   );
   if (error) {
     logger.warn("zernio: não consegui pedir a nova busca do pino", { organization_id: organizationId, detail: error.message });

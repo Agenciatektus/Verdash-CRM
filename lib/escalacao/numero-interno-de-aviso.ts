@@ -47,6 +47,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * A identidade que o ingestor já resolveu do chat.
@@ -250,9 +251,9 @@ export async function registrarMensagemIgnorada(
     sessionId: contexto.sessionId,
   });
   try {
-    const { error } = await db.rpc("fn_contar_mensagem_ignorada" as never, {
+    const { error } = await rpc(db, "fn_contar_mensagem_ignorada", {
       p_org: organizationId,
-    } as never);
+    });
     if (error) {
       logger.warn("[aviso-interno] contador de mensagens ignoradas não avançou", {
         organizationId,

@@ -52,6 +52,7 @@ import {
 import { CHAVES_DO_CLIMA, type MotorDoClima } from "@/lib/ai/decisao/metadados-do-clima";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { normalizarIdioma, type Idioma } from "@/lib/i18n/idiomas";
+import { rpc } from "@/lib/supabase/rpc";
 
 export type HandoffReason =
   | "requested_human"
@@ -378,7 +379,7 @@ export async function triggerHandoff(
     }
 
     // Step 3 — durable event for any downstream consumer.
-    const { error: emitErr } = await admin.rpc("emit_event" as never, {
+    const { error: emitErr } = await rpc(admin, "emit_event", {
       p_event_type: "ai.handoff_triggered",
       p_entity_kind: "conversation",
       p_entity_id: input.conversationId,
@@ -391,7 +392,7 @@ export async function triggerHandoff(
       },
       p_metadata: { source: "handoff-orchestrator" },
       p_organization_id: input.organizationId,
-    } as never);
+    });
     if (emitErr) {
       logger.warn("[handoff-orchestrator] emit_event failed", {
         conversation_id: input.conversationId,
@@ -652,11 +653,11 @@ async function encerrarConducaoDaConversa(
     if (error) throw new Error(error.message);
     const conducao = data as { id: string } | null;
     if (conducao === null) return;
-    const { error: rpcErr } = await admin.rpc("fn_cadencia_encerrar_conducao" as never, {
+    const { error: rpcErr } = await rpc(admin, "fn_cadencia_encerrar_conducao", {
       p_org: organizationId,
       p_conducao: conducao.id,
       p_motivo: "handoff",
-    } as never);
+    });
     if (rpcErr) throw new Error(rpcErr.message);
   } catch (err) {
     logger.warn("[handoff-orchestrator] condução da cadência não encerrada", {

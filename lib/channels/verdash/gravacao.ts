@@ -10,6 +10,7 @@ import { mensagemJaRecebida } from "@/lib/messaging/mensagem-ja-recebida";
 import { logger } from "@/lib/logger";
 
 import type { VerdashInboundMessage } from "./webhook";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * Carimba a conversa com o que acabou de chegar.
@@ -28,7 +29,7 @@ export async function marcarConversa(
   conversationId: string,
   msg: VerdashInboundMessage,
 ): Promise<void> {
-  const { error } = await admin.rpc("fn_mark_conversation_message" as never, {
+  const { error } = await rpc(admin, "fn_mark_conversation_message", {
     p_conv: conversationId,
     p_direction: msg.direction,
     p_preview: (msg.text ?? rotuloDoAnexo(msg)).slice(0, 200),
@@ -36,7 +37,7 @@ export async function marcarConversa(
     // reentrega atrasada as duas diferem por horas, e a ordem da lista e o
     // cálculo da janela dependem da primeira.
     p_at: msg.sentAt ?? new Date().toISOString(),
-  } as never);
+  });
   if (error) {
     // Não derruba a ingestão: a mensagem já está gravada, e perder o carimbo é
     // ruim — mas MUITO melhor que devolver 500 e fazer o FZAP reenviar tudo.
@@ -82,14 +83,14 @@ export async function pedirPersistenciaDaMidia(
   conversationId: string,
   messageId: string,
 ): Promise<void> {
-  const { error } = await admin.rpc("emit_event" as never, {
+  const { error } = await rpc(admin, "emit_event", {
     p_event_type: "media.persist_requested",
     p_entity_kind: "message",
     p_entity_id: messageId,
     p_payload: { message_id: messageId, conversation_id: conversationId },
     p_metadata: { source: "verdash_webhook" },
     p_organization_id: organizationId,
-  } as never);
+  });
   if (error) {
     logger.warn("[verdash] emit media.persist_requested falhou", {
       messageId,

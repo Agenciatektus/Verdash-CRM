@@ -14,6 +14,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 interface FonteRow {
   id: string;
@@ -75,7 +76,7 @@ export async function enfileirarTodosOsMateriais(p: {
 
   let emitidos = 0;
   for (const f of [...prioridade1, ...prioridade2]) {
-    const { error: emitErr } = await p.admin.rpc("emit_event" as never, {
+    const { error: emitErr } = await rpc(p.admin, "emit_event", {
       p_event_type: "knowledge_source.updated",
       p_entity_kind: "ai_knowledge_source",
       p_entity_id: f.id,
@@ -86,7 +87,7 @@ export async function enfileirarTodosOsMateriais(p: {
         triggered_by: p.motivo,
       },
       p_organization_id: p.organizationId,
-    } as never);
+    });
     if (emitErr) {
       // Contado na resposta (`emitidos` < `total`) e registrado aqui: a fonte
       // que não entrou na fila é a que o dono vai achar que "não preparou".

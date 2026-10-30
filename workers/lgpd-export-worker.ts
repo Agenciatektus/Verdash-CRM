@@ -62,6 +62,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { marcaDaSaida } from "@/lib/branding/saida";
 import { perfilDaOrganizacao } from "@/lib/legal/perfil-do-pais";
 import { partesDoArquivoDoTitular } from "@/lib/lgpd/copia-do-titular";
+import { rpc } from "@/lib/supabase/rpc";
 
 const MAX_ATTEMPTS = 3;
 const BUCKET = "lgpd-exports";
@@ -488,7 +489,7 @@ export async function processLgpdExport(event: EventRow): Promise<HandlerResult>
       .eq("id", requestId);
 
     // 11. Domain events.
-    await admin.rpc("emit_event" as never, {
+    await rpc(admin, "emit_event", {
       p_event_type: "lgpd.export_generated",
       p_entity_kind: "lgpd_request",
       p_entity_id: requestId,
@@ -500,9 +501,9 @@ export async function processLgpdExport(event: EventRow): Promise<HandlerResult>
       },
       p_metadata: { source: "lgpd-export-worker" },
       p_organization_id: orgId,
-    } as never);
+    });
 
-    await admin.rpc("emit_event" as never, {
+    await rpc(admin, "emit_event", {
       p_event_type: "lgpd.export_delivered",
       p_entity_kind: "lgpd_request",
       p_entity_id: requestId,
@@ -514,7 +515,7 @@ export async function processLgpdExport(event: EventRow): Promise<HandlerResult>
       },
       p_metadata: { source: "lgpd-export-worker" },
       p_organization_id: orgId,
-    } as never);
+    });
 
     // 12. Audit (sanitized — no plaintext email anywhere).
     await audit({

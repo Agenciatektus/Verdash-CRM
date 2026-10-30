@@ -39,6 +39,7 @@ import {
   extrairTextoDoArquivo,
   resolverExtensao,
 } from "@/lib/ai/rag/ingest/documento";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -216,13 +217,13 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const ksId = (ks as { id: string }).id;
 
-  const { error: emitErr } = await admin.rpc("emit_event" as never, {
+  const { error: emitErr } = await rpc(admin, "emit_event", {
     p_event_type: "knowledge_source.updated",
     p_entity_kind: "ai_knowledge_source",
     p_entity_id: ksId,
     p_payload: { knowledge_source_id: ksId, agent_id: agentId, source_type: "documento" },
     p_organization_id: activeOrg.orgId,
-  } as never);
+  });
 
   if (emitErr) {
     console.warn("[conhecimento-upload] emit_event falhou (não bloqueia):", emitErr.message);

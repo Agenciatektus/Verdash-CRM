@@ -136,6 +136,7 @@ import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
 import { resolveActiveLeadForContact } from "@/lib/leads/active-lead";
 import { stageChangeReason } from "@/lib/leads/activity-emitter";
 import { podeOperarNoFunil } from "./escopo-de-funil";
+import { rpc } from "@/lib/supabase/rpc";
 
 export interface ResultadoDaSincronizacao {
   moveu: boolean;
@@ -445,7 +446,7 @@ export async function sincronizaEstagioDoAgente(
   // Fire-and-forget com o erro LIDO, no mesmo espírito do resto do arquivo: a
   // mutação já aconteceu e não se desfaz por causa do rastro, mas rastro
   // perdido vira linha de log, nunca silêncio.
-  const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+  const { error: erroEvento } = await rpc(admin, "emit_event", {
     p_event_type: "lead.stage_changed",
     p_entity_kind: "crm_lead",
     p_entity_id: lead.id,

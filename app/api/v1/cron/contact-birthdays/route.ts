@@ -39,6 +39,7 @@ import { audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autorizaCron } from "@/lib/auth/cron-auth";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -185,7 +186,7 @@ async function handle(req: NextRequest): Promise<Response> {
         pular("ja_emitido_hoje");
         continue;
       }
-      const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+      const { error: erroEvento } = await rpc(admin, "emit_event", {
         p_event_type: "contact.birthday",
         p_entity_kind: "contact",
         p_entity_id: id,

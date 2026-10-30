@@ -51,6 +51,7 @@ import {
   type ZernioIdentity,
   type ZernioInboundMessage,
 } from "./webhook";
+import { rpc } from "@/lib/supabase/rpc";
 
 export interface ZernioIngestResult {
   status: "ingested" | "duplicate" | "ignored" | "unknown_account";
@@ -443,8 +444,9 @@ async function pedirPersistenciaDaMidia(
   conversationId: string,
   messageId: string,
 ): Promise<void> {
-  const { error } = await admin.rpc(
-    "emit_event" as never,
+  const { error } = await rpc(
+    admin,
+    "emit_event",
     {
       p_event_type: "media.persist_requested",
       p_entity_kind: "message",
@@ -452,7 +454,7 @@ async function pedirPersistenciaDaMidia(
       p_payload: { message_id: messageId, conversation_id: conversationId },
       p_metadata: { source: "zernio_webhook" },
       p_organization_id: organizationId,
-    } as never,
+    },
   );
   if (error) {
     logger.warn("[zernio] emit media.persist_requested falhou", {
