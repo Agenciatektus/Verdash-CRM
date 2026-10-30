@@ -157,7 +157,11 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
     // apêndice de migration — continua reprovando com o mesmo motivo de sempre:
     // cifra nova, guarda nova. A lista de donos não encolhe sozinha: só entra
     // aqui quem passa no item 6.
-    const donas = [...DEFINICOES_BASELINE, ...definicoesDeFuncao(BASELINE, "decrypt_cpf")];
+    const donas = [
+      ...DEFINICOES_BASELINE,
+      ...definicoesDeFuncao(BASELINE, "decrypt_cpf"),
+      ...definicoesDeFuncao(BASELINE, "decrypt_cpf_lote"),
+    ];
     const fora: number[] = [];
     for (const i of ocorrencias) {
       if (!donas.some((d) => d.inicio < i && i < d.fim)) fora.push(i);
@@ -234,5 +238,37 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
       naMigration[0]!.corpo,
       "corpo divergente entre baseline (install) e migration 0597 (update)",
     ).toBe(corpo);
+  });
+
+  it("7. decrypt_cpf_lote (9086) é a terceira porta: guarda de org e papel, audit e decifra só das orgs aprovadas", () => {
+    const noBaseline = definicoesDeFuncao(BASELINE, "decrypt_cpf_lote");
+    expect(noBaseline.length, "decrypt_cpf_lote não aparece no baseline").toBe(1);
+    const corpo = noBaseline[0]!.corpo;
+
+    const iTenancy = corpo.indexOf("fn_user_org_ids()");
+    const iPapel = corpo.indexOf("fn_role_at_least(v_org, 'manager')");
+    const iAudit = corpo.indexOf("insert into public.api_audit_log");
+    const iDecifra = corpo.indexOf("pgp_sym_decrypt");
+    expect(iTenancy, "falta a checagem de organização").toBeGreaterThan(-1);
+    expect(iPapel, "falta a checagem de papel manager").toBeGreaterThan(-1);
+    expect(iAudit, "falta o audit do decrypt").toBeGreaterThan(-1);
+    expect(corpo, "falta o piso medido (66 bytes)").toMatch(/octet_length\s*\(\s*c\.cpf_encrypted\s*\)\s*<\s*66/);
+    expect(corpo, "falta a checagem de pacote PGP").toMatch(/get_byte\s*\(\s*c\.cpf_encrypted\s*,\s*0\s*\)\s*<\s*128/);
+    expect(iTenancy).toBeLessThan(iAudit);
+    expect(iPapel).toBeLessThan(iAudit);
+    expect(iAudit, "decrypt sairia sem deixar rastro").toBeLessThan(iDecifra);
+    // Audit e decifra relêem contacts: sem o filtro, contato que mudou entre a guarda e o return passa sem checagem.
+    expect(
+      corpo.match(/c\.organization_id\s*=\s*any\(v_orgs\)/g)?.length,
+      "audit e decifra têm de filtrar pelas orgs aprovadas no loop",
+    ).toBe(2);
+
+    const arquivo9086 = readdirSync(MIGRATIONS).find((n) => n.includes("_9086_"));
+    expect(arquivo9086, "migration 9086 não está em supabase/migrations/").toBeTruthy();
+    const naMigration = definicoesDeFuncao(
+      readFileSync(join(MIGRATIONS, arquivo9086!), "utf8"),
+      "decrypt_cpf_lote",
+    );
+    expect(naMigration[0]?.corpo, "corpo divergente entre baseline e migration 9086").toBe(corpo);
   });
 });

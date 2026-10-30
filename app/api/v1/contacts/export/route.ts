@@ -35,8 +35,8 @@
  *
  * O audit registra QUEM, QUANDO e QUANTOS registros saíram — nunca o termo de
  * busca nem o conteúdo (mesma régua do export de conversa em PDF, #1982). O
- * CPF viaja só para quem tem papel, decifrado pela RPC que já audita cada
- * chamada própria.
+ * CPF viaja só para quem tem papel, decifrado em blocos pela `decrypt_cpf_lote`
+ * (migration 9086), que audita cada bloco.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
@@ -52,6 +52,7 @@ import {
   type ContatoParaExportar,
   type FormatoDeExport,
 } from "@/lib/contacts/exportar";
+import { decifraCpfsEmLote } from "@/lib/contacts/decifrar-cpfs";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { contactListQuerySchema } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/server";
@@ -66,29 +67,6 @@ const TAMANHO_DA_PAGINA = 100;
 /** Mesmo teto do export de auditoria — cabe na memória do processo que serve o CRM. */
 const TETO_DO_EXPORT = 10_000;
 const FORMATOS: readonly FormatoDeExport[] = ["csv", "vcf"];
-
-/**
- * O CPF em claro de quem tem cifra, um por contato.
- *
- * A RPC `decrypt_cpf` (migration 0597) valida org + papel por dentro e audita
- * cada chamada; falha aqui degrada para coluna VAZIA, como o próprio get do
- * contato faz — CPF que não sai não pode derrubar o arquivo inteiro.
- */
-async function decifraCpfs(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  contatos: readonly Contact[],
-  destino: Map<string, string>,
-): Promise<void> {
-  for (const contato of contatos) {
-    if (!contato.cpf_hash) continue;
-    const { data, error } = await supabase.rpc("decrypt_cpf", { p_contact_id: contato.id });
-    if (error) {
-      console.warn("[contacts.export] decrypt_cpf RPC indisponível", error.message);
-      continue;
-    }
-    if (typeof data === "string" && data !== "") destino.set(contato.id, data);
-  }
-}
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -145,7 +123,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   };
 
   const lidos: Contact[] = [];
-  const cpfs = new Map<string, string>();
   let cursor: string | undefined;
   let truncado = false;
 
@@ -158,7 +135,6 @@ export async function GET(req: NextRequest): Promise<Response> {
       );
       if (contacts.length === 0) break;
       lidos.push(...contacts);
-      if (formato === "csv") await decifraCpfs(supabase, contacts, cpfs);
       if (lidos.length >= TETO_DO_EXPORT) {
         truncado = has_more || lidos.length > TETO_DO_EXPORT;
         break;
@@ -173,7 +149,12 @@ export async function GET(req: NextRequest): Promise<Response> {
     throw err;
   }
 
-  const contatos: ContatoParaExportar[] = lidos.slice(0, TETO_DO_EXPORT).map((c) => ({
+  const exportados = lidos.slice(0, TETO_DO_EXPORT);
+  // CPF só no CSV (o vCard não tem campo), em blocos depois da leitura.
+  const cpfs =
+    formato === "csv" ? await decifraCpfsEmLote(supabase, exportados) : new Map<string, string>();
+
+  const contatos: ContatoParaExportar[] = exportados.map((c) => ({
     name: c.name,
     display_name: c.display_name,
     email: c.email,

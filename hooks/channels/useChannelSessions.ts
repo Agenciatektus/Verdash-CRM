@@ -51,7 +51,11 @@ export function channelLabel(
  * falhou é indistinguível de "nenhum número conectado", que é o convite a parear
  * de novo um número que já está no ar.
  */
-export function useChannelSessions(opts?: { refetchInterval?: number; enabled?: boolean }) {
+export function useChannelSessions(opts?: {
+  refetchInterval?: number | ((sessoes: ChannelSession[] | undefined) => number | false);
+  enabled?: boolean;
+}) {
+  const intervalo = opts?.refetchInterval;
   const query = useQuery({
     queryKey: ["channel-sessions"],
     queryFn: async () => {
@@ -61,7 +65,8 @@ export function useChannelSessions(opts?: { refetchInterval?: number; enabled?: 
       }>("/api/v1/channel-sessions");
     },
     staleTime: 15_000,
-    refetchInterval: opts?.refetchInterval,
+    refetchInterval:
+      typeof intervalo === "function" ? (q) => intervalo(q.state.data?.data) : intervalo,
     enabled: opts?.enabled ?? true,
   });
 

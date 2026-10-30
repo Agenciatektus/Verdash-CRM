@@ -18,8 +18,16 @@ interface Hospedado {
  * voz, os números de telefone); se uma delas falha, a página segue com o que tem em vez de
  * esconder canais que existem.
  */
+/**
+ * 10 s só enquanto algum canal está subindo ou esperando o QR; parado, 60 s basta
+ * para a queda de um canal aparecer (o foco da janela também recarrega).
+ */
+export function intervaloDasConexoes(sessoes: { status: string }[] | undefined): number {
+  return sessoes?.some((s) => s.status === "STARTING" || s.status === "SCAN_QR_CODE") ? 10_000 : 60_000;
+}
+
 export function useConexoes() {
-  const canais = useChannelSessions({ refetchInterval: 10_000 });
+  const canais = useChannelSessions({ refetchInterval: intervaloDasConexoes });
   const hospedado = useQuery({
     queryKey: ["channels-hosted"],
     queryFn: async () => (await apiClient.get<{ data: Hospedado }>("/api/v1/channels/hosted")).data,

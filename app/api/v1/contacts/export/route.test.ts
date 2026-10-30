@@ -194,15 +194,20 @@ describe("o CSV de contatos", () => {
       contato(2),
       contato(3, { cpf_hash: "hash-3" }),
     ]);
-    RPC.mockImplementation(async (_funcao: string, { p_contact_id }: { p_contact_id: string }) => ({
-      data: p_contact_id.endsWith("000001") ? "52998224725" : "39053344705",
+    RPC.mockImplementation(async (_funcao: string, { p_contact_ids }: { p_contact_ids: string[] }) => ({
+      data: p_contact_ids.map((id) => ({
+        contact_id: id,
+        cpf: id.endsWith("000001") ? "52998224725" : "39053344705",
+      })),
       error: null,
     }));
 
     const csv = await (await chamar()).text();
 
-    expect(RPC).toHaveBeenCalledTimes(2);
-    const decifrados = RPC.mock.calls.map(([, params]) => (params as { p_contact_id: string }).p_contact_id);
+    // Uma chamada em lote (9086), só com quem tem cifra.
+    expect(RPC).toHaveBeenCalledTimes(1);
+    expect(RPC.mock.calls[0]?.[0]).toBe("decrypt_cpf_lote");
+    const decifrados = (RPC.mock.calls[0]?.[1] as { p_contact_ids: string[] }).p_contact_ids;
     expect(decifrados).not.toContain("00000000-0000-4000-8000-000002");
     expect(decifrados).toContain("00000000-0000-4000-8000-000001");
     expect(csv).toContain("52998224725");
