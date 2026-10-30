@@ -37,14 +37,14 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { logger } from "@/lib/logger";
 import { venceReativacoes } from "@/lib/leads/reactivation";
-import { observaTravessias } from "@/lib/leads/risk-worker";
+import { observaTravessias, orgsDaPassada } from "@/lib/leads/risk-worker";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buscarTodasAsPaginas } from "@/lib/supabase/lotes";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 
 export const dynamic = "force-dynamic";
 
-/** Teto de orgs por invocação — a próxima passada pega o resto. */
-const ORG_LIMIT = 50;
+const PASSADA_MS = 15 * 60 * 1000;
 
 async function handle(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -55,18 +55,21 @@ async function handle(req: NextRequest): Promise<Response> {
 
   const admin = createAdminClient();
 
-  const { data: rows, error } = await admin
-    .from("crm_leads")
-    .select("organization_id")
-    .eq("status", "open");
+  // As orgs saem de `organizations`, paginadas. Antes saíam dos leads abertos
+  // numa consulta só, que o PostgREST corta em 1.000 linhas: com 6.378 leads
+  // abertos (30/10), org cujos leads caíam depois do corte ficava sem radar, calada.
+  const { data: todas, error } = await buscarTodasAsPaginas<{ id: string }>((de, ate) =>
+    admin.from("organizations").select("id").order("id").range(de, ate),
+  );
   if (error) {
-    logger.error("[risk-watcher] query failed", { error: error.message, requestId });
+    logger.error("[risk-watcher] query failed", { error, requestId });
     return fail("internal_error", "Failed to list organizations.", 500, { requestId });
   }
 
-  const orgs = [
-    ...new Set(((rows ?? []) as Array<{ organization_id: string }>).map((r) => r.organization_id)),
-  ].slice(0, ORG_LIMIT);
+  const orgs = orgsDaPassada(
+    todas.map((o) => o.id),
+    Math.floor(Date.now() / PASSADA_MS),
+  );
 
   let travessias = 0;
   let esfriaram = 0;

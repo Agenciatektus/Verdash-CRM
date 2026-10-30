@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET } from "@/app/api/v1/cron/risk-watcher/route";
 import type { EstadoCalculado } from "@/lib/leads/risk-seed";
-import { observaTravessias } from "@/lib/leads/risk-worker";
+import { observaTravessias, orgsDaPassada } from "@/lib/leads/risk-worker";
 
 /**
  * UMA GRAVAÇÃO RUIM CUSTA UMA LINHA — e a falha chega a quem lê o cron.
@@ -56,6 +56,23 @@ vi.mock("@/lib/leads/reactivation", () => ({
 
 let recusarLead: string | null = null;
 let gravados: string[] = [];
+let jaGravados: Array<{ lead_id: string; bucket: string }> = [];
+
+// Como o PostgREST daqui: sem `range`, corta em 1.000 (PGRST_DB_MAX_ROWS).
+const TETO_DO_SERVIDOR = 1000;
+function leituraDosEstados() {
+  const consulta = {
+    eq: () => consulta,
+    order: () => consulta,
+    range: async (de: number, ate: number) => ({
+      data: jaGravados.slice(de, Math.min(ate + 1, de + TETO_DO_SERVIDOR)),
+      error: null,
+    }),
+    then: (ok: (r: { data: unknown[]; error: null }) => unknown) =>
+      Promise.resolve({ data: jaGravados.slice(0, TETO_DO_SERVIDOR), error: null }).then(ok),
+  };
+  return consulta;
+}
 
 /**
  * Dublê mínimo do client: só a fatia que a rota e o observador usam. Tabela não
@@ -65,14 +82,16 @@ let gravados: string[] = [];
 function adminDuble() {
   return {
     from(tabela: string) {
-      if (tabela === "crm_leads") {
-        return {
-          select: () => ({ eq: async () => ({ data: [{ organization_id: ORG }], error: null }) }),
+      if (tabela === "organizations") {
+        const consulta = {
+          order: () => consulta,
+          range: async () => ({ data: [{ id: ORG }], error: null }),
         };
+        return { select: () => consulta };
       }
       if (tabela === "crm_lead_risk_states") {
         return {
-          select: () => ({ eq: async () => ({ data: [], error: null }) }),
+          select: () => leituraDosEstados(),
           upsert: async (linha: { lead_id: string }) => {
             if (linha.lead_id === recusarLead) return { error: { message: RECUSA } };
             gravados.push(linha.lead_id);
@@ -99,7 +118,23 @@ beforeEach(() => {
   estados = [estado("lead-recusado"), estado("lead-seguinte")];
   recusarLead = "lead-recusado";
   gravados = [];
+  jaGravados = [];
   for (const f of Object.values(logado)) f.mockClear();
+});
+
+describe("observador de risco: org com mais estados que o teto do PostgREST", () => {
+  it("1.444 estados já gravados e iguais aos atuais: nenhuma regravação", async () => {
+    const ids = Array.from({ length: 1444 }, (_, i) => `lead-${String(i).padStart(4, "0")}`);
+    estados = ids.map(estado);
+    jaGravados = ids.map((lead_id) => ({ lead_id, bucket: "em_voo" }));
+    recusarLead = null;
+
+    const r = await observaTravessias(adminDuble() as never, ORG, AGORA);
+
+    // Antes: só os 1.000 primeiros eram lidos, e os outros 444 eram regravados a cada passada.
+    expect(gravados).toEqual([]);
+    expect(r.travessias).toBe(0);
+  });
 });
 
 describe("observador de risco: uma gravação recusada", () => {
@@ -144,5 +179,19 @@ describe("cron risk-watcher: a contagem chega a quem lê a rodada", () => {
       "[risk-watcher] travessias sem estado gravado",
       expect.anything(),
     );
+  });
+});
+
+describe("cron risk-watcher: rodízio quando há mais orgs que o teto", () => {
+  it("até o teto, todas as orgs entram em toda passada", () => {
+    const ids = ["a", "b", "c"];
+    expect(orgsDaPassada(ids, 7, 50)).toEqual(ids);
+  });
+
+  it("acima do teto, passadas seguidas cobrem todas as orgs", () => {
+    const ids = Array.from({ length: 7 }, (_, i) => `org-${i}`);
+    const vistas = new Set([0, 1, 2, 3].flatMap((p) => orgsDaPassada(ids, p, 3)));
+    expect(vistas.size).toBe(7);
+    expect(orgsDaPassada(ids, 1, 3)).toEqual(["org-3", "org-4", "org-5"]);
   });
 });

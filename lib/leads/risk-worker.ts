@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
+import { buscarTodasAsPaginas } from "@/lib/supabase/lotes";
 
 import { emitLeadActivity } from "@/lib/leads/activity-emitter";
 import { registraFalhaDeAtividade } from "@/lib/leads/activity-write-failure";
@@ -86,14 +87,24 @@ export async function observaTravessias(
 ): Promise<ResultadoDaObservacao> {
   const atuais = await calculaBucketsAtuais(admin, organizationId, now);
 
-  const { data: gravados, error } = await admin
-    .from("crm_lead_risk_states")
-    .select("lead_id, bucket")
-    .eq("organization_id", organizationId);
-  if (error) throw new Error(`observador de risco: ${error.message}`);
-  const anterior = new Map<string, RiskBucket>(
-    ((gravados ?? []) as EstadoGravado[]).map((g) => [g.lead_id, g.bucket]),
+  // Paginado: com o corte de 1.000 linhas do PostgREST, todo estado além do
+  // milésimo parecia "novo" e era regravado a cada passada (medido em 30/10:
+  // ~290 regravações/hora numa org de 1.444 leads, 28% do WAL do Realtime).
+  const {
+    data: gravados,
+    error,
+    truncado,
+  } = await buscarTodasAsPaginas<EstadoGravado>((de, ate) =>
+    admin
+      .from("crm_lead_risk_states")
+      .select("lead_id, bucket")
+      .eq("organization_id", organizationId)
+      .order("lead_id")
+      .range(de, ate),
   );
+  if (error) throw new Error(`observador de risco: ${error}`);
+  if (truncado) throw new Error("observador de risco: estados gravados passaram do teto de páginas");
+  const anterior = new Map<string, RiskBucket>(gravados.map((g) => [g.lead_id, g.bucket]));
 
   const r: ResultadoDaObservacao = {
     avaliados: atuais.length,
@@ -208,3 +219,13 @@ export async function observaTravessias(
 }
 
 export type { EstadoCalculado };
+
+/** Teto de orgs por passada do cron; com mais que isso, o rodízio pega o resto. */
+export const ORGS_POR_PASSADA = 50;
+
+/** Com mais orgs que o teto, cada passada começa num ponto diferente (rodízio). */
+export function orgsDaPassada(ids: string[], passada: number, limite = ORGS_POR_PASSADA): string[] {
+  if (ids.length <= limite) return ids;
+  const inicio = (passada * limite) % ids.length;
+  return [...ids.slice(inicio), ...ids.slice(0, inicio)].slice(0, limite);
+}
