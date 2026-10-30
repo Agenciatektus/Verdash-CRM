@@ -1,0 +1,248 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > assistido: vira rascunho, nada sai 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "db:call fn_reply_begin",
+  "llm:agent_preview",
+  "tool:send_message ok",
+  "db:update ai_reply_drafts",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > erro do modelo: provedor fora 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "fim:lançou upstream 503",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: lê o contexto do lead e responde 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "tool:get_lead_context ok",
+  "db:begin",
+  "send:text "Vi aqui seu histórico, já te respondo."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: nota do lead e resposta 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:delete lead_notes",
+  "db:insert lead_notes",
+  "tool:save_lead_note ok",
+  "db:begin",
+  "send:text "Anotado, vou te oferecer horários de manhã."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > passa para humano: ferramenta de handoff 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Claro! Já estou chamando alguém da equipe para falar com você. Seu pedido ficou registrado e a equipe responde assim que possível."",
+  "db:insert pacing_ledger",
+  "db:commit",
+  "db:insert before_send_traces",
+  "db:update contacts",
+  "db:update conversations status=case",
+  "db:update cron_jobs",
+  "db:insert passagens_de_atendimento",
+  "db:update agent_inbox_items",
+  "db:insert agent_inbox_items",
+  "db:insert event_log",
+  "log:warn handoff: atividade não roteada para um negócio",
+  "tool:request_human_handoff ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > passa para humano: payload inválido 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Claro! Já estou chamando alguém da equipe para falar com você. Seu pedido ficou registrado e a equipe responde assim que possível."",
+  "db:insert pacing_ledger",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:request_human_handoff recusou invalid_payload",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: agente pausado 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: lead em handoff humano 1`] = `
+[
+  "log:info turno pulado — lead em handoff humano (bot silenciado)",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de envios 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Mensagem número 1 com conteúdo distinto xxxxxxx"",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "db:begin",
+  "send:text "Mensagem número 2 com conteúdo distinto xxxxxxxxxxxxxx"",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "db:begin",
+  "send:text "Mensagem número 3 com conteúdo distinto xxxxxxxxxxxxxxxxxxxxx"",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "tool:send_message recusou max_sends_per_turn",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: corpo vazio 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "tool:send_message recusou corpo_vazio",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: duas mensagens diferentes 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Oi! Tudo bem?"",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "db:begin",
+  "send:text "O horário de amanhã às 10h está livre."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: mesmo corpo duas vezes (trava de duplicata) 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Oi! Posso te ajudar com o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "db:insert event_log",
+  "log:warn supressão near-dup não roteada na timeline do negócio",
+  "tool:send_message recusou duplicate_suppressed",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: uma mensagem 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Oi! Posso te ajudar com o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > turno mudo: modelo não chama ferramenta 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "log:warn turno terminou sem mensagem ao cliente — pedindo UMA correção",
+  "llm:agent_turn",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;

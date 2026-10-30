@@ -1,6 +1,6 @@
 # ADR-0006: Fatiar o turno da IA (`executarTurnoDoAgente`) em fases, uma PR por fase
 
-- **Status:** proposto (aguarda o OK do dono do produto; nenhuma linha de código muda antes dele)
+- **Status:** aceito (OK do Peterson em 30/10/2026)
 - **Data:** 2026-10-30
 - **Contexto medido em:** `3ba2fe36d` (topo de `origin/dev` em 30/10/2026), por mapa da função (comandos de nível 1 e 2, `return`, chamadas de alto nível), não por leitura linha a linha
 - **Arquivo:** `lib/agent-engine/agent/inbound-turn.ts` (6.090 linhas; a função ocupa 1944 a 5694, cerca de 3.750)
@@ -133,7 +133,7 @@ algumas centenas de linhas. `runAgentTurn`, a escolta e `runAgentPreview` não m
    nada** depois do movimento. Cada cerca é classificada (positiva, negativa, de ordem) e ganha o arquivo-alvo
    da fatia que a afeta. Cerca negativa é reapontada na mesma PR do movimento, com controle negativo: colar o
    trecho proibido no módulo novo e ver a cerca ficar vermelha.
-2. **Teste de caracterização do turno (rastro de efeitos).** Um único teste em `tests/invariants/`
+2. **Teste de caracterização do turno (rastro de efeitos).** Um único teste (entregue em `tests/unit/`, com dublês e sem Postgres; ver abaixo)
    (`turno-rastro-de-efeitos.test.ts`), com Postgres real, modelo roteirizado e canal falso, que grava a
    **sequência ordenada** de efeitos de cada cenário e compara com um snapshot versionado:
    - SQL normalizado (verbo + tabela, sem valores), na ordem em que chegou ao pool;
@@ -150,6 +150,95 @@ algumas centenas de linhas. `runAgentTurn`, a escolta e `runAgentPreview` não m
 
 O teste nasce com controle negativo: trocar a ordem de dois efeitos à mão no código precisa deixá-lo vermelho
 (contagem igual não pega ordem invertida).
+
+---
+
+### Inventário das cercas por texto (S0, medido em 30/10/2026)
+
+42 arquivos de teste leem `inbound-turn.ts` como texto. **Positiva**: só exige que um trecho exista ou venha
+em certa ordem (fica vermelha quando o código sai do arquivo, barulhenta). **Negativa**: tem pelo menos uma
+asserção de ausência (`not.toContain`, `not.toMatch`, `toBe(-1)`) e pode ficar verde sem medir nada depois do
+movimento. A contagem é de asserções negativas no arquivo; a fatia e o destino vêm da âncora que a cerca
+procura. "Verificar" marca cerca sem âncora legível pelo grep, a ler na fatia indicada antes do corte.
+
+| Cerca (`tests/unit/` salvo indicação) | Tipo | Neg. | Fatia | Reapontar para |
+|---|---|---|---|---|
+| `lib/.../formato-whatsapp.test.ts` | positiva | 0 | S7 | (barulhenta) `turno/ferramentas/send-message.ts` |
+| `lib/.../roteiro-no-turno.test.ts` | negativa | 3 | S9 | `turno/chamada-e-correcao.ts` |
+| `lib/.../presets.test.ts` | negativa | 3 | verificar | provável fora da função; confirmar antes de S1 |
+| `agent-split-message` | negativa | 4 | S8 | `turno/montagem-da-chamada.ts` (bolhas) |
+| `agent-split-send` | positiva | 0 | S7 | (barulhenta) |
+| `assistido-roda-as-deteccoes` | positiva | 0 | S4 | (barulhenta) |
+| `atraso-humano-nao-afrouxa-o-anti-ban` | negativa | 2 | S8 | `turno/montagem-da-chamada.ts` |
+| `camada-lida-no-motor` | positiva | 0 | S1 | (barulhenta) |
+| `cerca-prometer-de-ponta-a-ponta` | negativa | 5 | S6 | `turno/ferramentas/` (`schedule_followup`) |
+| `chave-juridico-so-troca-a-descricao` | negativa | 4 | S6 | `turno/ferramentas/` (desligamento do handoff) |
+| `classificadores-auxiliares-em-paralelo` | positiva | 0 | S8 | (barulhenta) |
+| `classificadores-so-na-mensagem-nova` | negativa | 6 | S8 | `turno/montagem-da-chamada.ts` |
+| `correcao-do-turno-mudo-so-escala-com-falha` | negativa | 8 | S9 | `turno/chamada-e-correcao.ts` |
+| `dry-run-prepara-midia-como-o-envio-real` | positiva | 0 | S8 | (barulhenta) |
+| `etapa-de-perda-avisa-o-humano` | negativa | 7 | S6 | `turno/ferramentas/update-lead-state.ts` |
+| `fechamento-do-turno-corrige-antes-de-repetir` | negativa | 2 | S9 | `turno/chamada-e-correcao.ts` |
+| `fotos-respeitam-teto-e-tamanho` | negativa | 1 | S7 | `turno/ferramentas/send-message.ts` |
+| `gate-afirmacao-clinica` | negativa | 4 | S7 | `turno/ferramentas/send-message.ts` |
+| `gate-agenda-stall` | negativa | 4 | S7 | `turno/ferramentas/send-message.ts` |
+| `gate-vazamento-interno` | negativa | 3 | S7 | `turno/ferramentas/send-message.ts` |
+| `handoff-avisa-o-lead` | positiva | 0 | S5 | (barulhenta) |
+| `handoff-fantasma-fiacao` | positiva | 0 | S6/S7 | (barulhenta) |
+| `handoff-por-orcamento` | negativa | 4 | nenhuma | conta o call site único, que fica em `inbound-turn.ts`; não reapontar |
+| `janela-do-matcher-fica-no-matcher` | positiva | 0 | S8 | (barulhenta) |
+| `knobs-da-versao-publicada-sao-aplicados` | negativa | 1 | nenhuma | âncora fora da função (`PublishedAgentConfig`) |
+| `mensagem-atual-prioritaria` | negativa | 1 | S8 | `turno/montagem-da-chamada.ts` (abertura) |
+| `mensagem-que-tem-texto-nao-chega-vazia` | negativa | 4 | verificar (S2) | `turno/contexto-do-turno.ts` se a âncora estiver em F4 |
+| `operador-enfileiramento` | positiva | 0 | S3 | (barulhenta) |
+| `ponte-do-agente-passa-o-escopo` | positiva | 0 | verificar | |
+| `pr-mexe-no-piso-do-postgres` | positiva | 0 | verificar | |
+| `rajada-nao-cala-o-pedido-de-humano` | negativa | 2 | S5 e S7 | `turno/desvios-deterministicos.ts` e `send-message.ts` |
+| `recorte-1-build-opening` | negativa | 5 | S8 | `turno/montagem-da-chamada.ts` |
+| `retencao-das-tabelas-da-ia` | negativa | 1 | verificar | provável fora da função |
+| `saida-truncada-nao-vai-parcial` | negativa | 4 | S9 | `turno/chamada-e-correcao.ts` |
+| `seguranca-supressao-duplicata-e-desfecho-terminal` | negativa | 8 | S1 e S2 | `turno/portoes-de-entrada.ts` e `turno/contexto-do-turno.ts` |
+| `send-message-corpo-vazio` | positiva | 0 | S7 | (barulhenta) |
+| `send-message-duplicata-proxima` | negativa | 6 | S6 e S7 | `turno/estado-do-turno.ts` (semeadura) e `send-message.ts` |
+| `send-message-manda-foto-do-produto` | positiva | 0 | S7 | (barulhenta) |
+| `send-template-wiring` | negativa | 1 | S7 | `turno/ferramentas/send-template.ts` |
+| `silencio-da-janela-deixa-rastro` | negativa | 2 | S1 e S4 | `turno/portoes-de-entrada.ts` e `turno/roteamento-do-turno.ts` |
+| `sinal-de-urgencia-represado` | negativa | 5 | S3 | `turno/efeitos-pos-turno.ts` |
+| `turno-responde-a-mensagem-do-job` | positiva | 0 | verificar | |
+
+Resumo: 27 negativas, 15 positivas. Regra para cada fatia: antes do movimento, a PR lista as cercas da sua
+linha, reaponta as negativas para o módulo novo e prova cada uma com controle negativo (colar o trecho
+proibido no módulo novo e ver a cerca ficar vermelha).
+
+### Teste de caracterização entregue (S0)
+
+`tests/unit/turno-rastro-de-efeitos.test.ts`, com o snapshot em
+`tests/unit/__snapshots__/turno-rastro-de-efeitos.test.ts.snap`. Roda na suíte unitária, sem Postgres: pool
+fingido (o de `turno-le-em-paralelo`), `runModelCall` roteirizado por cenário e canal falso por
+`deps.channel`. Grava em ordem:
+
+- `db:` cada escrita (verbo e tabela), inclusive todas as de um CTE na ordem textual; `db:call fn_x` para
+  função do banco chamada como `select * from fn_x(...)`; o `status` gravado no SET de `agent_inbox_items`,
+  `contacts` e `conversations`; e as transações;
+- `send:`, `llm:<purpose>`, `tool:<nome> ok|recusou <code>`, `job:` e os avisos de log.
+
+São 14 cenários, mais um de determinismo e o controle negativo de ordem. O controle lê o `.snap` do disco e
+prova que o bloco do cenário contém a ordem original de dois efeitos vizinhos e não contém a trocada.
+
+O cenário "assistido: vira rascunho, nada sai" percorre o desvio real (`inbound-turn.ts:2172-2216`): o pool
+responde ao claim do turno autônomo, à fronteira de atendimento e ao `fn_reply_begin`, e o rastro mostra
+`llm:agent_preview` sem nenhum `llm:agent_turn`, a gravação em `ai_reply_drafts` e `fim:ok`.
+
+#### Lacunas da S0 (revisão do `cassio-secrev` na PR #468)
+
+| Lacuna | Por que ficou | Fatia que precisa dela |
+|---|---|---|
+| Horário de atendimento: o pool não devolve linhas de horário | `inbound-turn.ts` lê `new Date()` direto nas linhas 2819, 2824, 4361 e 5826 (em `3ba2fe36d`); devolver horário sem injetar o relógio deixaria o rastro dependente da hora | injeção do relógio antes de S5 (2819, 2824), S6 (4361) e S9 (5826); a injeção é mudança de comportamento e vai em PR própria, fora das fatias de movimento |
+| P2-2: o dublê do modelo devolve `responseMessages: []` e `steps: []`; a fita do turno chega vazia em `pruneToolResults`/`toolPartsAsText` e no checkpoint, então uma fatia que perca a fita passa verde | devolver as partes de tool-call/tool-result roteirizadas e gravar `llm:checkpoint msgs=N` | S8 |
+| P2-6: os classificadores do `Promise.all` (estágio, jailbreak, manipulação) não rodam, porque os knobs do agente do teste estão desligados | cenários com os knobs ligados e ordem determinística do `Promise.all` | S9 |
+| Classificadores auxiliares (`stage_classifier`, `jailbreak_detect`) fora do rastro: os knobs estão desligados no dublê | cenários com eles ligados pedem roteiro de saída de cada classificador | S8 |
+| Preview puro, `followup_turn`, `case_reply_turn`, saída truncada, veto até o teto, escalação por jailbreak, reagendamento pela janela anti-ban | fora da primeira leva de cenários | o cenário entra na PR anterior à fatia que move o trecho (S1, S5, S7, S9) |
+| `status` gravado por expressão aparece como `status=case`, sem o valor | o rastro lê o texto do SQL, não o resultado | nenhuma; basta para detectar mudança de ordem ou de alvo |
 
 ---
 
@@ -216,4 +305,4 @@ Esforço: P cabe numa sessão; M, uma a duas; G, duas ou mais, com revisão dedi
 
 ## Aceite
 
-Pendente. Aceitar esta ADR libera só a fatia S0; cada fatia seguinte começa depois da anterior mergeada na `dev`.
+Aceita pelo Peterson em 30/10/2026. O aceite liberou só a fatia S0; cada fatia seguinte começa depois da anterior mergeada na `dev`.
