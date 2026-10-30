@@ -96,7 +96,7 @@ describe("a cifra do CPF existe e roda (#2522)", () => {
     expect(erro, "o viewer decifrou o CPF").toContain("forbidden");
   });
 
-  it("decrypt_cpf_lote: o gerente lê o MESMO CPF em lote, com UMA linha de audit pelo bloco (9086)", () => {
+  it("decrypt_cpf_lote: o gerente lê o MESMO CPF em lote, com UMA linha de audit pelo bloco (9089)", () => {
     const lote = `select cpf from public.decrypt_cpf_lote(array['${CONTATO}']::uuid[]);`;
     expect(ultima(comoUsuario(GERENTE, lote))).toBe(CPF);
     expect(ultima(sql(`select count(*) from public.api_audit_log

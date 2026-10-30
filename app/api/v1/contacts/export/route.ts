@@ -36,7 +36,7 @@
  * O audit registra QUEM, QUANDO e QUANTOS registros saíram — nunca o termo de
  * busca nem o conteúdo (mesma régua do export de conversa em PDF, #1982). O
  * CPF viaja só para quem tem papel, decifrado em blocos pela `decrypt_cpf_lote`
- * (migration 9086), que audita cada bloco.
+ * (migration 9089), que audita cada bloco.
  */
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";

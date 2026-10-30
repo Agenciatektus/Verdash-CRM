@@ -240,7 +240,7 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
     ).toBe(corpo);
   });
 
-  it("7. decrypt_cpf_lote (9086) é a terceira porta: guarda de org e papel, audit e decifra só das orgs aprovadas", () => {
+  it("7. decrypt_cpf_lote (9089) é a terceira porta: guarda de org e papel, audit e decifra só das orgs aprovadas", () => {
     const noBaseline = definicoesDeFuncao(BASELINE, "decrypt_cpf_lote");
     expect(noBaseline.length, "decrypt_cpf_lote não aparece no baseline").toBe(1);
     const corpo = noBaseline[0]!.corpo;
@@ -263,12 +263,12 @@ describe("credencial de enfeite não derruba a leitura (#754)", () => {
       "audit e decifra têm de filtrar pelas orgs aprovadas no loop",
     ).toBe(2);
 
-    const arquivo9086 = readdirSync(MIGRATIONS).find((n) => n.includes("_9086_"));
-    expect(arquivo9086, "migration 9086 não está em supabase/migrations/").toBeTruthy();
+    const arquivo9089 = readdirSync(MIGRATIONS).find((n) => n.includes("_9089_"));
+    expect(arquivo9089, "migration 9089 não está em supabase/migrations/").toBeTruthy();
     const naMigration = definicoesDeFuncao(
-      readFileSync(join(MIGRATIONS, arquivo9086!), "utf8"),
+      readFileSync(join(MIGRATIONS, arquivo9089!), "utf8"),
       "decrypt_cpf_lote",
     );
-    expect(naMigration[0]?.corpo, "corpo divergente entre baseline e migration 9086").toBe(corpo);
+    expect(naMigration[0]?.corpo, "corpo divergente entre baseline e migration 9089").toBe(corpo);
   });
 });

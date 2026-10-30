@@ -14,6 +14,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isServiceRoleConfigured } from "@/lib/audit";
+import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
 
 export const dynamic = "force-dynamic";
 
@@ -50,15 +51,10 @@ export async function GET(_req: NextRequest): Promise<Response> {
     return ok(degraded, { requestId });
   }
 
-  const admin = createAdminClient();
-  const members: AssignableMember[] = await Promise.all(
-    memberships.map(async (m) => {
-      const { data: userRes } = await admin.auth.admin.getUserById(m.user_id);
-      return {
-        ...m,
-        full_name: (userRes?.user?.user_metadata?.full_name as string | undefined) ?? null,
-      };
-    }),
-  );
+  const nomes = await nomesDeMembros(orgId, memberships.map((m) => m.user_id));
+  const members: AssignableMember[] = memberships.map((m) => ({
+    ...m,
+    full_name: nomes.get(m.user_id)?.full_name ?? null,
+  }));
   return ok(members, { requestId });
 }

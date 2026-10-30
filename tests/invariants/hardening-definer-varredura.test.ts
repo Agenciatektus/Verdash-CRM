@@ -153,7 +153,7 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "(lê contacts.cpf_encrypted e a chave em private, ESCREVE o audit " +
       "contact.cpf_decrypted antes do texto). Mesma guarda por organização do bloco: " +
       "fora de fn_user_org_ids() levanta forbidden_org, abaixo de manager levanta " +
-      "forbidden_role; teto de 1000 ids por chamada (migration 9086).",
+      "forbidden_role; teto de 1000 ids por chamada (migration 9089).",
   },
   {
     fn: "fn_honorarios_parcela_pagar(uuid,uuid,uuid,uuid)",

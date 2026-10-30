@@ -20,6 +20,7 @@ import { isServiceRoleConfigured } from "@/lib/audit";
 import { PAPEL_MINIMO_DA_LISTA } from "@/lib/agenda/lista-de-pessoas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
 
 export const dynamic = "force-dynamic";
 
@@ -59,16 +60,11 @@ export async function GET(_req: NextRequest): Promise<Response> {
     return ok(degradado, { requestId });
   }
 
-  const admin = createAdminClient();
-  const pessoas: PessoaDaAgenda[] = await Promise.all(
-    membros.map(async (m) => {
-      const { data: userRes } = await admin.auth.admin.getUserById(m.user_id);
-      return {
-        ...m,
-        full_name: (userRes?.user?.user_metadata?.full_name as string | undefined) ?? null,
-      };
-    }),
-  );
+  const nomes = await nomesDeMembros(orgId, membros.map((m) => m.user_id));
+  const pessoas: PessoaDaAgenda[] = membros.map((m) => ({
+    ...m,
+    full_name: nomes.get(m.user_id)?.full_name ?? null,
+  }));
 
   return ok(pessoas, { requestId });
 }

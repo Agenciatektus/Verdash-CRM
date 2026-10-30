@@ -204,7 +204,7 @@ describe("o CSV de contatos", () => {
 
     const csv = await (await chamar()).text();
 
-    // Uma chamada em lote (9086), só com quem tem cifra.
+    // Uma chamada em lote (9089), só com quem tem cifra.
     expect(RPC).toHaveBeenCalledTimes(1);
     expect(RPC.mock.calls[0]?.[0]).toBe("decrypt_cpf_lote");
     const decifrados = (RPC.mock.calls[0]?.[1] as { p_contact_ids: string[] }).p_contact_ids;

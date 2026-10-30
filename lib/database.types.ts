@@ -10552,6 +10552,7 @@ export type Database = {
       fn_meet_delivery_current: { Args: { p_org:string; p_job:string; p_worker:string; p_acquired_at:string }; Returns:boolean }
       fn_meet_delivery_settle: { Args: { p_org:string; p_job:string; p_worker:string; p_acquired_at:string; p_state:string; p_retry_at?:string|null }; Returns:boolean }
       fn_meet_action: { Args: { p_org:string; p_id:string; p_revision:string; p_request:string|null; p_action:string; p_conversation?:string|null }; Returns:boolean }
+      fn_nomes_de_membros: { Args: { p_org: string; p_user_ids: string[] }; Returns: { user_id: string; full_name: string | null; email: string | null; last_sign_in_at: string | null }[] }
       fn_google_resolve: { Args: { p_org: string; p_id: string; p_revision: string; p_local_revision: string; p_etag: string | null; p_choice: string }; Returns: undefined }
       fn_google_counts_for_conflicts: { Args: { p_org: string; p_connection: string; p_calendar: string }; Returns: boolean }
       fn_google_coverage: { Args: { p_org: string; p_owner: string; p_start: string; p_end: string }; Returns: boolean }

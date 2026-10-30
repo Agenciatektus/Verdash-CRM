@@ -1,4 +1,4 @@
--- manifest: 9087 — índice GIN trigram em conversations.last_message_preview: a busca do Inbox faz ilike '%termo%' nessa coluna e era Seq Scan na tabela de conversas.
+-- manifest: 9090 — índice GIN trigram em conversations.last_message_preview: a busca do Inbox faz ilike '%termo%' nessa coluna e era Seq Scan na tabela de conversas.
 --
 -- A busca do Inbox (app/api/v1/conversations/_handler.ts) casa o termo em
 -- contacts.display_name, contacts.name, contacts.phone_number (os três já têm

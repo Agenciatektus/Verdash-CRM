@@ -23,6 +23,7 @@ import { createNoteSchema } from "@/lib/schemas/notes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
 
 export const dynamic = "force-dynamic";
 // As três colunas de anexo (migration 0483) entram nos DOIS caminhos: sem elas
@@ -180,6 +181,15 @@ async function emitirMencoesDaNota(input: {
       p_organization_id: input.organizationId,
     });
 
+  // Uma leitura só para todos os candidatos textuais, não um getUserById por membro.
+  const identidades =
+    textuais.length > 0
+      ? await nomesDeMembros(
+          input.organizationId,
+          ids.filter((id) => !estruturais.has(id.toLowerCase())),
+        )
+      : new Map<string, { full_name: string | null; email: string | null }>();
+
   await Promise.all(
     ids.map(async (userId) => {
       // Estrutural: `userId` já veio da membership desta org, então o id no
@@ -190,12 +200,9 @@ async function emitirMencoesDaNota(input: {
         return;
       }
       if (textuais.length === 0) return;
-      const { data: userRes } = await admin.auth.admin.getUserById(userId);
-      const u = userRes?.user;
+      const u = identidades.get(userId);
       if (!u?.email) return;
-      const fullName =
-        (typeof u.user_metadata?.full_name === "string" ? u.user_metadata.full_name : null) ?? null;
-      if (!mencaoAtingeUsuario(input.body, { id: userId, email: u.email, full_name: fullName })) return;
+      if (!mencaoAtingeUsuario(input.body, { id: userId, email: u.email, full_name: u.full_name })) return;
       await emitir(userId);
     }),
   );

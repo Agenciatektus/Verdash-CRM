@@ -38,14 +38,23 @@ function adminCom(o: {
   };
   return {
     from: () => cadeia,
-    rpc: vi.fn(async () =>
-      o.erroDoLimite
+    rpc: vi.fn(async (fn: string, args?: { p_user_ids?: string[] }) => {
+      // Os e-mails da equipe saem numa chamada (9088), como o getUserById devolvia.
+      if (fn === "fn_nomes_de_membros") {
+        return {
+          data: (args?.p_user_ids ?? []).map((id) => ({
+            user_id: id,
+            full_name: null,
+            email: `${id}@x.test`,
+            last_sign_in_at: null,
+          })),
+          error: null,
+        };
+      }
+      return o.erroDoLimite
         ? { data: null, error: { code: "42883", message: "function does not exist" } }
-        : { data: o.limite, error: null },
-    ),
-    auth: {
-      admin: { getUserById: vi.fn(async (id: string) => ({ data: { user: { email: `${id}@x.test` } } })) },
-    },
+        : { data: o.limite, error: null };
+    }),
   };
 }
 

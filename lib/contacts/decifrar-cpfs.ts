@@ -1,5 +1,5 @@
 /**
- * CPF em claro para o export de contatos, em BLOCOS (migration 9086).
+ * CPF em claro para o export de contatos, em BLOCOS (migration 9089).
  *
  * Antes era uma `decrypt_cpf` por contato, em série: até 10 mil idas ao banco
  * e 10 mil linhas de audit num export cheio. A `decrypt_cpf_lote` valida org +

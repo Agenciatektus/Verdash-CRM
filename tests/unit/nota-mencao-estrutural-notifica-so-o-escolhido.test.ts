@@ -32,7 +32,7 @@ import { createClient } from "@/lib/supabase/server";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
-vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}) }));
+vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}), isServiceRoleConfigured: () => true }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
@@ -56,7 +56,7 @@ interface Emissao {
 }
 
 let emissões: Emissao[];
-let idasAoAuth: string[];
+let idasAoAuth: string[][];
 
 /** Cliente falso que APPLICA o mínimo que a rota usa: conversa existe, nota insere. */
 function clientFalso() {
@@ -97,20 +97,19 @@ function adminFalso() {
       };
       return cadeia;
     },
-    auth: {
-      admin: {
-        getUserById: async (id: string) => {
-          idasAoAuth.push(id);
-          const u = MEMBROS[id];
-          return {
-            data: {
-              user: { id, email: u?.email ?? null, user_metadata: { full_name: u?.full_name ?? null } },
-            },
-          };
-        },
-      },
-    },
     rpc: async (nome: string, args: Record<string, unknown>) => {
+      if (nome === "fn_nomes_de_membros") {
+        const ids = args.p_user_ids as string[];
+        idasAoAuth.push(ids);
+        return {
+          data: ids.map((user_id) => ({
+            user_id,
+            email: MEMBROS[user_id]?.email ?? null,
+            full_name: MEMBROS[user_id]?.full_name ?? null,
+          })),
+          error: null,
+        };
+      }
       emissões.push({ nome, args });
       return { data: null, error: null };
     },
@@ -123,7 +122,10 @@ async function criarNota(body: string): Promise<Response> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ body }),
   });
-  return POST(req as unknown as NextRequest, { params: Promise.resolve({ id: CONVERSA }) });
+  const res = await POST(req as unknown as NextRequest, { params: Promise.resolve({ id: CONVERSA }) });
+  // A rota dispara as menções com `void` (não segura a resposta): espera a fila de microtarefas esvaziar.
+  await new Promise((r) => setTimeout(r, 0));
+  return res;
 }
 
 const alvos = () =>
@@ -169,8 +171,8 @@ describe("POST /notes — menção de atendente (#2372)", () => {
     await criarNota("fala com @carlos sobre o orçamento");
 
     expect(alvos()).toEqual([CARLOS]);
-    // caminho legado: vai ao auth de cada membro da org para comparar nome/e-mail
-    expect(idasAoAuth).toEqual([ANA_LIMA, ANA_SOUZA, CARLOS]);
+    // caminho textual: UMA leitura com todos os membros da org para comparar nome/e-mail
+    expect(idasAoAuth).toEqual([[ANA_LIMA, ANA_SOUZA, CARLOS]]);
   });
 
   it("id de FORA da empresa no token não gera aviso nem ida ao auth", async () => {

@@ -1,4 +1,4 @@
--- manifest: 9086 — decrypt_cpf_lote(uuid[]): o export de contatos decifra o CPF em blocos (uma RPC e uma linha de audit por organização a cada bloco) em vez de uma RPC por contato; mesma guarda de org e papel (manager+) da decrypt_cpf.
+-- manifest: 9089 — decrypt_cpf_lote(uuid[]): o export de contatos decifra o CPF em blocos (uma RPC e uma linha de audit por organização a cada bloco) em vez de uma RPC por contato; mesma guarda de org e papel (manager+) da decrypt_cpf.
 --
 -- O GET /api/v1/contacts/export chamava decrypt_cpf contato a contato: até 10 mil
 -- idas ao banco, em série, cada uma com o seu insert em api_audit_log. A função

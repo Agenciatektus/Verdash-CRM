@@ -28,7 +28,6 @@ import { type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
-import { isServiceRoleConfigured } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import type { PipelineVocabulary } from "@/lib/kanban/types";
 import {
@@ -38,8 +37,8 @@ import {
   type NomesConhecidos,
   type RelatorioBruto,
 } from "@/lib/reports/atividades";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
 
 export const dynamic = "force-dynamic";
 
@@ -152,18 +151,8 @@ async function resolveNomes(
   const idsDeUsuario = [...new Set(bruto.by_actor.map((a) => a.user_id).filter(ehId))];
   const idsDeAgente = [...new Set(bruto.by_actor.map((a) => a.agent_id).filter(ehId))];
 
-  if (idsDeUsuario.length > 0 && isServiceRoleConfigured()) {
-    const admin = createAdminClient();
-    await Promise.all(
-      idsDeUsuario.map(async (id) => {
-        const { data } = await admin.auth.admin.getUserById(id);
-        usuarios[id] =
-          (data?.user?.user_metadata?.full_name as string | undefined) ??
-          data?.user?.email ??
-          null;
-      }),
-    );
-  }
+  const membros = await nomesDeMembros(orgId, idsDeUsuario);
+  for (const [id, m] of membros) usuarios[id] = m.full_name ?? m.email ?? null;
 
   if (idsDeAgente.length > 0) {
     // Client do usuário de novo — e AINDA ASSIM com `organization_id` escrito:
