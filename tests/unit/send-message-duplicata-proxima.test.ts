@@ -29,14 +29,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { criarTravaDeDuplicata } from "@/lib/agent-engine/agent/near-dup";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
 const corpoDoSend = (() => {
-  const i = FONTE.indexOf("send_message: tool({");
-  const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
+  const i = ENVIO_S7.indexOf("send_message: tool({");
+  const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
   expect(i).toBeGreaterThan(-1);
   expect(j).toBeGreaterThan(i);
-  return FONTE.slice(i, j);
+  return ENVIO_S7.slice(i, j);
 })();
 
 describe("send_message nunca reenvia repetição do mesmo turno", () => {
@@ -71,7 +72,7 @@ describe("a memória de duplicata só cresce com envio REAL e é semeada por his
   it("candidato aceito (sent/already_sent/queued) PROMOVE de em-voo para a memória", () => {
     // O `promover` está DEPOIS de `outcomes.push(outcome)` e sob os kinds que
     // saíram — transição exatamente uma vez (em-voo → aceitos), nunca dupla.
-    expect(FONTE).toMatch(
+    expect(ENVIO_S7).toMatch(
       /if \(outcome\.kind === 'sent' \|\| outcome\.kind === 'already_sent' \|\| outcome\.kind === 'queued'\) \{\s*estado\.dupTrava\.promover\(body\);/,
     );
   });

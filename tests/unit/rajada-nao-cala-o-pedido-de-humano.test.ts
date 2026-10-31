@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { buildOpeningMessage, inboundsNaoRespondidos } from "@/lib/agent-engine/agent/inbound-turn";
 import { detectAmbiguousOptOut, detectHumanHandoffRequest } from "@/lib/agent-engine/agent/human-handoff";
 import type { LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * A RAJADA — o dano colateral do pin, e a separação que o desfaz.
@@ -127,10 +128,10 @@ describe("fiação — as duas perguntas leem de fontes diferentes", () => {
   });
 
   it("o veto do falso-vazio segue na mensagem PINADA — é sobre o que o turno responde", () => {
-    const i = FONTE.indexOf("send_message: tool({");
-    const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    expect(FONTE.slice(i, j)).toMatch(/claimsCurrentInboundIsEmpty\(body, mensagemDoJob\)/);
+    expect(ENVIO_S7.slice(i, j)).toMatch(/claimsCurrentInboundIsEmpty\(body, mensagemDoJob\)/);
   });
 });

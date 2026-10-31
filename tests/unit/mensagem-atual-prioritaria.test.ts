@@ -9,6 +9,7 @@ import {
   claimsCurrentInboundIsEmpty,
 } from "@/lib/agent-engine/agent/inbound-turn";
 import type { LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 describe("mensagem atual do cliente", () => {
   it("fica depois da memória anterior e vence um resumo contaminado", () => {
@@ -118,11 +119,11 @@ describe("a barreira está no caminho do envio, não numa função de ninguém",
     "utf8",
   );
   const corpoDoSend = (() => {
-    const i = FONTE.indexOf("send_message: tool({");
-    const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    return FONTE.slice(i, j);
+    return ENVIO_S7.slice(i, j);
   })();
 
   it("o veto roda dentro de send_message.execute", () => {

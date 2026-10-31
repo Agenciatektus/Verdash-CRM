@@ -9,6 +9,8 @@ import {
 } from "@/lib/agent-engine/guardrails/before-send";
 import { parsePromiseClassification } from "@/lib/agent-engine/guardrails/promise/semantic";
 
+import { ENVIO_S7 } from "./_fonte-do-send-message";
+
 /**
  * CERCA C — nenhuma promessa ao cliente sai sem destino.
  *
@@ -295,7 +297,8 @@ describe("cerca prometer — follow-up agendado como destino (opção a)", () =>
   });
 
   it("fiação: o turno marca o follow-up só DEPOIS de o agendamento dar certo, e o passa ao gate", () => {
-    const fonte = fs.readFileSync(path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+    // Os argumentos do guardrail do `send_message` saíram do turno na S7 do ADR-0006.
+    const fonte = ENVIO_S7;
     // O corpo do `schedule_followup` mora em `turno/ferramentas/lead.ts` desde a S6 do ADR-0006.
     const lead = fs.readFileSync(path.join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/lead.ts"), "utf8");
     const inicio = lead.indexOf("export function criarScheduleFollowup(");

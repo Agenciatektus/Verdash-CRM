@@ -10,6 +10,7 @@ import type pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FlowGraph } from '@/lib/followup/graph-schema';
+import { ENVIO_S7, TEMPLATE_S7 } from '../../../tests/unit/_fonte-do-send-message';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno, type RoteiroDoTurno, type ValidarResposta } from './roteiro-no-turno';
 
 const GRAFO: FlowGraph = {
@@ -446,17 +447,22 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
 
   it('fiado no turno: a guarda liga o descarte e o enviar do roteiro veta por ele', () => {
     const src = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/inbound-turn.ts'), 'utf8');
-    const guarda = src.indexOf("code: 'resposta_obsoleta'");
+    // A guarda e a marca do descarte saíram com o `send_message` para `turno/ferramentas/`
+    // na S7 do ADR-0006: lê-se a remontagem dele, na ordem original.
+    const envio = ENVIO_S7;
+    const guarda = envio.indexOf("code: 'resposta_obsoleta'");
     // Uso no `enviar` do roteiro — o import (com `} perguntaDoRoteiroPodeSair,`)
-    // vem antes da guarda e enganaria um `indexOf` simples no nome.
+    // vem antes e enganaria um `indexOf` simples no nome.
     const enviaRoteiro = src.indexOf('!perguntaDoRoteiroPodeSair(');
-    const marcaDescarte = src.indexOf('turnoDescartado = true');
+    const marcaDescarte = envio.indexOf('turnoDescartado = true');
     expect(marcaDescarte).toBeGreaterThan(0);
-    // Uma só atribuição, e DENTRO da guarda: depois da chamada da régua.
-    expect(src.split('turnoDescartado = true').length - 1).toBe(1);
-    expect(marcaDescarte).toBeGreaterThan(src.indexOf('await respostaFicouObsoleta('));
+    // Uma só atribuição em todo o turno e nas ferramentas de envio, e DENTRO da guarda.
+    expect(`${src}\n${envio}\n${TEMPLATE_S7}`.split('turnoDescartado = true').length - 1).toBe(1);
+    const regua = envio.indexOf('await respostaFicouObsoleta(');
+    expect(regua).toBeGreaterThan(-1);
+    expect(marcaDescarte).toBeGreaterThan(regua);
     expect(marcaDescarte).toBeLessThan(guarda); // liga ANTES de devolver resposta_obsoleta
-    expect(enviaRoteiro).toBeGreaterThan(guarda); // o enviar do roteiro lê o descarte
+    expect(enviaRoteiro).toBeGreaterThan(-1); // o enviar do roteiro lê o descarte
     const tornoDoEnviar = src.slice(enviaRoteiro, enviaRoteiro + 200);
     expect(tornoDoEnviar).toContain('turnoDescartado');
   });

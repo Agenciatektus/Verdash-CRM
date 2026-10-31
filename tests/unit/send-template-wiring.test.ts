@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { AGENT_TOOL_DEFS } from "@/lib/agent-engine/agent/inbound-turn";
 import { CHANNEL_PROVIDER_META, CHANNEL_PROVIDER_WAHA, capabilitiesOf } from "@/lib/channels/capabilities";
+import { TEMPLATE_S7 } from "./_fonte-do-send-message";
 
 /**
  * A LIGAÇÃO do `send_template` no turno do agente.
@@ -45,11 +46,11 @@ const FONTE = fs.readFileSync(
 
 /** O corpo do `execute` da tool — recortado para as asserções não casarem noutro lugar. */
 function corpoDoExecute(): string {
-  const i = FONTE.indexOf("send_template: tool({");
+  const i = TEMPLATE_S7.indexOf("send_template: tool({");
   expect(i, "âncora `send_template: tool({` sumiu do turno").toBeGreaterThan(-1);
-  const j = FONTE.indexOf("search_knowledge: criarSearchKnowledge(", i);
+  const j = TEMPLATE_S7.indexOf("search_knowledge: criarSearchKnowledge(", i);
   expect(j, "âncora de fim (a tool seguinte) sumiu").toBeGreaterThan(i);
-  return FONTE.slice(i, j);
+  return TEMPLATE_S7.slice(i, j);
 }
 
 describe("send_template — a tool só existe onde o canal a exige", () => {

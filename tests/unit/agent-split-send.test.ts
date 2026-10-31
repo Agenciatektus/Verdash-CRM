@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
-
 import { describe, expect, it, vi } from "vitest";
 
 import { sendInBubbles } from "@/lib/agent-engine/agent/split-message";
+
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 describe("sendInBubbles", () => {
   it("split off → 1 envio com o corpo inteiro", async () => {
@@ -114,7 +114,8 @@ describe("sendInBubbles", () => {
   it("o turno passa o que resta do teto nos DOIS pontos: a pausa humana e o envio", () => {
     // A pausa é medida pela 1ª bolha do MESMO fatiamento que vai ao canal; com
     // maxBubbles 1 a 1ª bolha é o texto inteiro, então os dois têm de receber o teto.
-    const turno = readFileSync("lib/agent-engine/agent/inbound-turn.ts", "utf8");
+    // O `send_message` saiu do `inbound-turn.ts` na S7 do ADR-0006: lê-se a remontagem dele.
+    const turno = ENVIO_S7;
     expect(turno.match(/Math\.max\(1, maxSendsPerTurn - estado\.seq\)/g)?.length).toBe(2);
     expect(turno).toMatch(/maxBubbles: Math\.max\(1, maxSendsPerTurn - estado\.seq\)/);
   });

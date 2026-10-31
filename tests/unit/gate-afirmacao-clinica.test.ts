@@ -15,6 +15,8 @@ import type { Logger } from "@/lib/agent-engine/obs/logger";
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
 
+import { ENVIO_S7, TEMPLATE_S7 } from "./_fonte-do-send-message";
+
 /**
  * O GATE de afirmação clínica (`clinical_claim`). O detector tem os próprios casos em
  * `lib/agent-engine/guardrails/afirmacao-clinica.test.ts`; aqui se prova o resto do
@@ -158,12 +160,15 @@ const FONTE_PREVIEW = fs.readFileSync(
   "utf8",
 );
 
+// `send_message` e `send_template` saíram do turno na S7 do ADR-0006: lê-se a remontagem deles.
+const FONTE_FERRAMENTAS = `${ENVIO_S7}\n${TEMPLATE_S7}`;
+
 function corpoDoExecute(ancora: string, fim: string): string {
-  const i = FONTE_INBOUND.indexOf(ancora);
+  const i = FONTE_FERRAMENTAS.indexOf(ancora);
   expect(i, `âncora \`${ancora}\` sumiu do turno`).toBeGreaterThan(-1);
-  const j = FONTE_INBOUND.indexOf(fim, i);
+  const j = FONTE_FERRAMENTAS.indexOf(fim, i);
   expect(j, `âncora de fim \`${fim}\` sumiu`).toBeGreaterThan(i);
-  return FONTE_INBOUND.slice(i, j);
+  return FONTE_FERRAMENTAS.slice(i, j);
 }
 
 describe("fiação do gate — a escolha da organização chega ao send_message", () => {
@@ -193,6 +198,7 @@ describe("fiação do gate — a escolha da organização chega ao send_message"
     const bloco = corpo.slice(corpo.indexOf("chain.code === 'clinical_claim'"));
     expect(bloco.slice(0, bloco.indexOf("internal_vocabulary_leak"))).toMatch(/openCase\(/);
     expect(FONTE_INBOUND).not.toMatch(/enforceClinicalClaim:\s*false/);
+    expect(FONTE_FERRAMENTAS).not.toMatch(/enforceClinicalClaim:\s*false/);
   });
 
   it("o teto do fail-safe deixa ao menos UMA chance de reescrita", () => {

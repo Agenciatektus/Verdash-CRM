@@ -157,6 +157,10 @@ function poolQueGrava(rastro: Rastro, c: Cenario = {}) {
     if (c.contatoBloqueado && /from contacts where organization_id = \$1 and id = \$2/.test(texto)) {
       return { rows: [{ ...LINHA_DO_CONTATO, is_blocked: true }], rowCount: 1 };
     }
+    if (c.provider && texto.includes("select provider from channel_sessions")) return { rows: [{ provider: c.provider }], rowCount: 1 };
+    if (c.camadas && texto.includes("org_guardrail_layers")) {
+      return { rows: Object.entries(c.camadas).map(([layer, enabled]) => ({ layer, enabled })), rowCount: Object.keys(c.camadas).length };
+    }
     if (texto.includes("select timezone from organizations")) return { rows: [{ timezone: "America/Sao_Paulo" }], rowCount: 1 };
     if (texto.includes("playbook_pointers")) return { rows: [{ layer: "platform", version_id: "v1", content: "plataforma" }], rowCount: 1 };
     if (/from contacts where organization_id = \$1 and id = \$2/.test(texto)) return { rows: [LINHA_DO_CONTATO], rowCount: 1 };
@@ -215,6 +219,10 @@ type Cenario = {
   historico?: Array<{ direction: "inbound" | "outbound"; body: string }>;
   /** O contato chega com `is_blocked` (opt-out lido do CRM na abertura). */
   contatoBloqueado?: boolean;
+  /** Camadas da org ligadas (`org_guardrail_layers`), ex.: `{ afirmacao_clinica: true }`. */
+  camadas?: Record<string, boolean>;
+  /** Provedor da conexão (`channel_sessions.provider`); ausente = o padrão do dublê. */
+  provider?: string;
 };
 
 const AGENTE = {
@@ -432,6 +440,25 @@ const CENARIOS: Record<string, Cenario> = {
     ferramentas: [
       { nome: "update_lead_state", args: { stage: "contacted", reason: "respondeu" } },
       { nome: "send_message", args: { body: "Amanhã te mando o orçamento." } },
+    ],
+  },
+  // F8 envio (ADR-0006, S7), gravados contra o código de antes da extração. Fotos ficam
+  // nas cercas próprias: a cópia no Storage não tem dublê neste harness.
+  "envio: vocabulário interno vetado e solto no fail-safe": {
+    ferramentas: [
+      { nome: "send_message", args: { body: "Não consegui: resume_requires_person." } },
+      { nome: "send_message", args: { body: "Não consegui: resume_requires_person." } },
+    ],
+  },
+  "envio: afirmação clínica vetada com a camada ligada": {
+    camadas: { afirmacao_clinica: true },
+    ferramentas: [{ nome: "send_message", args: { body: "Você tem micose. Passe o antifúngico. Passe a pomada também." } }],
+  },
+  "envio: janela fechada aciona o breaker e recusa template desconhecido": {
+    provider: "datafy",
+    ferramentas: [
+      ...[1, 2, 3].map((n) => ({ nome: "send_message", args: { body: `Mensagem número ${n} com conteúdo distinto ${"x".repeat(n * 7)}` } })),
+      { nome: "send_template", args: { template_name: "retomada", language: "pt_BR", values: [] } },
     ],
   },
 };

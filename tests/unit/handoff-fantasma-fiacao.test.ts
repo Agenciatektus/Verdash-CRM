@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * FIAÇÃO — mesmo padrão de `gate-agenda-stall.test.ts`/`gate-vazamento-interno.test.ts`:
@@ -28,20 +29,20 @@ const FONTE_INGEST = fs.readFileSync(path.join(process.cwd(), "lib/waha/ingest.t
 
 describe("fiação — casePromiseGate recebe o nome do gerente do tenant", () => {
   it("send_message passa humanPromiseExtraTargets a partir de agentConfig.handoffKeywords", () => {
-    const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: criarUpdateLeadState(", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    const corpo = FONTE_INBOUND.slice(i, j);
+    const corpo = ENVIO_S7.slice(i, j);
     expect(corpo).toMatch(/humanPromiseExtraTargets:\s*agentConfig\?\.handoffKeywords/);
   });
 });
 
 describe("fiação — caso humano aberto move o lead pra etapa de handoff", () => {
   it("o fail-safe do case_promise (auto-abre-caso) chama moverParaHandoffBestEffort", () => {
-    const i = FONTE_INBOUND.indexOf("chain.status === 'vetoed' && chain.code === 'case_promise_without_case'");
+    const i = ENVIO_S7.indexOf("chain.status === 'vetoed' && chain.code === 'case_promise_without_case'");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 1800);
+    const janela = ENVIO_S7.slice(i, i + 1800);
     expect(janela).toMatch(/openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
   });
 

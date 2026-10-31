@@ -40,6 +40,7 @@ import {
   scenarioContext,
   type TurnPreview,
 } from "@/lib/agent-engine/agent/preview";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const PRODUTO = "bbbbbbbb-0000-4000-8000-000000000001";
@@ -267,11 +268,11 @@ describe("dry-run prepara a mídia do produto como o envio real (#2490)", () => 
     expect(bloco).toContain("prepararFotosDoProduto(pool, copiarFotoNoStorage(");
     expect(bloco).toContain(`conversationId: PASTA_DE_TESTE_DE_MIDIA`);
     // E o envio real continua com a dele — a prévia não pode tê-la substituído.
-    const iSend = fonte.indexOf("send_message: tool({");
-    const fimSend = fonte.indexOf("update_lead_state: criarUpdateLeadState(", iSend);
+    const iSend = ENVIO_S7.indexOf("send_message: tool({");
+    const fimSend = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", iSend);
     expect(iSend).toBeGreaterThan(-1);
     expect(fimSend).toBeGreaterThan(iSend);
-    const send = fonte.slice(iSend, fimSend);
+    const send = ENVIO_S7.slice(iSend, fimSend);
     expect(send).toContain("prepararFotosDoProduto(pool, copiarFotoNoStorage(runLog),");
   });
 });

@@ -33,6 +33,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { ENVIO_S7 } from "./_fonte-do-send-message";
+
 const ler = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const inbound = ler("lib/agent-engine/agent/inbound-turn.ts");
 const followup = ler("lib/agent-engine/agent/followup-turn.ts");
@@ -74,7 +76,8 @@ describe("follow-up fixo não tem gate near-dup (decisão mantida e documentada)
     // Follow-up de promessa roda por runAgentTurn → send_message, cujo gate em
     // memória do turno (semeado com a janela) cobre a quase-repetição.
     expect(followup).toContain("runAgentTurn");
-    expect(inbound).toContain("dupTrava.checar(body)");
+    // O corpo do `send_message` mora em `turno/ferramentas/` desde a S7 do ADR-0006.
+    expect(ENVIO_S7).toContain("dupTrava.checar(body)");
     expect(inbound).toContain("corposEnviadosDesdeUltimaInbound(");
   });
 });
@@ -82,13 +85,14 @@ describe("follow-up fixo não tem gate near-dup (decisão mantida e documentada)
 // ─── invariantes transversais nos dois arquivos sensiveis ───────────────────
 describe("nunca entregue e nunca despachado fora do contrato, nos dois caminhos", () => {
   it("inbound: a supressão vem ANTES da cadeia de despacho e antes de qualquer outcome", () => {
-    const gi = inbound.indexOf("dupTrava.checar(body)");
+    // Lê a remontagem do `send_message` (S7 do ADR-0006), na ordem original.
+    const gi = ENVIO_S7.indexOf("dupTrava.checar(body)");
     expect(gi).toBeGreaterThan(-1);
-    const ri = inbound.indexOf("runBeforeSend(", gi);
+    const ri = ENVIO_S7.indexOf("runBeforeSend(", gi);
     expect(ri).toBeGreaterThan(gi);
     // Entre a supressão e a cadeia não há registro de outcome: um veto não é
     // resposta e não pode virar entrega (nem ledger, nem contagem de envio).
-    expect(inbound.slice(gi, ri)).not.toContain("outcomes.push");
+    expect(ENVIO_S7.slice(gi, ri)).not.toContain("outcomes.push");
   });
 
   it("corpo vazio é estruturalmente indespachável (schema min(1))", () => {

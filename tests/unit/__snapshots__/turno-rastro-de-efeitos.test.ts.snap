@@ -51,6 +51,75 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > desvio: suspeita de opt-out
 ]
 `;
 
+exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: afirmação clínica vetada com a camada ligada 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "tool:send_message recusou clinical_claim",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: janela fechada aciona o breaker e recusa template desconhecido 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "tool:send_message recusou messaging_window_closed",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "tool:send_message recusou messaging_window_closed",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "log:warn breaker: warn (same_tool_failure)",
+  "tool:send_message recusou messaging_window_closed",
+  "tool:send_template recusou template_desconhecido",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: vocabulário interno vetado e solto no fail-safe 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "tool:send_message recusou internal_vocabulary_leak",
+  "db:begin",
+  "db:rollback",
+  "db:insert before_send_traces",
+  "log:warn fail-safe do gate de vocabulário interno: envio liberado após vetos seguidos",
+  "db:begin",
+  "send:text "Não consegui: resume_requires_person."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok #6cfce56a",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
 exports[`rastro de efeitos do turno (ADR-0006, S0) > erro do modelo: provedor fora 1`] = `
 [
   "db:update agent_inbox_items status='resolved'",

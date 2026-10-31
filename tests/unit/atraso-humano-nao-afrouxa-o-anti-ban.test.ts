@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { sendInBubbles } from "@/lib/agent-engine/agent/split-message";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * A PERGUNTA QUE DECIDE ESTE RECURSO: o atraso humano SOMA ao anti-ban, ou SUBSTITUI?
@@ -177,9 +178,9 @@ describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha
 
 describe("fiação — a espera humana é paga UMA vez por turno", () => {
   it("`esperaForaDoLock` abre com a guarda do flag e a arma antes de esperar", () => {
-    const i = FONTE_INBOUND.indexOf("esperaForaDoLock: async (): Promise<void> => {");
+    const i = ENVIO_S7.indexOf("esperaForaDoLock: async (): Promise<void> => {");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 400);
+    const janela = ENVIO_S7.slice(i, i + 400);
     // Ordem importa: guardar DEPOIS de esperar não impediria a segunda espera.
     expect(janela).toMatch(/if \(estado\.jaEsperouComoHumano\) return;\s*\n\s*estado\.jaEsperouComoHumano = true;/);
   });
@@ -203,11 +204,11 @@ describe("fiação — a espera humana é paga UMA vez por turno", () => {
     // bolhas E fotos, e o MESMO jitter vale entre as duas — por isso a âncora é o
     // callback, não mais a chamada de `sendInBubbles`.
     // O do `send_message` — o `send_template`, antes dele, tem um callback homônimo.
-    const doSendMessage = FONTE_INBOUND.indexOf("send_message: tool({");
+    const doSendMessage = ENVIO_S7.indexOf("send_message: tool({");
     expect(doSendMessage).toBeGreaterThan(-1);
-    const i = FONTE_INBOUND.indexOf("send: (finalBody: string) =>", doSendMessage);
+    const i = ENVIO_S7.indexOf("send: (finalBody: string) =>", doSendMessage);
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 2400);
+    const janela = ENVIO_S7.slice(i, i + 2400);
     // Os dois convivem: o jitter é throttle anti-ban entre mensagens físicas, o
     // atraso humano é a pausa do turno. Perder o primeiro é afrouxar o anti-ban.
     // Desde a 0499 o jitter LÊ os knobs da conexão (throttleMs + jitterMaxMs,

@@ -10,6 +10,7 @@ import {
 } from "@/lib/agent-engine/guardrails/before-send";
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * O GATE de "vou verificar/confirmar agenda sem checar" — a cura DETERMINÍSTICA para o
@@ -306,11 +307,11 @@ const FONTE_INBOUND = fs.readFileSync(
 
 describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal, não a decisão de chamar", () => {
   it("send_message passa `agenda` calculado a partir de toolIds e da flag de execução", () => {
-    const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: criarUpdateLeadState(", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    const corpo = FONTE_INBOUND.slice(i, j);
+    const corpo = ENVIO_S7.slice(i, j);
     // Desde a #831 o `send_message` não compara com uma ferramenta só: ele pergunta
     // às duas funções de fiação, e `temFerramentaDeMarcacao` cobre também a que
     // consulta e marca numa chamada só (`crm_find_and_book_appointment`).

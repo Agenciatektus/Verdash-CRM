@@ -203,3 +203,6 @@ export async function tratarDesviosDeterministicos(c: ContextoDoTurno, e: Entrad
     valor: { channel, liveChannel, optedOutThisTurn, lgpd, avisoDaEscalacao, mensagemDoJob, inboundsPendentes },
   } as const satisfies Passo<unknown>;
 }
+
+/** O que os desvios devolvem ao turno quando ele segue (o envio da S7 lê os campos). */
+export type SaidaDosDesvios = Extract<Awaited<ReturnType<typeof tratarDesviosDeterministicos>>, { seguir: true }>['valor'];
