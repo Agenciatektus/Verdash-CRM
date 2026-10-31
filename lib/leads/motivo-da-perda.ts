@@ -255,9 +255,18 @@ export function recusaDeMotivoForaDoVocabulario(input: {
   const motivo = (input.motivo ?? "").trim();
   if (motivo.length === 0) return null;
 
-  const extras = (input.settingsDoFunil as { lost_reasons?: unknown } | null | undefined)
-    ?.lost_reasons;
-  const aceitos = new Set<string>([
+  if (vocabularioDeMotivos(input.settingsDoFunil).includes(motivo)) return null;
+
+  return {
+    codigo: "lost_reason_invalid",
+    mensagem: traduzir(MOTIVO_DA_PERDA_FORA_DO_VOCABULARIO, input.idioma ?? IDIOMA_PADRAO),
+  };
+}
+
+/** Os motivos que o banco aceita neste funil: canônicos + `settings.lost_reasons`. */
+export function vocabularioDeMotivos(settingsDoFunil: unknown): string[] {
+  const extras = (settingsDoFunil as { lost_reasons?: unknown } | null | undefined)?.lost_reasons;
+  return [
     ...CANONICAL_LOST_REASONS,
     // #1537: o item é texto puro OU `{ label, categoria }` — o mesmo que o trigger
     // aceita; ler só o texto recusava aqui o motivo que o banco aceitaria.
@@ -266,11 +275,5 @@ export function recusaDeMotivoForaDoVocabulario(input: {
           .map((v) => (typeof v === "string" ? v : (v as { label?: unknown } | null)?.label))
           .filter((v): v is string => typeof v === "string" && v.length > 0)
       : []),
-  ]);
-  if (aceitos.has(motivo)) return null;
-
-  return {
-    codigo: "lost_reason_invalid",
-    mensagem: traduzir(MOTIVO_DA_PERDA_FORA_DO_VOCABULARIO, input.idioma ?? IDIOMA_PADRAO),
-  };
+  ];
 }

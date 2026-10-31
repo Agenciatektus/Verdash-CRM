@@ -4622,6 +4622,15 @@ export const DICIONARIO: Traducoes = {
   "A conversa de configuração mostra um erro e preserva o que foi escrito; nenhum agente é criado.": {
     es: "La conversación de configuración muestra un error y conserva lo escrito; no se crea ningún agente.",
   },
+  "Organizar o funil pela conversa": {
+    es: "Organizar el embudo según la conversación",
+  },
+  "Lê a conversa de cada negócio aberto e, quando uma mensagem da sua equipe sustenta, leva o card para a etapa certa do funil. Só avança, nunca marca como ganho e nunca fala com o cliente.": {
+    es: "Lee la conversación de cada negocio abierto y, cuando un mensaje de tu equipo lo respalda, lleva la tarjeta a la etapa correcta del embudo. Solo avanza, nunca marca como ganado y nunca habla con el cliente.",
+  },
+  "Os cards ficam parados na primeira etapa mesmo com a conversa andando, e o funil deixa de refletir a venda.": {
+    es: "Las tarjetas quedan paradas en la primera etapa aunque la conversación avance, y el embudo deja de reflejar la venta.",
+  },
   "Ler a resposta ao follow-up": {
     es: "Leer la respuesta al seguimiento",
   },
