@@ -102,6 +102,11 @@ const FONTE = readFileSync(
   "utf8",
 );
 
+// F13 (urgência no ramo do cap) mora em `turno/desfecho-do-envio.ts` desde a S3 do ADR-0006.
+const FONTE_EFEITOS = readFileSync(
+  join(process.cwd(), "lib/agent-engine/agent/turno/desfecho-do-envio.ts"),
+  "utf8",
+);
 describe("fiação — as duas perguntas leem de fontes diferentes", () => {
   it("handoff, opt-out e urgência leem os inbounds pendentes, POR MENSAGEM", () => {
     // Presença antes de qualquer coisa: uma asserção que some junto com o código
@@ -109,7 +114,7 @@ describe("fiação — as duas perguntas leem de fontes diferentes", () => {
     expect(FONTE).toMatch(/const inboundsPendentes = inboundsNaoRespondidos\(/);
     expect(FONTE).toMatch(/inboundsPendentes\.some\([\s\S]{0,200}?detectHumanHandoffRequest\(/);
     expect(FONTE).toMatch(/inboundsPendentes\.some\(\(texto\) => detectAmbiguousOptOut\(texto\)\)/);
-    expect(FONTE).toMatch(/inboundsPendentes\.some\(\(texto\) => detectUrgencySignal\(texto\)\)/);
+    expect(FONTE_EFEITOS, "urgência lida em F13 (turno/desfecho-do-envio.ts, S3)").toMatch(/inboundsPendentes\.some\(\(texto\) => detectUrgencySignal\(texto\)\)/);
     // E nenhum deles voltou a olhar só a última linha do histórico.
     expect(FONTE).not.toMatch(/detectAmbiguousOptOut\(latestInboundSignal\(/);
   });

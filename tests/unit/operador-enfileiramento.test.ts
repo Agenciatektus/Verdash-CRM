@@ -76,7 +76,7 @@ describe("decidirSeEnfileiraOperador", () => {
  */
 describe("o chamador honra a decisão", () => {
   const fonte = readFileSync(
-    path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
+    path.join(process.cwd(), "lib/agent-engine/agent/turno/efeitos-pos-turno.ts"),
     "utf8",
   );
 

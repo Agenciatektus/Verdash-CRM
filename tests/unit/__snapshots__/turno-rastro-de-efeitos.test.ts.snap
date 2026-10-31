@@ -118,6 +118,34 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: lead em handoff hu
 ]
 `;
 
+exports[`rastro de efeitos do turno (ADR-0006, S0) > pós-turno: tentativa do Operador, emissão e golden (nota fora do rastro) 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:stage_classifier",
+  "llm:agent_turn",
+  "db:insert lead_state",
+  "db:insert lead_state_transitions",
+  "log:warn espelho de stage no CRM falhou — harness mantido",
+  "db:insert agent_inbox_items",
+  "tool:update_lead_state ok",
+  "db:begin",
+  "send:text "Amanhã te mando o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "job:insert job_queue",
+  "log:error turno do operador NÃO foi enfileirado (o turno segue)",
+  "db:insert crm_lead_activities",
+  "db:insert golden_candidates",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
 exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de envios 1`] = `
 [
   "db:update agent_inbox_items status='resolved'",

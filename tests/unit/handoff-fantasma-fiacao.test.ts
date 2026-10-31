@@ -14,6 +14,11 @@ const FONTE_INBOUND = fs.readFileSync(
   path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
   "utf8",
 );
+// F13 (reagendamento por cap) mora em `turno/desfecho-do-envio.ts` desde a S3 do ADR-0006.
+const FONTE_EFEITOS = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/desfecho-do-envio.ts"),
+  "utf8",
+);
 const FONTE_INGEST = fs.readFileSync(path.join(process.cwd(), "lib/waha/ingest.ts"), "utf8");
 
 describe("fiação — casePromiseGate recebe o nome do gerente do tenant", () => {
@@ -52,9 +57,9 @@ describe("fiação — caso humano aberto move o lead pra etapa de handoff", () 
 
 describe("fiação — lead urgente represado pelo cap de warm-up gera alerta crítico", () => {
   it("o bloco de reagendamento por cap checa detectUrgencySignal e abre agent_inbox_items kind='handoff'", () => {
-    const i = FONTE_INBOUND.indexOf("pacingCapVeto !== null && outcomes.length === 0");
+    const i = FONTE_EFEITOS.indexOf("pacingCapVeto !== null && outcomes.length === 0");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 2000);
+    const janela = FONTE_EFEITOS.slice(i, i + 2000);
     // A fonte do sinal mudou de "a última inbound do histórico" para "todo inbound
     // ainda não respondido", porque o drain COALESCE rajada: um relato de risco
     // que chega na 2ª mensagem entra de carona no job da 1ª e, lido só pela

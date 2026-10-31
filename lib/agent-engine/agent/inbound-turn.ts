@@ -50,9 +50,6 @@ import {
 import { citationsFromHits, searchKnowledge } from './search-knowledge';
 import type { CrmEdgeConfig } from '../edge/crm/mcp-client';
 import { WahaChannelAdapter } from '../edge/channel/waha-adapter';
-// applySendOutcome é disposição de FILA (cancel/reschedule + cache de opt-out), não
-// egress de canal — o envio em si vai pelo adapter (ChannelAdapter). Ver F2-25.
-import { applySendOutcome } from '../edge/crm/send-message';
 import {
   LlmBudgetExceededError,
   runModelCall,
@@ -64,11 +61,9 @@ import {
 import type { ProviderRegistry } from '../edge/llm/providers';
 import { HANDOFF_REASON_ORCAMENTO } from '../edge/llm/orcamento';
 import { abreAvisoDoEspelhoRecusado, mirrorLeadStageToCrm } from '../edge/crm/move-lead-stage';
-import { insertInboxItem } from '../db/repository';
 import { criarConferidorDeAfirmacoes } from '@/lib/ai/decisao/afirmacao-de-fato';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { moverLeadParaEtapaDeHandoff } from '@/lib/leads/handoff-stage-move';
-import { detectUrgencySignal } from '../guardrails/sinal-de-urgencia';
 import { buildNativeMediaParts } from './media-parts';
 import {
   copiarFotoNoStorage,
@@ -77,7 +72,7 @@ import {
   PASTA_DE_TESTE_DE_MIDIA,
   type FotoParaEnvio,
 } from './fotos-do-produto';
-import { enqueueJob, rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
+import { rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
 import {
   applyLeadStateUpdate,
   type LeadStage,
@@ -130,12 +125,10 @@ import {
 import { pruneToolResults, toolPartsAsText, type PruneToolResultsKnobs } from './prune-tool-results';
 import {
   classifyStage,
-  recordStageDivergenceCandidate,
   renderStageHint,
   type StageClassifierKnobs,
 } from './stage-classifier';
 import { classificadoresDoTurno } from './classificadores-do-turno';
-import { promessasEmAberto } from './declaracao';
 import {
   projetarContexto,
   projetarRetornoDeTool,
@@ -201,15 +194,12 @@ import {
   montarBriefingDaPassagem,
   type BriefingDaPassagem,
 } from '@/lib/escalacao/briefing-da-passagem';
-import { diffCheckpoint } from '@/lib/leads/checkpoint-diff';
 import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from './turno-mudo';
 import { criarTravaDeDuplicata } from './near-dup';
 import { vetoReason } from '@/lib/leads/veto-activity';
 import { corposEnviadosDesdeUltimaInbound } from './memoria-envio';
 import { emitAgentActivityForContact } from '@/lib/leads/agent-activity';
-import { resolveActiveLeadForContact, type LeadCandidate } from '@/lib/leads/active-lead';
 import { aplicaDestinoDaIntencao, funisDeProdutoDoRoteador } from './destino-da-intencao';
-import { recalculaScoreDoLead } from '@/lib/leads/score-writer';
 import {
   JAILBREAK_ESCALATION_LEVEL,
   classifyJailbreak,
@@ -220,6 +210,7 @@ import {
 import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
 import { carregarContextoDoTurno } from './turno/contexto';
+import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
 import {
   nivelFinalDaManipulacao,
   perguntarManipulacaoAoJev,
@@ -227,7 +218,6 @@ import {
   type ManipulacaoDoJev,
 } from '@/lib/ai/decisao/manipulacao';
 import type { DependenciasDoPonto } from '@/lib/ai/decisao/ponto';
-import { perguntarUrgenciaAoJev, registrarUrgenciaDoJev } from '@/lib/ai/decisao/urgencia';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
@@ -5074,337 +5064,14 @@ async function executarTurnoDoAgente(
     const checkpointAnterior = await latestCheckpoint(pool, tenantId, leadId);
     await insertCheckpoint(pool, { tenantId, leadId, jobId: liveJob().id, content });
 
-    // ── O TURNO DO OPERADOR (spec 16 §3.2) ─────────────────────────────────────
-    //
-    // Enfileirado AQUI, pelo RUNTIME, logo depois de o checkpoint existir — nunca
-    // por decisão do modelo. Um Conversador que "chama" o Operador devolveria o
-    // problema inteiro: voltaria a depender de o modelo lembrar, e o turno em que
-    // ele não achasse necessário seria um lead parado no funil, em silêncio.
-    //
-    // Depois do checkpoint porque a declaração É o insumo do Operador; enfileirar
-    // antes criaria uma corrida em que ele leria o checkpoint do turno ANTERIOR e
-    // agiria sobre um turno que não é o seu.
-    //
-    // Fire-and-forget: falha ao enfileirar NÃO derruba um turno que já respondeu
-    // ao cliente. O `sourceEventId` é o job do Conversador, então o retry da fila
-    // não gera um segundo Operador para o mesmo turno.
-    const disparo = decidirSeEnfileiraOperador({
-      temAgentePublicado: agentConfig !== null,
-      papelLigado: agentConfig?.operatorEnabled ?? false,
-    });
-    if (!disparo.enfileira) {
-      runLog.info('turno do operador não enfileirado', { porque: disparo.porque });
-    } else {
-      try {
-        const { deduped } = await enqueueJob(pool, tenantId, {
-          kind: 'operator_turn',
-          leadId,
-          sourceEventId: liveJob().id,
-          payload: {
-            conversation_id: input.conversationId,
-            origin_job_id: liveJob().id,
-            agent_id: agentConfig?.agentId ?? null,
-          },
-        });
-        runLog.info('turno do operador enfileirado', { deduped });
-      } catch (err) {
-        runLog.error('turno do operador NÃO foi enfileirado (o turno segue)', {
-          error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
-        });
-        // O CATCH TINHA A DOUTRINA CERTA E A CONCLUSÃO ERRADA.
-        //
-        // "O aviso não pode derrubar o turno que já respondeu ao cliente" está certo.
-        // "Então basta um log" não: o enfileiramento é o ÚNICO mecanismo que garante o
-        // disparo do papel, e falhar aqui significa que a promessa que o Conversador
-        // acabou de fazer não terá dono e ninguém vai saber.
-        //
-        // É a mesma lição que este arquivo já aplicou no catch das capacidades MCP,
-        // onde o comentário diz que a versão anterior "dizia 'o humano vê o log'. Não
-        // vê." Lição aplicada numa ocorrência e não na irmã.
-        //
-        // Só quando HÁ promessa: sem ela o Operador teria decidido "nada a fazer", e
-        // item sem ação é ruído — ruído ensina a ignorar a Central.
-        const promessas = promessasEmAberto(content.declaracao ?? null);
-        if (promessas.length > 0) {
-          try {
-            await insertInboxItem(
-              pool,
-              tenantId,
-              {
-                kind: 'promise_unfulfilled',
-                severity: 'warn',
-                title: 'Um retorno prometido a um cliente ficou sem dono',
-                body:
-                  'O assistente prometeu algo a esta pessoa nesta conversa e o passo que registra ' +
-                  'o cumprimento não chegou a ser agendado. Abra a conversa, veja o que foi ' +
-                  'combinado e cumpra você mesmo.',
-                refKind: 'conversation',
-                refId: input.conversationId,
-              },
-              'kind_e_ref',
-            );
-          } catch (erroDoAviso) {
-            runLog.error('aviso de promessa sem dono não foi gravado', {
-              error: (erroDoAviso instanceof Error
-                ? erroDoAviso.message
-                : String(erroDoAviso)
-              ).slice(0, 120),
-            });
-          }
-        }
-      }
-    }
-
-    const mudanca = diffCheckpoint(
-      checkpointAnterior
-        ? {
-            commitments: (checkpointAnterior.commitments ?? []) as string[],
-            objections: (checkpointAnterior.objections ?? []) as string[],
-            next_action: checkpointAnterior.next_action ?? null,
-            rolling_summary: checkpointAnterior.rolling_summary ?? null,
-          }
-        : null,
-      content,
+    // F13 — efeitos pós-turno (ADR-0006, S3): Operador, emissão, nota, golden, veto e cap.
+    await executarEfeitosPosTurno(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      {
+        agentConfig, content, checkpointAnterior, closing, stageSuggestion, confirmedStage,
+        outcomes, pacingCapVeto, inboundsPendentes, turn,
+      },
     );
-
-    if (mudanca.emit) {
-      try {
-        const r = await emitAgentActivityForContact({
-          pool,
-          organizationId: tenantId,
-          contactId: leadId,
-          type: 'ai_turn',
-          sourceModule: 'agent',
-          sourceId: liveJob().id,
-          // O lastro é a chamada de modelo que PRODUZIU este checkpoint
-          // (llm_calls.id). Sem ele a linha entraria como 'system' e perderia a
-          // autoria justamente no evento mais "de IA" que existe.
-          ...(closing.callId ? { evidence: { llm_call_ids: [closing.callId] } } : {}),
-          ...(agentConfig?.agentId ? { agentId: agentConfig.agentId } : {}),
-          reason: mudanca.reason,
-          payload: {
-            added_commitments: mudanca.addedCommitments,
-            added_objections: mudanca.addedObjections,
-            next_action_changed: mudanca.nextActionChanged,
-          },
-        });
-        if (!r.routed) {
-          runLog.info('checkpoint sem negócio para pendurar: registrado no event_log', {
-            reason: r.reason,
-          });
-        }
-      } catch (err) {
-        // A timeline do turno não pode derrubar o turno.
-        runLog.error('falha ao registrar atividade de checkpoint (segue)', {
-          error: err instanceof Error ? err.name : 'unknown',
-        });
-      }
-    }
-
-    // ── A NOTA DO NEGÓCIO ──────────────────────────────────────────────────────
-    //
-    // O turno acabou de mexer em TUDO que a fórmula lê: compromissos e objeções
-    // (o checkpoint acima) e a qualificação BANT (`lead_state`, escrita pelo
-    // update_lead_state do modelo). Recalcular aqui é recalcular no instante em
-    // que os sinais mudaram — não há evento melhor.
-    //
-    // ⚠️ POR QUE ISTO EXISTE: `recalculaScoreDoLead` estava escrita, testada e
-    // com constraint no banco exigindo o `reason` — e SEM UM ÚNICO CHAMADOR no
-    // repositório inteiro. Nenhuma nota jamais foi calculada. O modo de falha era
-    // mudo: o card simplesmente não mostrava número, e "não tem nota ainda" é
-    // indistinguível de "ninguém nunca calcula".
-    //
-    // Fora do `if (mudanca.emit)` DE PROPÓSITO: o BANT muda em turnos que não
-    // mexem no checkpoint, e esses turnos também mudam a nota. Amarrar o cálculo
-    // à emissão da atividade faria a nota envelhecer em silêncio — o mesmo
-    // defeito, um andar acima.
-    //
-    // Falha aqui não derruba o turno: nota é derivado, e o próximo turno
-    // recalcula. O que não pode é o cliente ficar sem resposta por causa dela.
-    try {
-      const alvo = await resolveActiveLeadForContact(
-        (
-          await pool.query<LeadCandidate>(
-            `select l.id, l.organization_id, l.pipeline_id, l.status,
-                  l.last_activity_at, l.created_at
-             from crm_leads l
-            where l.organization_id = $1 and l.contact_id = $2`,
-            [tenantId, leadId],
-          )
-        ).rows,
-      );
-      if (alvo.routed) {
-        const r = await recalculaScoreDoLead(pool, tenantId, alvo.leadId);
-        runLog.info('score do negócio recalculado', {
-          lead_id: alvo.leadId,
-          gravou: r.gravou,
-          ...(r.motivo !== undefined ? { motivo: r.motivo } : {}),
-        });
-      }
-    } catch (err) {
-      runLog.error('falha ao recalcular score (segue)', {
-        error: err instanceof Error ? err.name : 'unknown',
-      });
-    }
-
-    // F3-11: divergência classificador×modelo. O classificador sugeriu um estágio; se o
-    // modelo confirmou (via update_lead_state — a máquina F2-10) um estágio DIFERENTE, o
-    // desacordo vira candidato ao golden set (linha em `golden_candidates` — mesma tabela
-    // da F3-09, migration 0428). Sem sugestão, sem confirmação, ou concordância ⇒ nenhuma
-    // linha (zero divergência).
-    if (
-      deps.knobs.goldenCandidates === true &&
-      stageSuggestion !== null &&
-      confirmedStage !== null &&
-      stageSuggestion !== confirmedStage
-    ) {
-      await recordStageDivergenceCandidate(
-        pool,
-        {
-          tenantId,
-          leadId,
-          jobId: liveJob().id,
-          divergence: { suggested: stageSuggestion, confirmed: confirmedStage },
-        },
-        runLog,
-      );
-    }
-
-    const blocked = outcomes.find((o) => o.kind === 'blocked');
-    if (blocked !== undefined) {
-      // veto permanente (regra dura nº 2): cancela o job e cacheia o opt-out —
-      // depois do checkpoint (o artefato do turno fica registrado mesmo em veto).
-      await applySendOutcome(
-        pool,
-        blocked,
-        {
-          jobId: liveJob().id,
-          workerId: ctx.workerId,
-          tenantId,
-          leadId,
-          jobClaim: claimOfJob(liveJob()),
-        },
-        { queuedRetryDelayMs: deps.knobs.queuedRetryDelayMs },
-      );
-      throw new JobSettledError(
-        'turno encerrado com veto do sink (is_blocked) — job cancelado em definitivo, checkpoint gravado',
-      );
-    }
-
-    // Cap de warm-up/diário vetou toda tentativa de envio deste turno e nada saiu: sem
-    // isto, o job terminava 'ok' com `messages_sent: 0` e o lead ficava sem resposta até
-    // escrever de novo por conta própria (ou nunca) — medido em produção, 2026-08-29
-    // (número no dia 0 de warm-up, cap batido pelo volume da própria conversa de teste).
-    // Mesmo contrato da janela anti-ban (linha ~1233): adia sem gastar `attempts`, o job
-    // volta a 'pending' na hora certa e o mesmo turno roda de novo, com o mesmo contexto.
-    if (pacingCapVeto !== null && outcomes.length === 0) {
-      // Capturado num `const`: `pacingCapVeto` é reatribuído numa closure em outro ponto do
-      // turno, e o TS reabre a união (perde o `!== null`) depois de qualquer chamada — o
-      // valor JÁ CHECADO não muda, só a inferência precisa de um nome que não reatribui.
-      const veto = pacingCapVeto;
-      await rescheduleJob(pool, liveJob().id, ctx.workerId, {
-        acquiredAt: claimOfJob(liveJob())?.acquired_at,
-        delayMs: Math.max(veto.nextAllowedAt.getTime() - clock().getTime(), 1_000),
-        reason: `cap de envio (${veto.code}) atingido — turno adiado para a próxima abertura`,
-      });
-      runLog.info('turno adiado — cap de envio atingido antes de qualquer mensagem sair', {
-        code: veto.code,
-        proxima_abertura: veto.nextAllowedAt.toISOString(),
-      });
-      // O reagendamento acima trata toda mensagem represada igual — um lead relatando
-      // risco de segurança (freio, fumaça, bateria esquentando) esperaria a mesma janela
-      // que um "bom dia" qualquer, às vezes horas (medido num tenant de produção:
-      // 20h+ represado num relato de bateria superaquecendo). Sem furar o cap de
-      // warm-up/diário em si (proteção anti-banimento — mexer nisso é decisão de
-      // produto, não deste guardrail), abre um alerta CRÍTICO na Central agora, pra um
-      // humano poder responder manualmente pelo próprio WhatsApp enquanto o número
-      // aquece. Dedupe por (kind, ref) — não reabre um já aberto pra esta conversa.
-      //
-      // A REGRA continua decidindo (#2232): ela decide; onde não, o Jev só OPINA (R3),
-      // nasce em observação e, com "Avisar a equipe", abre o MESMO alerta
-      // `kind='handoff'`, sem a frase do cliente (#1747).
-      if (inboundsPendentes.some((texto) => detectUrgencySignal(texto))) {
-        await insertInboxItem(
-          pool,
-          tenantId,
-          {
-            kind: 'handoff',
-            severity: 'critical',
-            title: 'Lead com sinal de urgência represado pelo cap de envio do número',
-            body:
-              `Mensagem do lead parece relatar risco/urgência, mas o número está em ` +
-              `warm-up/bateu o cap diário (${veto.code}) — a resposta automática só sai em ` +
-              `${veto.nextAllowedAt.toISOString()}. Considere responder manualmente pelo ` +
-              `WhatsApp enquanto o número aquece.`,
-            refKind: 'conversation',
-            refId: input.conversationId,
-          },
-          'kind_e_ref',
-        ).catch((err) => {
-          runLog.warn('alerta de urgência represada por warmup_cap falhou (best-effort)', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-      } else if (!preview) {
-        const mensagemRepresada = inboundsPendentes[inboundsPendentes.length - 1] ?? '';
-        const urgencia = await perguntarUrgenciaAoJev(
-          pool,
-          {
-            organizationId: tenantId,
-            conversationId: input.conversationId || null,
-            messageId: input.inboundMessageId ?? null,
-            contactId: leadId || null,
-            jobId: liveJob().id,
-            mensagem: mensagemRepresada,
-          },
-          deps.jev,
-        );
-        if (urgencia !== null) {
-          await registrarUrgenciaDoJev(pool, {
-            organizationId: tenantId,
-            contactId: leadId || null,
-            conversationId: input.conversationId || null,
-            messageId: input.inboundMessageId ?? null,
-            jobId: liveJob().id,
-            urgencia,
-          });
-          if (urgencia.percebeu && urgencia.estado === 'decidindo') {
-            await insertInboxItem(
-              pool,
-              tenantId,
-              {
-                kind: 'handoff',
-                severity: 'critical',
-                title: 'Lead com risco percebido pelo modelo de decisão represado pelo cap de envio',
-                body:
-                  `A regra de urgência de hoje não reconheceu o risco, mas o modelo de decisão ` +
-                  `percebeu, numa mensagem represada, risco à segurança ou à saúde ` +
-                  `(origem: percebido pelo modelo de decisão, visível só para a equipe). O ` +
-                  `número está em warm-up/bateu o cap diário (${veto.code}) — a resposta ` +
-                  `automática só sai em ${veto.nextAllowedAt.toISOString()}. Considere ` +
-                  `responder manualmente pelo WhatsApp enquanto o número aquece.`,
-                refKind: 'conversation',
-                refId: input.conversationId,
-              },
-              'kind_e_ref',
-            ).catch((err) => {
-              runLog.warn('alerta de urgência percebida pelo modelo represada falhou (best-effort)', {
-                error: err instanceof Error ? err.message : String(err),
-              });
-            });
-          }
-        }
-      }
-      throw new JobSettledError(
-        'cap de envio atingido — job reagendado para a próxima abertura, sem mensagem enviada',
-      );
-    }
-
-    runLog.info('turno do agente concluído', {
-      kind: liveJob().kind,
-      messages_sent: outcomes.length,
-      model: turn.model,
-    });
   } finally {
     // Turno que terminou sem enviar (veto, handoff, erro) também para de renovar.
     pararDigitando();

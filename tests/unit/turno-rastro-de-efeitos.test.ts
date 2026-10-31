@@ -99,7 +99,15 @@ const VERSAO = "88888888-8888-4888-8888-888888888888";
 /** Data fixa do claim do job: `new Date()` deixaria o rastro dependente do relógio. */
 const CLAIM_EM = "2026-10-06T14:59:00.000Z";
 
-function poolQueGrava(rastro: Rastro) {
+/** O negócio ativo do contato: a nota da F13 (`recalculaScoreDoLead`) só escreve com ele. */
+const NEGOCIO = {
+  id: "99999999-9999-4999-8999-999999999999", organization_id: ORG, contact_id: CONTATO, pipeline_id: null,
+  status: "open", last_activity_at: "2026-10-06T14:00:00.000Z", created_at: "2026-10-01T12:00:00.000Z",
+  expected_duration_hours: null, qualification: {}, checkpoint_id: null, commitments: [], objections: [],
+  band_anterior: null,
+};
+
+function poolQueGrava(rastro: Rastro, c: Cenario = {}) {
   // Lacuna consciente: o pool não devolve linhas de horário de atendimento. Fazer isso
   // exige injetar o relógio em `inbound-turn.ts` (linhas 2819, 2824, 4361 e 5826 em
   // `3ba2fe36d`), que hoje leem `new Date()` direto; sem isso o rastro dependeria da hora.
@@ -126,6 +134,11 @@ function poolQueGrava(rastro: Rastro) {
     if (texto.includes("playbook_pointers")) return { rows: [{ layer: "platform", version_id: "v1", content: "plataforma" }], rowCount: 1 };
     if (/from contacts where organization_id = \$1 and id = \$2/.test(texto)) return { rows: [LINHA_DO_CONTATO], rowCount: 1 };
     if (texto.includes("from conversations") && texto.includes("is_group = false")) return { rows: [{ id: CONVERSA }], rowCount: 1 };
+    if (c.comNegocio && texto.includes("from crm_leads l")) return { rows: [NEGOCIO], rowCount: 1 };
+    // `applyLeadStateUpdate` lê a linha que gravou (`returning`): sem ela a ferramenta recusa.
+    if (c.comNegocio && texto.includes("insert into lead_state ")) {
+      return { rows: [{ organization_id: ORG, contact_id: CONTATO, stage: "contacted", qualification: {}, updated_at: CLAIM_EM }], rowCount: 1 };
+    }
     return { rows: [], rowCount: 0 };
   };
   return { query, connect: async () => ({ query, release() {} }) };
@@ -163,6 +176,11 @@ type Cenario = {
   agente?: Record<string, unknown>;
   modeloFalha?: Error;
   emHandoff?: boolean;
+  /** Texto do checkpoint do fechamento; ausente = `CHECKPOINT` (sem mudança, sem emissão). */
+  checkpoint?: string;
+  /** O pool devolve um negócio ativo do contato (a nota da F13 escreve). */
+  comNegocio?: boolean;
+  knobs?: Record<string, unknown>;
 };
 
 const AGENTE = {
@@ -191,7 +209,9 @@ function roteirizarModelo(rastro: Rastro, c: Cenario) {
       }
       return { result: { finishReason: "stop", responseMessages: [], text: "", steps: [] }, model: "fake-model", callId: "call-turno" };
     }
-    if (proposito === "checkpoint") return { result: { text: CHECKPOINT }, model: "fake-model", callId: "call-ck" };
+    if (proposito === "checkpoint") return { result: { text: c.checkpoint ?? CHECKPOINT }, model: "fake-model", callId: "call-ck" };
+    // Só roda com `knobs.stageClassifier`: sugere um estágio diferente do que o modelo confirma.
+    if (proposito === "stage_classifier") return { result: { text: "qualifying" }, model: "fake-model", callId: "call-stage" };
     throw new Error(`dublê: sem roteiro para ${proposito}`);
   }) as never);
 }
@@ -200,7 +220,7 @@ export async function rodarCenario(c: Cenario): Promise<Rastro> {
   const rastro: Rastro = [];
   vi.mocked(isLeadInHandoff).mockResolvedValue(c.emHandoff ?? false);
   roteirizarModelo(rastro, c);
-  const pool = poolQueGrava(rastro);
+  const pool = poolQueGrava(rastro, c);
   const deps = {
     log: logQueGrava(rastro),
     llmCfg: {},
@@ -211,6 +231,7 @@ export async function rodarCenario(c: Cenario): Promise<Rastro> {
         exactFailureWarn: 2, exactFailureBlock: 3, sameToolFailureWarn: 3,
         sameToolFailureHalt: 5, noProgressWarn: 4, noProgressBlock: 6,
       },
+      ...c.knobs,
     },
     clock: () => new Date("2026-10-06T15:00:00Z"),
     sleep: async () => {},
@@ -291,6 +312,20 @@ const CENARIOS: Record<string, Cenario> = {
     ],
   },
   "erro do modelo: provedor fora": { modeloFalha: new Error("upstream 503") },
+  // F13 com os ramos ligados (ADR-0006, S3): Operador enfileirado, checkpoint que muda
+  // (emissão), negócio ativo (nota), divergência classificador×modelo (golden).
+  "pós-turno: tentativa do Operador, emissão e golden (nota fora do rastro)": {
+    agente: { operatorEnabled: true },
+    knobs: { goldenCandidates: true, stageClassifier: {} },
+    comNegocio: true,
+    checkpoint: JSON.stringify({
+      commitments: ["enviar o orçamento amanhã"], objections: [], next_action: "enviar orçamento", rolling_summary: "pediu orçamento",
+    }),
+    ferramentas: [
+      { nome: "update_lead_state", args: { stage: "contacted", reason: "respondeu" } },
+      { nome: "send_message", args: { body: "Amanhã te mando o orçamento." } },
+    ],
+  },
 };
 
 beforeEach(() => {
