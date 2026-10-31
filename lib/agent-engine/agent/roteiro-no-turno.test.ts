@@ -464,15 +464,19 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
 
 describe('ordem no turno (achado 5 da prova do #1130)', () => {
   const src = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/inbound-turn.ts'), 'utf8');
-  const chamada = src.indexOf('await prepararRoteiroDoTurno(');
+  // F5 e F6 moram em turno/ desde a S5 do ADR-0006: no orquestrador ordena-se a CHAMADA ao
+  // preparo (F6, que abre o roteiro) contra as chamadas às fases que silenciam o turno.
+  const chamada = src.indexOf('await prepararContextoDoTurno(');
+  const desvios = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/desvios-deterministicos.ts'), 'utf8');
+  const preparo = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/preparo-do-contexto.ts'), 'utf8');
+  const chamadaDoRoteiro = preparo.indexOf('await prepararRoteiroDoTurno(');
 
   it('o roteiro entra DEPOIS da pausa, do pedido de humano e do opt-out ambíguo', () => {
     expect(chamada).toBeGreaterThan(0);
     for (const trava of [
       // A pausa mora em turno/roteamento.ts (ADR-0006, S4); idem: ordena-se a chamada.
       'await resolverRoteamentoDoTurno(',
-      'detectHumanHandoffRequest(texto)',
-      'detectAmbiguousOptOut(texto)',
+      'await tratarDesviosDeterministicos(',
       // O veto de handoff mora em turno/portoes-de-entrada.ts (ADR-0006, S1);
       // o que se ordena aqui é a CHAMADA aos portões.
       'await avaliarPortoesDeEntrada(',
@@ -480,6 +484,14 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
       const posicao = src.indexOf(trava);
       expect(posicao, trava).toBeGreaterThan(0);
       expect(posicao, trava).toBeLessThan(chamada);
+    }
+  });
+
+  it('os desvios ainda carregam o pedido de humano e o opt-out ambíguo, antes de liberar o turno', () => {
+    for (const trava of ['detectHumanHandoffRequest(texto)', 'detectAmbiguousOptOut(texto)']) {
+      const posicao = desvios.indexOf(trava);
+      expect(posicao, trava).toBeGreaterThan(-1);
+      expect(posicao, trava).toBeLessThan(desvios.indexOf('seguir: true'));
     }
   });
 
@@ -503,7 +515,8 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
   });
 
   it('e nunca para contato bloqueado, nem fora do turno de inbound', () => {
-    const guarda = src.slice(src.lastIndexOf('const roteiro =', chamada), chamada);
+    expect(chamadaDoRoteiro).toBeGreaterThan(0);
+    const guarda = preparo.slice(preparo.lastIndexOf('const roteiro =', chamadaDoRoteiro), chamadaDoRoteiro);
     expect(guarda).toContain("liveJob().kind === 'inbound_turn'");
     expect(guarda).toContain('!optedOutThisTurn');
     expect(guarda).toContain('!preview');

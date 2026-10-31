@@ -374,7 +374,7 @@ describe("o call site — AST separa prévia sem job do turno operacional escolt
     const ast = ts.createSourceFile("inbound.ts", texto, ts.ScriptTarget.Latest, true);
     const encontrados: Array<{ nome: string; owner: string | undefined }> = [];
     const visit = (node: ts.Node) => {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["classifyStage", "maybeCompact"].includes(node.expression.text)) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["classifyStage", "maybeCompact", "prepararContextoDoTurno"].includes(node.expression.text)) {
         let parent: ts.Node | undefined = node.parent;
         while (parent && !ts.isFunctionDeclaration(parent)) parent = parent.parent;
         encontrados.push({ nome: node.expression.text, owner: parent && ts.isFunctionDeclaration(parent) ? parent.name?.text : undefined });
@@ -386,8 +386,12 @@ describe("o call site — AST separa prévia sem job do turno operacional escolt
   }
   it("todos os auxiliares de classificação e compaction ficam dentro do núcleo", () => {
     const calls = auxiliaresForaDoNucleo(fonteInbound);
-    expect(new Set(calls.map(c => c.nome))).toEqual(new Set(["classifyStage", "maybeCompact"]));
+    // A compactação mora em F6 (`turno/preparo-do-contexto.ts`, ADR-0006 S5): o núcleo
+    // chama a fase, e a fase é o único dono de `maybeCompact`.
+    expect(new Set(calls.map(c => c.nome))).toEqual(new Set(["classifyStage", "prepararContextoDoTurno"]));
     expect(calls.filter(c => c.owner !== "executarTurnoDoAgente")).toEqual([]);
+    const preparo = readFileSync(join(RAIZ, "lib/agent-engine/agent/turno/preparo-do-contexto.ts"), "utf8");
+    expect(auxiliaresForaDoNucleo(preparo)).toEqual([{ nome: "maybeCompact", owner: "prepararContextoDoTurno" }]);
   });
 
   it("controle negativo: retirar a escolta é acusado mesmo mantendo o número de chamadas", () => {

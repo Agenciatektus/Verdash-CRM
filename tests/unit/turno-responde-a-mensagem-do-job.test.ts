@@ -89,7 +89,12 @@ describe("fiação — o id sai do payload e chega ao sinal do turno", () => {
     // perguntas do turno se separaram — o que o turno RESPONDE (pinado no job) e
     // o que o cliente DISSE e ainda não foi respondido (a rajada inteira). Ver
     // `rajada-nao-cala-o-pedido-de-humano.test.ts`.
-    expect(FONTE).toMatch(
+    // Mora em F5 (`turno/desvios-deterministicos.ts`) desde a S5 do ADR-0006.
+    const desvios = fs.readFileSync(
+      path.join(process.cwd(), "lib/agent-engine/agent/turno/desvios-deterministicos.ts"),
+      "utf8",
+    );
+    expect(desvios).toMatch(
       /const mensagemDoJob =\s*currentInboundText \?\? latestInboundSignal\(/,
     );
   });

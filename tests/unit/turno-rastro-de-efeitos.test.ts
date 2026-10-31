@@ -138,6 +138,25 @@ function poolQueGrava(rastro: Rastro, c: Cenario = {}) {
       };
     }
     if (texto.includes("insert into lead_notes")) return { rows: [{ id: "nota-1", superseded: "0" }], rowCount: 1 };
+    // Histórico da conversa (`get_lead_context`, ordem `sent_at desc`) e a mensagem pinada do job.
+    if (c.historico && texto.includes("from messages") && texto.includes("media_mime")) {
+      return {
+        rows: c.historico.map((m, i) => ({
+          direction: m.direction, type: "text", body: m.body, media_url: null, media_storage_path: null,
+          media_mime: null, media_derived_text: null, sent_at: new Date(`2026-10-06T14:${String(10 + i).padStart(2, "0")}:00.000Z`),
+        })).reverse(),
+        rowCount: c.historico.length,
+      };
+    }
+    if (c.historico && texto.includes("from messages") && /and id = \$3/.test(texto)) {
+      const ultimo = c.historico.filter((m) => m.direction === "inbound").at(-1);
+      return ultimo
+        ? { rows: [{ type: "text", body: ultimo.body, media_url: null, media_storage_path: null, media_derived_text: null }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+    }
+    if (c.contatoBloqueado && /from contacts where organization_id = \$1 and id = \$2/.test(texto)) {
+      return { rows: [{ ...LINHA_DO_CONTATO, is_blocked: true }], rowCount: 1 };
+    }
     if (texto.includes("select timezone from organizations")) return { rows: [{ timezone: "America/Sao_Paulo" }], rowCount: 1 };
     if (texto.includes("playbook_pointers")) return { rows: [{ layer: "platform", version_id: "v1", content: "plataforma" }], rowCount: 1 };
     if (/from contacts where organization_id = \$1 and id = \$2/.test(texto)) return { rows: [LINHA_DO_CONTATO], rowCount: 1 };
@@ -192,6 +211,10 @@ type Cenario = {
   /** O pool devolve um negócio ativo do contato (a nota da F13 escreve). */
   comNegocio?: boolean;
   knobs?: Record<string, unknown>;
+  /** Mensagens da conversa em ordem cronológica; a última `inbound` é a do job. */
+  historico?: Array<{ direction: "inbound" | "outbound"; body: string }>;
+  /** O contato chega com `is_blocked` (opt-out lido do CRM na abertura). */
+  contatoBloqueado?: boolean;
 };
 
 const AGENTE = {
@@ -222,6 +245,9 @@ function roteirizarModelo(rastro: Rastro, c: Cenario) {
     }
     if (proposito === "checkpoint") return { result: { text: c.checkpoint ?? CHECKPOINT }, model: "fake-model", callId: "call-ck" };
     // Só roda com `knobs.stageClassifier`: sugere um estágio diferente do que o modelo confirma.
+    // Só rodam com `knobs.compaction` e histórico acima do gatilho (F6).
+    if (proposito === "flush") return { result: { text: JSON.stringify({ notes: [{ headline: "Prefere manhã", body: "Só pode de manhã." }] }) }, model: "fake-model", callId: "call-flush" };
+    if (proposito === "compaction") return { result: { text: JSON.stringify({ rolling_summary: "pediu orçamento", commitments: ["mandar orçamento"] }) }, model: "fake-model", callId: "call-compact" };
     if (proposito === "stage_classifier") return { result: { text: "qualifying" }, model: "fake-model", callId: "call-stage" };
     throw new Error(`dublê: sem roteiro para ${proposito}`);
   }) as never);
@@ -342,6 +368,31 @@ const CENARIOS: Record<string, Cenario> = {
       routerId: "88888888-8888-4888-8888-888888888888", intentName: "orcamento", confidence: 0.9,
       outcome: "matched", destinationPipelineId: "99999999-9999-4999-8999-999999999999", destinationStageId: null,
     },
+    ferramentas: [{ nome: "send_message", args: { body: "Oi! Posso te ajudar com o orçamento." } }],
+  },
+  // F5 e F6 (ADR-0006, S5), gravados contra o código de antes da extração.
+  "desvio: pedido de humano detectado sem modelo": {
+    agente: { handoffKeywords: [] },
+    historico: [{ direction: "inbound", body: "Oi, quero falar com um atendente" }],
+    ferramentas: [{ nome: "send_message", args: { body: "não deveria sair" } }],
+  },
+  "desvio: suspeita de opt-out confirma e sai": {
+    agente: { handoffKeywords: [] },
+    historico: [{ direction: "inbound", body: "para de me mandar mensagem, me tira da lista" }],
+    ferramentas: [{ nome: "send_message", args: { body: "não deveria sair" } }],
+  },
+  "preparo: compactação com flush e resposta": {
+    knobs: { compaction: { triggerMessages: 3, transcriptMaxTokens: 40 }, notesIndexMaxTokens: 200 },
+    agente: { handoffKeywords: [] },
+    historico: [
+      { direction: "inbound", body: "Oi, queria um orçamento" },
+      { direction: "outbound", body: "Claro! Para qual serviço?" },
+      { direction: "inbound", body: "Limpeza de pele, só posso de manhã" },
+    ],
+    ferramentas: [{ nome: "send_message", args: { body: "Anotado, te mando o orçamento." } }],
+  },
+  "preparo: contato bloqueado cancela os follow-ups": {
+    contatoBloqueado: true,
     ferramentas: [{ nome: "send_message", args: { body: "Oi! Posso te ajudar com o orçamento." } }],
   },
   // F13 com os ramos ligados (ADR-0006, S3): Operador enfileirado, checkpoint que muda

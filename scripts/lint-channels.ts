@@ -159,7 +159,12 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
       "`WahaChannelAdapter` — o ChannelAdapter PRÉ-seam do agent-engine (F2-25), " +
       "abstração paralela à de `lib/channels/`. Unificar as duas é decisão de " +
       "arquitetura com superfície própria, não passo de um lint.",
-    files: ["lib/agent-engine/agent/followup-turn.ts", "lib/agent-engine/agent/inbound-turn.ts"],
+    files: [
+      "lib/agent-engine/agent/followup-turn.ts",
+      "lib/agent-engine/agent/inbound-turn.ts",
+      // O mesmo uso, movido de `inbound-turn.ts` na S5 do ADR-0006 (desvios determinísticos).
+      "lib/agent-engine/agent/turno/desvios-deterministicos.ts",
+    ],
   },
   {
     reason:

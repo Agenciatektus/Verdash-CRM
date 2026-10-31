@@ -93,9 +93,7 @@ import {
   type LeadCheckpointRow,
 } from "./abertura/checkpoint";
 import { buildOpeningMessage, ritualBlocks } from "./abertura/ritual";
-import { applySaveLeadNote, buildNotesIndexBlock, getLeadNoteBody } from './lead-notes';
-import { buildCompromissosBlock } from './compromissos-do-contato';
-import { buildOrigemBlock } from './abertura/origem-do-contato';
+import { applySaveLeadNote, getLeadNoteBody } from './lead-notes';
 import { agendaNoFechamento } from './abertura/agenda-no-fechamento';
 import { applyScheduleFollowup, type FollowupWindowKnobs } from './schedule-followup';
 import { podeExporScheduleFollowup } from '@/lib/followup/callback-policy';
@@ -116,9 +114,6 @@ import {
   performHumanHandoff,
 } from './human-handoff';
 import {
-  maybeCompact,
-  renderCompactedSummary,
-  trimTranscriptToBudget,
   type CompactionKnobs,
 } from './compaction';
 import { pruneToolResults, toolPartsAsText, type PruneToolResultsKnobs } from './prune-tool-results';
@@ -139,9 +134,7 @@ import {
   catalogoEntregueAoOperador,
 } from './entrega-de-capacidade';
 import { loadPublishedAgentConfigById, matchesHandoffKeyword, type PublishedAgentConfig } from './agent-config';
-import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno } from './roteiro-no-turno';
-import { validarRespostaDoFluxo } from './flow-validate';
-import { moduloLigadoComMemo } from '@/lib/instalacao/modulos';
+import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from './roteiro-no-turno';
 import { loadChannelKnobs } from '../pacing/store';
 import { resolveConversationTurn, type TurnAgentResolution } from './resolve-turn-agent';
 import {
@@ -208,6 +201,8 @@ import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
 import { carregarContextoDoTurno } from './turno/contexto';
 import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
 import { resolverRoteamentoDoTurno } from './turno/roteamento';
+import { tratarDesviosDeterministicos } from './turno/desvios-deterministicos';
+import { prepararContextoDoTurno } from './turno/preparo-do-contexto';
 import {
   nivelFinalDaManipulacao,
   perguntarManipulacaoAoJev,
@@ -1983,317 +1978,24 @@ async function executarTurnoDoAgente(
     { agentConfig, contextKnobs, fusoDaOrg },
   );
 
-  // Seam de canal (F2-25): o envio vai SÓ pela interface ChannelAdapter — o
-  // default WAHA-via-CRM envolve o sink F2-06. Instanciado por job (o pool é
-  // per-job neste codebase); trocar o adapter não muda nada abaixo.
-  // Fase 2B: o envio carrega o ai_agents.id REAL como ator (audit/metadata do
-  // CRM apontam o agente publicado, não um id genérico).
-  //
-  // ⚠️ Ele nasce AQUI, e não depois da compactação como antes, porque os dois
-  // desvios determinísticos logo abaixo — pedido de humano e suspeita de
-  // opt-out — passaram a FALAR com o lead antes de silenciar. Eles rodam antes
-  // de qualquer chamada de modelo; o canal precisa existir antes deles.
-  const turnCrmCfg =
-    agentConfig !== null ? { ...deps.crmCfg, agentActorId: agentConfig.agentId } : deps.crmCfg;
-  const channel = preview
-    ? null
-    : (deps.channel ?? ((p: pg.Pool) => new WahaChannelAdapter(p, turnCrmCfg)))(pool);
-  const liveChannel = (): ChannelAdapter => {
-    if (!channel) throw new Error('preview_transport_forbidden');
-    return channel;
-  };
+  // F5 — desvios determinísticos (ADR-0006, S5): canal, STOP, LGPD, pedido de humano e opt-out.
+  const desvios = await tratarDesviosDeterministicos(
+    { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+    { agentConfig, agentOperation, currentInboundText, previous, openingContext },
+  );
+  if (!desvios.seguir) return;
+  const { channel, liveChannel, optedOutThisTurn, lgpd, avisoDaEscalacao, mensagemDoJob, inboundsPendentes } =
+    desvios.valor;
   // Apaga a renovação do "digitando…" (ver `manterDigitando`). Começa como no-op:
   // turno de preview ou de retaguarda nunca acende, e parar o que não acendeu é nada.
   let pararDigitando: () => void = () => {};
-  // STOP lido no turno (fonte: CRM via get_lead_context) — combinado com o cache
-  // durável leads.is_opted_out no gate 1 da cadeia (F2-13).
-  const optedOutThisTurn = openingContext.context.contact.is_blocked;
-  // LGPD (F4-09): base legal/anonimização do CRM lidas na abertura do turno (fonte confiável,
-  // regra dura nº 1) — o gate LGPD da cadeia veta anonimizado (sempre) e 1º toque de prospecção
-  // sem base legal. Resposta a inbound (isProspecting=false) não dispara o veto de base legal.
-  const lgpd = openingContext.lgpd;
 
-  /** Argumentos fixos do aviso ao lead — os dois desvios abaixo só trocam o motivo. */
-  const avisoDaEscalacao = () => ({
-    ids: {
-      tenantId,
-      leadId,
-      conversationId: input.conversationId,
-      channelSessionId: input.channelSessionId,
-      jobId: liveJob().id,
-      jobClaim: claimOfJob(liveJob()),
-      agentOperation,
-    },
-    base: {
-      channel: liveChannel(),
-      optedOutThisTurn,
-      // #2112: o TIPO do turno decide a janela do aviso — `inbound_turn`/
-      // `case_reply_turn` respondem a quem escreveu; `followup_turn` é disparo
-      // (retomada), e o aviso de escalação dentro dele tem de cair na janela de
-      // `window_*`. Mesmo discriminador do resto do turno.
-      origem: tipoDeEnvio(eTurnoDeResposta(liveJob())),
-      now: clock(),
-      log: runLog,
-      lgpd,
-      agentId: agentConfig?.agentId ?? null,
-      ...(deps.knobs.disclosureMode !== undefined
-        ? { disclosureMode: deps.knobs.disclosureMode }
-        : {}),
-      ...(deps.sleep !== undefined ? { sleep: deps.sleep } : {}),
-    },
-  });
-
-  // F4-06 (acceptance 1): detecção DETERMINÍSTICA (regex PT-BR, sem LLM) de pedido explícito
-  // de atendimento humano na última mensagem do lead. Handoff é cidadão de 1ª classe (exigência
-  // Meta fiscalizada, blueprint 5.5) — dispara ANTES do modelo: o bot não gasta LLM.
-  // A ação (CRM force_human + cache + cancela crons + inbox) é idempotente.
-  //
-  // ⚠️ ORDEM: AVISA e SÓ ENTÃO silencia. Não é preferência de redação — é a única
-  // ordem que funciona. `performHumanHandoff` grava `contacts.force_human = true`,
-  // e o gate 1 da cadeia (`stopGate`) lê `(is_blocked or force_human)` DIRETO da
-  // fonte, sob o lock, a cada tentativa de envio. Avisar depois seria avisar
-  // ninguém: a própria trava que a passagem acabou de armar veta a mensagem.
-  // DUAS perguntas diferentes, duas fontes diferentes — e emendá-las foi o dano
-  // colateral medido do pin.
-  //
-  //  • `mensagemDoJob` é O QUE ESTE TURNO RESPONDE. Vem pinada no
-  //    `inbound_message_id`, para um registro concorrente não sequestrar o turno.
-  //  • `inboundsPendentes` é O QUE O CLIENTE DISSE e ainda não foi respondido.
-  //    Handoff, opt-out e urgência leem daqui: são coisas que não podem passar
-  //    despercebidas só porque chegaram na segunda mensagem de uma rajada, que o
-  //    drain coalesce no job da primeira.
-  const mensagemDoJob =
-    currentInboundText ?? latestInboundSignal(openingContext.context.messages);
-  const inboundsPendentes = inboundsNaoRespondidos(openingContext.context.messages);
-  if (
-    !preview &&
-    inboundsPendentes.some(
-      (texto) =>
-        detectHumanHandoffRequest(texto) ||
-        (agentConfig !== null && matchesHandoffKeyword(texto, agentConfig.handoffKeywords)),
-    )
-  ) {
-    const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
-      ...avisoDaEscalacao().base,
-      motivo: 'pediu_humano',
-    });
-    // `inboundsPendentes` JÁ está em memória (linha acima): a fala literal do
-    // cliente entra no briefing a custo zero. É a diferença entre quem assume
-    // ler "o cliente pediu uma pessoa" e ler o que ele de fato escreveu.
-    const briefing = montarBriefingDaPassagem({
-      checkpoint: previous,
-      pendentesDoCliente: inboundsPendentes,
-      motivo: { codigo: 'requested_human' },
-    });
-    await performHumanHandoff(
-      pool,
-      { tenantId, leadId, conversationId: input.conversationId },
-      {
-        reason: 'requested_human',
-        conversationSummary: briefing.body,
-        passagem: { origem: 'pedido_explicito', motivoCodigo: 'requested_human', briefing },
-        avisoAoLead: aviso,
-        log: runLog,
-      },
+  // F6 — preparo do contexto (ADR-0006, S5): roteiro, compactação, blocos auxiliares e crons do opt-out.
+  const { roteiro, effectivePrevious, effectiveContext, notesIndexBlock, compromissosBlock, origemBlock } =
+    await prepararContextoDoTurno(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      { routed, argsAux, currentInboundText, previous, openingContext, optedOutThisTurn },
     );
-    runLog.info('handoff humano acionado por pedido explícito do lead (detecção determinística)', {
-      kind: liveJob().kind,
-      lead_avisado: aviso.avisado,
-    });
-    return; // bot silencia: o aviso já saiu, e nada mais sai neste turno
-  }
-
-  // F4-07: STOP AMBÍGUO ("para de me mandar isso", "não quero mais receber", "me tira da
-  // lista", ou a palavra-chave STOP/PARAR/SAIR sozinha). Detecção CONSERVADORA — na dúvida
-  // é STOP: o bot silencia JÁ (sem LLM, sem envio) via o MESMO mecanismo durável do handoff
-  // (bot_silenced_until='infinity', que SOBREVIVE à leitura do CRM que sobrescreve o cache
-  // is_opted_out) e escala à inbox para o humano confirmar o opt-out real (is_blocked) no
-  // CRM. Cancela os follow-ups agendados de tabela. Nada disso reverte (regra dura nº 2).
-  if (!preview && inboundsPendentes.some((texto) => detectAmbiguousOptOut(texto))) {
-    // O aviso daqui NÃO fala em atendente — quem pediu para parar não quer ouvir
-    // sobre atendimento (`textoDoAviso`, motivo `suspeita_de_opt_out`). Ele
-    // CONFIRMA a parada, que é o padrão de mensageria para um opt-out, e diz que
-    // uma pessoa vai conferir. Sair calado deixaria a pessoa sem saber se o
-    // pedido dela foi ouvido — e ela pediu justamente para ser ouvida.
-    const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
-      ...avisoDaEscalacao().base,
-      motivo: 'suspeita_de_opt_out',
-    });
-    const briefing = montarBriefingDaPassagem({
-      checkpoint: previous,
-      pendentesDoCliente: inboundsPendentes,
-      motivo: { codigo: 'suspected_optout' },
-    });
-    await performHumanHandoff(
-      pool,
-      { tenantId, leadId, conversationId: input.conversationId },
-      {
-        reason: 'suspected_optout',
-        conversationSummary: briefing.body,
-        inboxTitle: 'Suspeita de opt-out — confirmar bloqueio do contato no CRM',
-        passagem: { origem: 'opt_out_provavel', motivoCodigo: 'suspected_optout', briefing },
-        avisoAoLead: aviso,
-        log: runLog,
-      },
-    );
-    runLog.info('possível opt-out detectado no inbound — bot silenciado e escalado ao humano', {
-      kind: liveJob().kind,
-      lead_avisado: aviso.avisado,
-    });
-    return; // bot silencia: a confirmação já saiu, e nada mais sai neste turno
-  }
-
-  // ROTEIRO DE ATENDIMENTO (módulo opcional `fluxos_atendimento`, #1130). Entra
-  // AQUI, depois de tudo que silencia o turno — handoff humano, pausa, pedido de
-  // humano, opt-out ambíguo — e nunca para contato bloqueado. Na prova prática,
-  // o roteiro começava antes dessas travas e abria para quem pedira para parar.
-  // Chave desligada: `null` sem consulta nenhuma. Ver `roteiro-no-turno.ts`.
-  const roteiro =
-    !preview && liveJob().kind === 'inbound_turn' && !optedOutThisTurn
-      ? await prepararRoteiroDoTurno(
-          {
-            pool,
-            moduloLigado: () => moduloLigadoComMemo(deps.crmCfg.supabase, 'fluxos_atendimento'),
-            validar: (args) =>
-              validarRespostaDoFluxo(
-                pool,
-                deps.llmCfg,
-                { tenantId, leadId, jobId: liveJob().id },
-                args,
-                { registry: deps.registry, log: runLog, aux: argsAux(undefined) },
-              ),
-            log: runLog,
-          },
-          {
-            organizationId: tenantId,
-            contactId: leadId,
-            conversationId: input.conversationId,
-            texto: currentInboundText,
-            messageId: input.inboundMessageId ?? null,
-            flowPointerDoRoteador: 'flowPointerId' in routed ? (routed.flowPointerId ?? null) : null,
-            mensagens: openingContext.context.messages.slice(-6).map((m) => ({
-              de: m.direction === 'inbound' ? ('cliente' as const) : ('loja' as const),
-              texto: m.body,
-            })),
-          },
-        )
-      : null;
-
-  // F3-07: compaction + flush pré-compaction. Quando o histórico cresce além do limiar,
-  // o FLUSH grava as notas duráveis (lead_notes) e a compaction resume a conversa com o
-  // modelo BARATO; o resumo compactado entra no lugar do rolling summary e o transcript
-  // integral é trocado por uma cauda recente sob orçamento (regra de cache 15). O rolling
-  // summary DURÁVEL segue vindo do checkpoint de fechamento; aqui ele só alimenta o prompt.
-  let effectivePrevious = previous;
-  let effectiveContext = openingContext.context;
-  if (deps.knobs.compaction !== undefined) {
-    const compacted = await maybeCompact(
-      pool,
-      deps.llmCfg,
-      { tenantId, leadId: leadId || null, jobId: job?.id },
-      {
-        context: openingContext.context,
-        previousSummary: previous?.rolling_summary ?? '',
-        // A compactação é o QUARTO call site da mesma regra, e o #151 só cobriu
-        // três: ela também pedia o modelo do agente ao provider default da org.
-        // Mesmo 404, mesma morte de turno — só que num caminho que roda quando a
-        // conversa já é longa, ou seja, mais tarde e com menos gente olhando.
-        knobs: { ...deps.knobs.compaction, ...argsAux(deps.knobs.compaction.model) },
-        notesIndexMaxTokens: deps.knobs.notesIndexMaxTokens,
-      },
-      {
-        registry: deps.registry,
-        log: runLog,
-        ...(preview
-          ? {
-              noteSink: (note: { headline: string; body: string }) => {
-                (preview.notes ??= []).push(note);
-              },
-            }
-          : {}),
-      },
-    );
-    if (compacted !== null) {
-      // Só o rolling_summary é sobrescrito (o resumo compactado carrega compromissos/
-      // objeções/estágio/dados pessoais planificados). O `previous` sintético do 1º
-      // turno com histórico importado é local — nunca persistido; o fechamento grava o
-      // checkpoint real.
-      const base: LeadCheckpointRow = previous ?? {
-        id: '',
-        seq: '0',
-        organization_id: tenantId,
-        contact_id: leadId,
-        job_id: null,
-        created_at: new Date(),
-        commitments: [],
-        objections: [],
-        next_action: null,
-        rolling_summary: '',
-        // Este `previous` é sintetizado a partir de histórico IMPORTADO — não
-        // houve turno nosso, logo ninguém declarou nada. `null` é o valor
-        // honesto; um objeto vazio afirmaria uma avaliação que não aconteceu.
-        declaracao: null,
-      };
-      effectivePrevious = { ...base, rolling_summary: renderCompactedSummary(compacted) };
-      effectiveContext = {
-        ...openingContext.context,
-        messages: trimTranscriptToBudget(
-          openingContext.context.messages,
-          deps.knobs.compaction.transcriptMaxTokens,
-        ),
-      };
-    }
-  }
-
-  // Índice da memória durável do lead (F3-05) — headlines dentro do orçamento fixo,
-  // injetado no SUFIXO da abertura (não invalida o prefixo cacheável F2-17). Montado
-  // DEPOIS do flush (F3-07) para que as notas gravadas neste turno já entrem no índice.
-  // As três leituras abaixo só dependem do flush, não umas das outras: correm juntas.
-  //
-  // ⚠️ `leadId` AQUI É O CONTATO (`leadIdDoJob = job.contact_id`, e o comentário
-  // de `get-lead-context.ts:193` diz o mesmo). Passar essa variável para um
-  // parâmetro chamado `contactId` é correto pelo VALOR; o nome é que mente, e é
-  // o que a issue #509 conserta. Não troque por um `lead_id` "mais coerente".
-  const [notesIndexBlock, compromissosBlock, origemBlock, noteIdRows] = await Promise.all([
-    preview
-      ? (preview.notes ?? []).map((n) => n.headline + ': ' + n.body).join('\n')
-      : buildNotesIndexBlock(pool, tenantId, leadId, deps.knobs.notesIndexMaxTokens),
-    preview?.kind === 'sandbox' ? '' : buildCompromissosBlock(pool, tenantId, leadId, new Date()),
-    // Só o turno que responde ao contato recebe o bloco completo; follow-up e caso,
-    // em que não há texto-padrão do botão a responder, recebem o histórico curto.
-    preview
-      ? ''
-      : buildOrigemBlock(pool, tenantId, leadId, new Date(), liveJob().kind === 'inbound_turn' ? 'entrada' : 'retomada'),
-    preview
-      ? null
-      : pool
-          .query<{ id: string }>(
-            'select id from lead_notes where organization_id = $1 and contact_id = $2 order by created_at',
-            [tenantId, leadId],
-          )
-          .then((r) => r.rows),
-  ]);
-  // Observabilidade da memória (Fase 2A): SÓ ids/contagens no log — headline/corpo
-  // são PII e nunca saem do prompt. Prova auditável de que a memória durável do
-  // lead entrou no contexto DESTE turno.
-  if (noteIdRows !== null) {
-    runLog.info('memória do lead injetada no turno', {
-      checkpoint_seq: effectivePrevious?.seq ?? null,
-      notes_count: noteIdRows.length,
-      note_ids: noteIdRows.map((r) => r.id),
-    });
-  }
-
-  // F4-07: STOP no CRM detectado no turno → cancela TODOS os follow-ups agendados do lead
-  // (não só o job atual). O stopGate já veta ESTE turno; o cancel garante que nenhum cron
-  // futuro dispare em vão (opt-out irrevogável, regra dura nº 2). Idempotente — reusa o
-  // cancel compartilhado com o handoff (F4-06).
-  if (!preview && optedOutThisTurn) {
-    const canceled = await cancelPendingCronsForLead(pool, tenantId, leadId);
-    if (canceled > 0) {
-      runLog.info('opt-out detectado no turno — follow-ups agendados cancelados', { canceled });
-    }
-  }
 
   // Estado do RUN — vive só neste closure (isolamento por construção, acc 3).
   let seq = 0;
