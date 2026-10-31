@@ -472,12 +472,25 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
       'agentConfig.pausedAt',
       'detectHumanHandoffRequest(texto)',
       'detectAmbiguousOptOut(texto)',
-      'isLeadInHandoff(pool, tenantId, leadId)',
+      // O veto de handoff mora em turno/portoes-de-entrada.ts (ADR-0006, S1);
+      // o que se ordena aqui é a CHAMADA aos portões.
+      'await avaliarPortoesDeEntrada(',
     ]) {
       const posicao = src.indexOf(trava);
       expect(posicao, trava).toBeGreaterThan(0);
       expect(posicao, trava).toBeLessThan(chamada);
     }
+  });
+
+  it('os portões ainda carregam o veto de handoff', () => {
+    const portoes = readFileSync(
+      join(process.cwd(), 'lib/agent-engine/agent/turno/portoes-de-entrada.ts'),
+      'utf8',
+    );
+    const veto = portoes.indexOf('isLeadInHandoff(pool, tenantId, leadId)');
+    expect(veto).toBeGreaterThan(-1);
+    // O veto vem antes da saída que libera o turno.
+    expect(veto).toBeLessThan(portoes.indexOf('return { seguir: true'));
   });
 
   it('e nunca para contato bloqueado, nem fora do turno de inbound', () => {

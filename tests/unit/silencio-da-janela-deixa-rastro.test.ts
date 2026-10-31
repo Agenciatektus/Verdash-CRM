@@ -167,32 +167,47 @@ describe("aviso de janela fechada", () => {
  * eterno pendurado na segunda-feira.
  */
 describe("o turno realmente CHAMA o aviso — nas duas direções", () => {
-  const turno = readFileSync(
+  // Desde a S1 do ADR-0006 o gate mora em `turno/portoes-de-entrada.ts`; o
+  // orquestrador só o chama. Mede o módulo E a chamada, senão o módulo podia
+  // existir perfeito e desligado.
+  const orquestrador = readFileSync(
     join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
     "utf8",
   );
+  const turno = readFileSync(
+    join(process.cwd(), "lib/agent-engine/agent/turno/portoes-de-entrada.ts"),
+    "utf8",
+  );
+
+  it("o turno chama os portões de entrada", () => {
+    expect(
+      /await avaliarPortoesDeEntrada\s*\(/.test(orquestrador),
+      "inbound-turn.ts não chama avaliarPortoesDeEntrada — a janela anti-ban saiu do turno",
+    ).toBe(true);
+  });
 
   it("o adiamento por janela abre o aviso", () => {
     expect(
       /avisarJanelaFechada\s*\(/.test(turno),
-      "inbound-turn.ts não chama avisarJanelaFechada — o silêncio volta a ser invisível",
+      "portoes-de-entrada.ts não chama avisarJanelaFechada — o silêncio volta a ser invisível",
     ).toBe(true);
   });
 
   it("a janela aberta resolve o aviso", () => {
     expect(
       /resolverAvisoDeJanela\s*\(/.test(turno),
-      "inbound-turn.ts não chama resolverAvisoDeJanela — o aviso ficaria pendurado depois que o número volta a atender",
+      "portoes-de-entrada.ts não chama resolverAvisoDeJanela — o aviso ficaria pendurado depois que o número volta a atender",
     ).toBe(true);
   });
 
   it("as duas chamadas estão no MESMO gate — a resolução não pode viver noutro lugar", () => {
     // Se a resolução migrar para um cron ou para outro ponto do turno, o laço
     // deixa de fechar onde foi aberto e volta a depender de varredura.
-    const gate = turno.slice(
-      turno.indexOf("janelaDeEnvioAberta(agora, knobs"),
-      turno.indexOf("Fase 3: stickiness do router"),
-    );
+    const inicio = turno.indexOf("janelaDeEnvioAberta(agora, knobs");
+    const fim = turno.indexOf("return { seguir: true", inicio);
+    expect(inicio, "a sonda não acha o gate da janela").toBeGreaterThan(-1);
+    expect(fim, "a sonda não acha o fim dos portões").toBeGreaterThan(inicio);
+    const gate = turno.slice(inicio, fim);
     expect(gate).toContain("avisarJanelaFechada");
     expect(gate).toContain("resolverAvisoDeJanela");
   });
