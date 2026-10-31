@@ -1,7 +1,9 @@
 /**
  * O texto do turno com a montagem da chamada de volta no lugar (ADR-0006, S8): F9 saiu
  * do `inbound-turn.ts` para três módulos em `turno/` (`conjunto-de-ferramentas.ts`,
- * `classificadores-auxiliares.ts`, `montagem-da-chamada.ts`). As cercas que liam F9 no
+ * `classificadores-auxiliares.ts`, `montagem-da-chamada.ts`). Na S9, F10 a F12 saíram
+ * para `chamada-do-modelo.ts`, `correcao-pos-modelo.ts` e `fechamento-do-turno.ts`, e
+ * voltam aqui do mesmo jeito (as duas saídas do fechamento viram `return { seguir: false … }`). As cercas que liam F9 no
  * orquestrador leem esta remontagem: cada chamada do orquestrador é trocada pelo CORPO
  * da função do módulo, com a indentação original. Assim a ordem entre o "digitando…",
  * os classificadores e o modelo continua medível, e uma chamada que suma do orquestrador
@@ -50,6 +52,22 @@ export function fonteDoTurnoMontado(): string {
     t,
     /^ {4}const \{ openingMessages, openingTextOnly \} = await montarAberturaDaChamada\([\s\S]*?^ {4}\);$/m,
     corpoDaFase("montagem-da-chamada.ts"),
+  );
+  // S9: F10 a F12 (chamada do modelo, correções e fechamento).
+  t = encaixar(
+    t,
+    /^ {4}const \{ turn, saidaTruncada \} = await chamarOModelo\([\s\S]*?^ {4}\);$/m,
+    corpoDaFase("chamada-do-modelo.ts"),
+  );
+  t = encaixar(
+    t,
+    /^ {4}const \{ mensagensDoTurno \} = await corrigirAposOModelo\([\s\S]*?^ {4}\);$/m,
+    corpoDaFase("correcao-pos-modelo.ts"),
+  );
+  t = encaixar(
+    t,
+    /^ {4}const fechamento = await fecharOTurnoComCheckpoint\([\s\S]*?^ {4}const \{ content, closing, checkpointAnterior \} = fechamento\.valor;$/m,
+    corpoDaFase("fechamento-do-turno.ts"),
   );
   return t;
 }

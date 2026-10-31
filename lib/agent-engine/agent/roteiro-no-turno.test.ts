@@ -10,6 +10,7 @@ import type pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FlowGraph } from '@/lib/followup/graph-schema';
+import { fonteDoTurnoMontado } from '../../../tests/unit/_fonte-da-montagem';
 import { ENVIO_S7, TEMPLATE_S7 } from '../../../tests/unit/_fonte-do-send-message';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno, type RoteiroDoTurno, type ValidarResposta } from './roteiro-no-turno';
 
@@ -446,7 +447,8 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
   });
 
   it('fiado no turno: a guarda liga o descarte e o enviar do roteiro veta por ele', () => {
-    const src = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/inbound-turn.ts'), 'utf8');
+    // ADR-0006, S9: a pergunta do roteiro saiu para `turno/correcao-pos-modelo.ts`; a remontagem a devolve ao lugar.
+    const src = fonteDoTurnoMontado();
     // A guarda e a marca do descarte saíram com o `send_message` para `turno/ferramentas/`
     // na S7 do ADR-0006: lê-se a remontagem dele, na ordem original.
     const envio = ENVIO_S7;

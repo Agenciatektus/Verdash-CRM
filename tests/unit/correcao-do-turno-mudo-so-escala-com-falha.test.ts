@@ -32,13 +32,12 @@
  * o detect fica no meio do closure do turno, sem ponto de injeção barato; o que
  * dá pra prender com segurança é a estrutura — presença, ordem e condições.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { describe, expect, it } from "vitest";
 
-const ler = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
-const turno = ler("lib/agent-engine/agent/inbound-turn.ts");
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
+
+// ADR-0006, S9: F10 a F12 saíram para `turno/`; a remontagem os devolve ao lugar.
+const turno = fonteDoTurnoMontado();
 
 // Posições de âncora (fonte única de verdade para as ordens abaixo).
 const idxCorrecaoConst = turno.indexOf("const correcaoDoTurnoMudoPedida =");

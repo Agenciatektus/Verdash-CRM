@@ -12,6 +12,50 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > assistido: vira rascunho, n
 ]
 `;
 
+exports[`rastro de efeitos do turno (ADR-0006, S0) > chamada: saída truncada com envio, sem correção nem caso 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
+  "db:begin",
+  "send:text "Oi! Posso te ajudar com o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok #6cfce56a",
+  "log:warn output_truncated — resposta do modelo cortada no teto de tokens",
+  "llm:checkpoint",
+  "checkpoint: msgs=3 #efb573c8",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > correção: saída truncada sem envio, correção truncada, tenta abrir caso 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
+  "log:warn output_truncated — resposta do modelo cortada no teto de tokens",
+  "log:warn turno terminou sem mensagem ao cliente — pedindo UMA correção",
+  "llm:agent_turn",
+  "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#213c79f0",
+  "log:error output_truncated_recovered_failed — sem nenhuma mensagem entregue",
+  "db:insert agent_cases",
+  "db:insert agent_case_events",
+  "log:error output_truncated_recovered_failed — caso humano não abriu (já existe)",
+  "llm:checkpoint",
+  "checkpoint: msgs=3 #d51b507e",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
 exports[`rastro de efeitos do turno (ADR-0006, S0) > desvio: pedido de humano detectado sem modelo 1`] = `
 [
   "db:update agent_inbox_items status='resolved'",
@@ -133,6 +177,30 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > erro do modelo: provedor fo
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "fim:lançou upstream 503",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > fechamento: checkpoint inválido, uma correção 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "llm:agent_turn",
+  "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
+  "db:begin",
+  "send:text "Oi! Posso te ajudar com o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok #6cfce56a",
+  "llm:checkpoint",
+  "checkpoint: msgs=3 #efb573c8",
+  "log:warn fechamento do turno recusado — pedindo uma correção antes de re-tentar o turno",
+  "llm:checkpoint",
+  "checkpoint: msgs=5 #5b925383",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
 ]
 `;
 

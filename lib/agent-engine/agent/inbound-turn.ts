@@ -48,9 +48,7 @@ import type { CrmEdgeConfig } from '../edge/crm/mcp-client';
 import { WahaChannelAdapter } from '../edge/channel/waha-adapter';
 import {
   LlmBudgetExceededError,
-  runModelCall,
   type LlmEdgeConfig,
-  type ModelMessage,
   type ToolSet,
 } from '../edge/llm/run-model-call';
 import type { ProviderRegistry } from '../edge/llm/providers';
@@ -71,14 +69,11 @@ import {
 import {
   CHECKPOINT_INSTRUCTION,
   checkpointContentSchema,
-  fecharOTurno,
-  insertCheckpoint,
   parseCheckpointText,
   type CheckpointContent,
   type LeadCheckpointRow,
 } from "./abertura/checkpoint";
 import { buildOpeningMessage, ritualBlocks } from "./abertura/ritual";
-import { agendaNoFechamento } from './abertura/agenda-no-fechamento';
 import { type FollowupWindowKnobs } from './schedule-followup';
 import { podeExporScheduleFollowup } from '@/lib/followup/callback-policy';
 import {
@@ -97,18 +92,13 @@ import {
 import {
   type CompactionKnobs,
 } from './compaction';
-import { pruneToolResults, toolPartsAsText, type PruneToolResultsKnobs } from './prune-tool-results';
+import { type PruneToolResultsKnobs } from './prune-tool-results';
 import {
   type StageClassifierKnobs,
 } from './stage-classifier';
 import { loadPublishedAgentConfigById, matchesHandoffKeyword, type PublishedAgentConfig } from './agent-config';
-import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from './roteiro-no-turno';
 import { loadChannelKnobs } from '../pacing/store';
 import { resolveConversationTurn, type TurnAgentResolution } from './resolve-turn-agent';
-import {
-  hasOpenCaseForContact,
-  openCase,
-} from './human-cases';
 import { cancelPendingCronsForLead } from '../cron/scheduler';
 import {
   latestInboundSignal,
@@ -122,7 +112,6 @@ import { type ToolBreakerThresholds } from './tool-breaker';
 import {
   loadChannelProvider,
   nomesDasFerramentas,
-  runBeforeSend,
   tipoDeEnvio,
 } from '../guardrails/before-send';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
@@ -140,11 +129,8 @@ import {
   montarBriefingDaPassagem,
   type BriefingDaPassagem,
 } from '@/lib/escalacao/briefing-da-passagem';
-import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from './turno-mudo';
 import { corposEnviadosDesdeUltimaInbound } from './memoria-envio';
 import {
-  JAILBREAK_ESCALATION_LEVEL,
-  escalateJailbreakPromise,
   type JailbreakClassifierKnobs,
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada } from '../guardrails/camadas-da-org';
@@ -158,6 +144,9 @@ import { criarSendTemplate } from './turno/ferramentas/envio-de-template';
 import { carregarContextoDoTurno } from './turno/contexto';
 import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
 import { resolverRoteamentoDoTurno } from './turno/roteamento';
+import { chamarOModelo } from './turno/chamada-do-modelo';
+import { corrigirAposOModelo } from './turno/correcao-pos-modelo';
+import { fecharOTurnoComCheckpoint } from './turno/fechamento-do-turno';
 import { tratarDesviosDeterministicos } from './turno/desvios-deterministicos';
 import { prepararContextoDoTurno } from './turno/preparo-do-contexto';
 import { montarConjuntoDeFerramentas } from './turno/conjunto-de-ferramentas';
@@ -2329,434 +2318,31 @@ async function executarTurnoDoAgente(
       }
     }
 
-    // O "digitando…" ENQUANTO o modelo pensa já está aceso e sendo renovado desde
-    // o início do `try` (`manterDigitando`). A pausa humana antes da 1ª bolha
-    // (`esperaForaDoLock`) desconta este tempo e quase sempre zera — e com espera
-    // zero ela não acende presença; é a renovação que cobre o cliente até lá.
+    // F10 — chamada do modelo (ADR-0006, S9): turno ou prévia, saída truncada, escalação por jailbreak.
+    const { turn, saidaTruncada } = await chamarOModelo(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      { agentConfig, system, maxSteps, openingMessages, tools, jailbreakLevel },
+      estado,
+    );
 
-    // O modelo decide tools livremente dentro do teto de steps (knob AGENT_MAX_STEPS).
-    //
-    // Sem escolta LOCAL: quem cobre o teto de gasto é `runAgentTurn`, que envolve
-    // este corpo inteiro. Escoltar aqui deixaria de fora as chamadas de modelo dos
-    // auxiliares (`classifyStage`, `maybeCompact`), que rodam ANTES desta e por
-    // isso são as que estouram primeiro.
-    const turn = await runModelCall(
-      pool,
-      deps.llmCfg,
+    // F11 — correções depois do modelo (ADR-0006, S9): turno mudo, silêncio sem razão e pergunta do roteiro.
+    const { mensagensDoTurno } = await corrigirAposOModelo(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
       {
-        tenantId,
-        leadId: leadId || null,
-        jobId: job?.id,
-        // De quem é esta execução. Vai para `llm_calls.agent_id` e é o que permite
-        // a aba "Execuções" da tela do agente mostrar o que ELE fez — antes ela
-        // lia `ai_agent_runs`, tabela que motor nenhum vivo escreve, e dizia
-        // "Nenhuma execução ainda" com o agente respondendo no WhatsApp.
-        agentId: agentConfig?.agentId ?? null,
-        purpose: preview ? 'agent_preview' : 'agent_turn',
-        system,
-        messages: openingMessages,
-        tools,
-        maxSteps,
-        // Rascunho: a resposta é o send_message ACEITO; a etapa seguinte só
-        // "encerrava". Aceito, e não chamado: o envio vetado pela cadeia
-        // before_send volta ao modelo para ele reescrever (o 1º veto ensina).
-        ...(preview?.kind === 'assisted'
-          ? { pararQuando: () => preview.result.candidates.length > 0 }
-          : {}),
-        ...(agentConfig !== null
-          ? {
-              model: agentConfig.model,
-              llmOverride: {
-                provider: agentConfig.provider,
-                credentialId: agentConfig.credentialId,
-              },
-            }
-          : {}),
+        agentConfig, agentOperation, system, maxSteps, openingMessages, tools, turn, saidaTruncada, roteiro, liveChannel,
+        optedOutThisTurn, lgpd, maxSendsPerTurn, capDeEnvioAtingido, buildCaseContextSnapshot, moverParaHandoffBestEffort,
+        pararDigitando: () => pararDigitando(),
       },
-      { registry: deps.registry, log: runLog },
+      estado,
     );
 
-    // SAÍDA TRUNCADA (finish_reason = 'length'): o modelo bateu no
-    // teto de tokens de saída e o que produziu veio cortado. A detecção mora aqui,
-    // no ponto que consome o resultado, porque o seam devolve o resultado INTEIRO
-    // (ramo generateText e ramo de assinatura streamText — este último monta o
-    // objeto à mão e só não cega se repassar o finishReason, ver run-model-call).
-    //
-    // NUNCA se manda parcial: texto fora de `send_message` não sai, e argumento de
-    // tool cortado falha no schema (zod) e nem executa. Logo, truncamento só é
-    // DANO quando nada despachou — aí vira correção limitada (UM retry, o mesmo
-    // caminho do turno mudo) e, se a correção também falhar, FALHA TERMINAL
-    // VISÍVEL. Nunca retry infinito, nunca silêncio mascarado como decisão.
-    const saidaTruncada = turn.result.finishReason === 'length';
-    if (saidaTruncada) {
-      runLog.warn('output_truncated — resposta do modelo cortada no teto de tokens', {
-        job_id: job?.id ?? null,
-        enviadas_ate_aqui: estado.outcomes.length,
-        finish_reason: turn.result.finishReason,
-      });
-    }
-
-    // F4-04: correlação dos dois sinais do MESMO turno — jailbreak ALTO + tentativa de
-    // promessa fora de tabela (F4-01). Ambos estão determinados aqui (o jailbreak rodou na
-    // abertura; as tentativas de envio já passaram pelo loop). Dispara escalação humana em
-    // inbox_items (dedup por episódio). Advisório: o classifier sozinho nunca escala — o gate
-    // determinístico é que confirma a promessa indevida. Feito antes do runError/veto para
-    // não se perder num turno que falha o envio depois.
-    if (!preview && jailbreakLevel === JAILBREAK_ESCALATION_LEVEL && estado.outOfTablePromiseAttempted) {
-      const created = await escalateJailbreakPromise(pool, {
-        tenantId,
-        leadId,
-        level: jailbreakLevel,
-      });
-      if (created > 0) {
-        runLog.warn(
-          'jailbreak: escalação humana criada (flag alta + promessa fora de tabela no turno)',
-          {
-            jailbreak_level: jailbreakLevel,
-          },
-        );
-      }
-    }
-
-    if (estado.runError !== null) {
-      throw estado.runError; // job falha → retry da fila; o ledger segura duplicata de envio
-    }
-    if (estado.outcomes.some((o) => o.kind === 'failed')) {
-      // ponytail: retry re-roda o run inteiro (LLM incluso); seq N re-encontra a
-      // linha do ledger — 'accepted' pula, 'failed' rotaciona a key (F2-06).
-      throw new Error('envio marcado como failed pelo CRM — run re-tentado pela fila');
-    }
-
-    // TURNO MUDO: o turno de resposta terminou sem mensagem ao cliente e sem
-    // nenhuma razão para o silêncio (`turno-mudo.ts`). UMA correção, com a mesma
-    // conversa e as mesmas ferramentas: o envio passa pela cadeia inteira, como
-    // qualquer outro. O fechamento lê a fita das DUAS chamadas.
-    let mensagensDoTurno: ModelMessage[] = turn.result.responseMessages;
-    // Foi PEDIDA (e logo abaixo EXECUTADA) a correção limitada do turno mudo? O
-    // valor é consumido DEPOIS dela, no desfecho terminal, junto com
-    // `correcaoTruncou` (o sinal de FALHA da própria correção): correção que
-    // terminou truncada (length) é defeito, mas silêncio DELIBERADO — que o
-    // CORRECAO_DO_TURNO_MUDO autoriza o modelo a escolher — nunca abre caso.
-    // Erro da chamada de correção propaga e o job falha na fila (retry /
-    // dead-letter visível). As condições são as do próprio pedido
-    // (turno-mudo.ts): razões legítimas de silêncio nem chegam a corrigir.
-    let correcaoTruncou = false;
-    const correcaoDoTurnoMudoPedida =
-      !preview &&
-      liveJob().kind === 'inbound_turn' &&
-      turnoMudoPedeCorrecao({
-        tentativasDeEnvio: estado.tentativasDeEnvio,
-        enviadas: estado.outcomes.length,
-        turnoDescartado: estado.turnoDescartado,
-        passouParaAEquipe: estado.passouParaAEquipe,
-        capDeEnvio: capDeEnvioAtingido(),
-      });
-    if (correcaoDoTurnoMudoPedida) {
-      runLog.warn('turno terminou sem mensagem ao cliente — pedindo UMA correção', {
-        job_id: liveJob().id,
-      });
-      const pedidoDeCorrecao: ModelMessage = { role: 'user', content: CORRECAO_DO_TURNO_MUDO };
-      const correcao = await runModelCall(
-        pool,
-        deps.llmCfg,
-        {
-          tenantId,
-          leadId: leadId || null,
-          jobId: job?.id,
-          agentId: agentConfig?.agentId ?? null,
-          purpose: 'agent_turn',
-          system,
-          messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
-          tools,
-          maxSteps: Math.min(maxSteps, 3),
-          ...(agentConfig !== null
-            ? {
-                model: agentConfig.model,
-                llmOverride: {
-                  provider: agentConfig.provider,
-                  credentialId: agentConfig.credentialId,
-                },
-              }
-            : {}),
-        },
-        { registry: deps.registry, log: runLog },
-      );
-      // Sinal de FALHA da correção: terminou no teto de tokens. Silêncio com
-      // finishReason normal (stop/tool-calls) é resposta escolhida, não defeito.
-      correcaoTruncou = correcao.result.finishReason === 'length';
-      mensagensDoTurno = [...mensagensDoTurno, pedidoDeCorrecao, ...correcao.result.responseMessages];
-      if (estado.runError !== null) throw estado.runError;
-      if (estado.outcomes.some((o) => o.kind === 'failed')) {
-        throw new Error('envio marcado como failed pelo CRM — run re-tentado pela fila');
-      }
-      runLog.info('correção do turno mudo concluída', { messages_sent: estado.outcomes.length });
-    }
-
-    // FALHA TERMINAL VISÍVEL — só com sinal de FALHA, nunca por silêncio
-    // deliberado (#2938): o CORRECAO_DO_TURNO_MUDO autoriza o modelo a responder
-    // "nada a dizer", então silêncio que persiste com a correção NÃO é defeito.
-    // Duas causas, um único bloco (um caso humano por turno, nunca duplicado):
-    //  - saída TRUNCADA (finish_reason=length): o modelo cortou no teto de tokens;
-    //  - a correção limitada do turno mudo (UMA, `correcaoDoTurnoMudoPedida`
-    //    acima) TAMBÉM terminou truncada (`correcaoTruncou`) — sinal de falha.
-    // As condições isentam toda razão LEGÍTIMA de silêncio — turno descartado
-    // (obsoleto), passagem para a equipe (handoff do cliente), teto de pacing, e
-    // `tentativasDeEnvio === 0` (o modelo nunca chegou a chamar `send_message`;
-    // se chamou e levou veto, o veto é a razão e já ensinou o modelo). Os flags
-    // são re-avaliados DEPOIS da correção: se nela nasceu handoff/teto/descarte,
-    // aquilo é a razão e não há caso. O caso humano abre só com `casesEnabled`
-    // ligado (mesma régua dos fail-safes clínico e de promessa; `openCase`
-    // deduplica caso aberto) — a falha em si continua visível pelo log de erro.
-    // O bloco não despacha nada (só registra e abre caso) — logo nunca duplica
-    // mensagem; `caso.ok` gateia o move do funil — logo nunca duplica caso
-    // humano. O retry continua limitado à UMA correção.
-    const silencioSemRazaoLegitima =
-      !preview &&
-      // Só turno que RESPONDE ao cliente: retomada (followup) cortada não é "cliente sem resposta".
-      eTurnoDeResposta(liveJob()) &&
-      estado.outcomes.length === 0 &&
-      estado.seq === 0 &&
-      estado.tentativasDeEnvio === 0 &&
-      !estado.turnoDescartado &&
-      !estado.passouParaAEquipe &&
-      !capDeEnvioAtingido();
-    if (silencioSemRazaoLegitima && (saidaTruncada || correcaoTruncou)) {
-      const desfechoTerminal = saidaTruncada
-        ? 'output_truncated_recovered_failed'
-        : 'correction_truncated_failed';
-      runLog.error(`${desfechoTerminal} — sem nenhuma mensagem entregue`, {
-        job_id: job?.id ?? null,
-        kind: liveJob().kind,
-        finish_reason: turn.result.finishReason,
-        correcao_limitada_rodou: correcaoDoTurnoMudoPedida,
-        correcao_truncou: correcaoTruncou,
-      });
-      // Cases vêm desligados por padrão (`ai_agent_versions.cases_enabled`) — a
-      // mesma régua dos fail-safes clínico e de promessa de caso. Com a feature
-      // desligada a falha segue visível pelo log de erro acima; o caso para o
-      // time (e o move do funil) só acontece com ela ligada e sem caso aberto.
-      const haCasoAberto =
-        agentConfig?.casesEnabled === true
-          ? await hasOpenCaseForContact(pool, tenantId, input.conversationId)
-          : false;
-      if (agentConfig?.casesEnabled === true && !estado.openedCaseThisTurn && !haCasoAberto) {
-        try {
-          const caso = await openCase(
-            pool,
-            { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
-            {
-              title: saidaTruncada
-                ? 'Resposta do agente truncada — nenhuma mensagem saiu'
-                : 'A correção automática da IA também falhou — nenhuma mensagem saiu',
-              summary:
-                'O cliente ficou sem resposta neste turno: a IA não entregou mensagem nenhuma e a ' +
-                'correção automática não recuperou. Atendente precisa retomar a conversa e responder o cliente.',
-              blocker: saidaTruncada
-                ? 'A resposta da IA veio cortada no limite de tamanho, e mensagem cortada não é enviada ao cliente.'
-                : 'O turno terminou sem mensagem para o cliente e a correção automática da IA também veio ' +
-                  'cortada no limite de tamanho.',
-              kind: 'problema',
-              source: 'guardrail_autofallback',
-              contextSnapshot: buildCaseContextSnapshot(),
-            },
-          );
-          if (caso.ok) {
-            estado.openedCaseThisTurn = true;
-            moverParaHandoffBestEffort(desfechoTerminal);
-          } else {
-            // Caso não abriu (já existe um aberto) — a falha fica visível pelo log
-            // de erro acima; nada de retry extra aqui.
-            runLog.error(`${desfechoTerminal} — caso humano não abriu (já existe)`, {
-              job_id: job?.id ?? null,
-              code: caso.error.code,
-            });
-          }
-        } catch (err) {
-          // Best-effort: erro do banco não pode mascarar a causa original.
-          runLog.error(`${desfechoTerminal} — openCase lançou`, {
-            job_id: job?.id ?? null,
-            error: (err instanceof Error ? err.message : String(err)).slice(0, 160),
-          });
-        }
-      }
-    }
-
-    // ROTEIRO: a pergunta pendente é compromisso. Se o modelo não a fez, o motor
-    // a manda — pela MESMA cadeia de guardrails, dentro do teto de envios. Roda
-    // mesmo com o teto cheio: registrar que o MODELO fez a pergunta é o que a
-    // torna "a pergunta atual" no turno seguinte.
-    if (roteiro !== null) {
-      await garantirPerguntaDoRoteiro(
-        { pool, log: runLog },
-        {
-          organizationId: tenantId,
-          roteiro,
-          corposEnviados: estado.corposEnviados,
-          enviar: async (texto) => {
-            // #1943: turno descartado como obsoleto → a pergunta do roteiro NÃO
-            // sai (segue pendente para o turno seguinte). Também vigia o teto
-            // de mensagens físicas do turno (F2-15b).
-            if (!perguntaDoRoteiroPodeSair({ turnoDescartado: estado.turnoDescartado, seq: estado.seq, maxSendsPerTurn })) return false;
-            const chain = await runBeforeSend({
-              pool,
-              log: runLog,
-              agentOperation,
-              tenantId,
-              leadId,
-              jobId: liveJob().id,
-              channelSessionId: input.channelSessionId,
-              body: texto,
-              optedOutThisTurn,
-              // Sai no MESMO turno da resposta: sem isto, às 3h com a janela de
-              // resposta aberta, o agente responde e a pergunta do roteiro é vetada.
-              resposta: eTurnoDeResposta(liveJob()),
-              crmDailyLimit: null,
-              // A pergunta repete por design (foi feita e não respondida); o
-              // anti-blast vetaria justamente o que esta trava garante. Mesmo
-              // motivo do aviso de escalação.
-              enforceSpinning: false,
-              now: clock(),
-              sleep: deps.sleep,
-              lgpd,
-              ...(deps.knobs.disclosureMode !== undefined
-                ? { disclosureMode: deps.knobs.disclosureMode }
-                : {}),
-              send: (finalBody: string) => {
-                pararDigitando(); // a mensagem sai agora; renovar depois dela mentiria
-                estado.seq += 1;
-                return liveChannel().send({
-                  tenantId,
-                  leadId,
-                  jobId: liveJob().id,
-                  jobClaim: claimOfJob(liveJob()),
-                  agentOperation,
-                  seq: estado.seq,
-                  conversationId: input.conversationId,
-                  body: finalBody,
-                });
-              },
-            });
-            return chain.status !== 'vetoed' && (chain.outcome.kind === 'sent' || chain.outcome.kind === 'already_sent');
-          },
-        },
-      );
-    }
-
-    // F3-10: poda os tool results antigos da fita do run ANTES de reenviá-los no fechamento
-    // (é onde a fita inteira é re-serializada num prompt) — o conteúdo durável já foi para
-    // lead_notes pelo flush (F3-07), então o stub não perde nada recuperável. Opera SÓ no
-    // sufixo por-lead, nunca no prefixo estável (regra de cache 15).
-    // No SDK atual, response.messages contém só a ÚLTIMA etapa. O fechamento
-    // precisa da fita inteira, incluindo as ações concluídas em etapas anteriores.
-    // O fechamento vai SEM `tools`: as partes de ferramenta viram texto (a Anthropic recusa
-    // tool_use/tool_result sem tools), com teto por resultado no knob do pruning.
-    const responseMessages = toolPartsAsText(
-      deps.knobs.prune !== undefined
-        ? pruneToolResults(mensagensDoTurno, deps.knobs.prune)
-        : mensagensDoTurno,
-      deps.knobs.prune?.minResultTokens,
+    // F12 — fechamento e checkpoint (ADR-0006, S9): o assistido e a prévia saem antes de gravar.
+    const fechamento = await fecharOTurnoComCheckpoint(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      { agentConfig, system, openingTextOnly, compromissosBlock, mensagensDoTurno },
     );
-
-    // Fechamento imposto pelo runtime: 2ª chamada, mesma conversa, só o checkpoint.
-    //
-    // Também sob o handoff (o do turno inteiro, em `runAgentTurn`): o teto pode
-    // ser cruzado ENTRE as duas chamadas — a primeira é que gasta o grosso do
-    // turno. Aqui o lead já recebeu resposta, mas a conversa ficaria sem
-    // checkpoint e sem dono, e o próximo inbound cairia no mesmo bloqueio, agora
-    // sem nada tendo mudado no meio.
-    // Prévia sem candidato e sem impedimento: quem opera precisa saber que o agente não propôs nada.
-    const avisarSemCandidato = (p: NonNullable<typeof preview>): void => {
-      if (p.result.candidates.length === 0 && p.result.impediments.length === 0)
-        p.result.impediments.push({
-          code: 'no_candidate',
-          message: 'O agente não propôs uma resposta. Revise o cenário ou a configuração.',
-        });
-    };
-    // ⚠️ RASCUNHO (modo assistido) não fecha o turno com checkpoint. O checkpoint
-    // da prévia não é gravado (a prévia retorna antes do `insertCheckpoint`, logo
-    // abaixo) e o `reply-drafts.ts` não o lê — só a prévia de TESTE (sandbox) o
-    // mostra na tela. Mesmo assim, a chamada de fechamento segurava a entrega do
-    // rascunho: medido em produção (gpt-6-luna, 2026-09-24), resposta pronta às
-    // 12:32:40 e rascunho entregue às 12:32:56 — 16 dos 28 s que o operador
-    // esperava depois de clicar em "Sugerir resposta".
-    if (preview?.kind === 'assisted') {
-      avisarSemCandidato(preview);
-      return;
-    }
-    // A prévia propõe escritas: não pode tratá-las como reservas executadas.
-    let agendaAtual = '';
-    if (!preview) {
-      try {
-        agendaAtual = await agendaNoFechamento({
-          db: pool,
-          organizationId: tenantId,
-          contactId: leadId,
-          agora: clock(),
-          blocoDaAbertura: compromissosBlock,
-          mensagens: mensagensDoTurno,
-        });
-      } catch (err) {
-        // A resposta já saiu: falhar o job por esta leitura repetiria o turno.
-        // Falha de leitura não equivale a agenda vazia nem a ação desfeita.
-        runLog.warn('agenda não pôde ser relida no fechamento', {
-          error: (err instanceof Error ? err.message : String(err)).slice(0, 160),
-        });
-        agendaAtual = 'A agenda não pôde ser relida depois das ações deste turno. Isso não prova ausência de reserva nem desfaz uma ação concluída. Registre somente o que os resultados das ferramentas comprovaram.';
-      }
-    }
-    // Uma correção antes de re-tentar o turno inteiro (`fecharOTurno`): o JSON
-    // recusado volta ao modelo com o problema, numa 2ª chamada de fechamento.
-    const { content, resposta: closing } = await fecharOTurno({
-      pedir: async (correcao) => {
-        const chamada = await runModelCall(
-          pool,
-          deps.llmCfg,
-          {
-            tenantId,
-            leadId: leadId || null,
-            jobId: job?.id,
-            purpose: 'checkpoint',
-            ...(agentConfig !== null
-              ? {
-                  model: agentConfig.model,
-                  llmOverride: {
-                    provider: agentConfig.provider,
-                    credentialId: agentConfig.credentialId,
-                  },
-                }
-              : {}),
-            system,
-            messages: [
-              // prune: o checkpoint reusa a abertura só como texto — a mídia nativa (cara) já
-              // fez seu trabalho na 1ª chamada e não precisa ir de novo.
-              ...openingTextOnly,
-              ...responseMessages,
-              ...(agendaAtual ? [{ role: 'user' as const, content: agendaAtual }] : []),
-              { role: 'user', content: CHECKPOINT_INSTRUCTION },
-              ...correcao,
-            ],
-          },
-          { registry: deps.registry, log: runLog },
-        );
-        return { text: chamada.result.text, callId: chamada.callId };
-      },
-      ajustar: (text) =>
-        text.replace(/https:\/\/meet\.google\.com\/[a-zA-Z0-9-]+/g, '[link da reunião disponível na Agenda]'),
-      log: runLog,
-    });
-
-    if (preview) {
-      preview.result.checkpoint = content;
-      avisarSemCandidato(preview);
-      return;
-    }
-
-    // Wave 3 (2.4): o checkpoint anterior é lido ANTES de gravar o novo — a
-    // timeline recebe o DIFF, nunca o snapshot. Emitir a cada turno encheria a
-    // tela com "a IA pensou" e enterraria a única linha que muda o que alguém
-    // faria a seguir.
-    const checkpointAnterior = await latestCheckpoint(pool, tenantId, leadId);
-    await insertCheckpoint(pool, { tenantId, leadId, jobId: liveJob().id, content });
+    if (!fechamento.seguir) return;
+    const { content, closing, checkpointAnterior } = fechamento.valor;
 
     // F13 — efeitos pós-turno (ADR-0006, S3): Operador, emissão, nota, golden, veto e cap.
     await executarEfeitosPosTurno(

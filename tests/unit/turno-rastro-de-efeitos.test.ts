@@ -223,6 +223,10 @@ type Cenario = {
   camadas?: Record<string, boolean>;
   /** Provedor da conexão (`channel_sessions.provider`); ausente = o padrão do dublê. */
   provider?: string;
+  /** `finishReason` de toda chamada principal (`agent_turn`); ausente = `stop`. */
+  finishReason?: string;
+  /** Textos do fechamento em ordem, um por chamada de `checkpoint`; o último se repete. */
+  checkpoints?: string[];
 };
 
 const AGENTE = {
@@ -240,6 +244,7 @@ function resumoDoRetorno(r: unknown): string {
 
 /** O seam de modelo roteirizado: classificadores degradam, o turno chama as ferramentas do cenário. */
 function roteirizarModelo(rastro: Rastro, c: Cenario) {
+  let fechamentos = 0;
   vi.mocked(runModelCall).mockImplementation((async (_db: unknown, _cfg: unknown, input: SeamDeModelo.RunModelCallInput) => {
     const proposito = input.purpose ?? "sem_proposito";
     rastro.push(`llm:${proposito}`);
@@ -267,12 +272,13 @@ function roteirizarModelo(rastro: Rastro, c: Cenario) {
           { role: "tool", content: [{ type: "tool-result", toolCallId, toolName: f.nome, output: { type: "json", value: r ?? null } }] },
         );
       }
-      return { result: { finishReason: "stop", responseMessages: fita, text: "", steps: [] }, model: "fake-model", callId: "call-turno" };
+      return { result: { finishReason: c.finishReason ?? "stop", responseMessages: fita, text: "", steps: [] }, model: "fake-model", callId: "call-turno" };
     }
     if (proposito === "checkpoint") {
       // P2-2: a fita que chega ao fechamento (contagem e resumo), para uma fatia que a perca ficar vermelha.
       rastro.push(`checkpoint: msgs=${input.messages?.length ?? 0} #${resumoDoRetorno(input.messages)}`);
-      return { result: { text: c.checkpoint ?? CHECKPOINT }, model: "fake-model", callId: "call-ck" };
+      const texto = c.checkpoints?.[Math.min(fechamentos++, c.checkpoints.length - 1)] ?? c.checkpoint ?? CHECKPOINT;
+      return { result: { text: texto }, model: "fake-model", callId: "call-ck" };
     }
     if (proposito === "jailbreak_detect") return { result: { text: '{"level":"high","reason":"override"}' }, model: "fake-model", callId: "call-jb" };
     // Só roda com `knobs.stageClassifier`: sugere um estágio diferente do que o modelo confirma.
@@ -481,6 +487,21 @@ const CENARIOS: Record<string, Cenario> = {
       ...[1, 2, 3].map((n) => ({ nome: "send_message", args: { body: `Mensagem número ${n} com conteúdo distinto ${"x".repeat(n * 7)}` } })),
       { nome: "send_template", args: { template_name: "retomada", language: "pt_BR", values: [] } },
     ],
+  },
+  // F10 a F12 (ADR-0006, S9), gravados contra o código de antes da extração.
+  "chamada: saída truncada com envio, sem correção nem caso": {
+    agente: { casesEnabled: true },
+    finishReason: "length",
+    ferramentas: [{ nome: "send_message", args: { body: "Oi! Posso te ajudar com o orçamento." } }],
+  },
+  "correção: saída truncada sem envio, correção truncada, tenta abrir caso": {
+    agente: { casesEnabled: true },
+    finishReason: "length",
+    ferramentas: [],
+  },
+  "fechamento: checkpoint inválido, uma correção": {
+    checkpoints: ["isto não é JSON", CHECKPOINT],
+    ferramentas: [{ nome: "send_message", args: { body: "Oi! Posso te ajudar com o orçamento." } }],
   },
 };
 

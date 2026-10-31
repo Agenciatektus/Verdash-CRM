@@ -35,9 +35,12 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
+
 const ler = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const seam = ler("lib/agent-engine/edge/llm/run-model-call.ts");
-const turno = ler("lib/agent-engine/agent/inbound-turn.ts");
+// ADR-0006, S9: F10 a F12 saíram para `turno/`; a remontagem os devolve ao lugar.
+const turno = fonteDoTurnoMontado();
 
 describe("seam: finishReason chega nos dois ramos", () => {
   it("o tipo do seam EXIGE finishReason (tirar vira erro de tipo na hora)", () => {
