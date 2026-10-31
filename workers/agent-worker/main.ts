@@ -97,6 +97,7 @@ import { runVoiceCallsBridgeLoop } from "@/lib/wacalls/events-bridge";
 import { estadoDoWatchdog, runSessionWatchdogLoop } from "@/lib/agent-engine/edge/crm/session-reconciler";
 import { runHealthLoop } from "@/lib/agent-engine/health/circuit";
 import { runFlywheelLoop } from "@/lib/agent-engine/flywheel/live";
+import { runOrganizadorLoop } from "@/lib/organizador/varredura";
 import { llmEdgeConfigFromEnv } from "@/lib/agent-engine/edge/llm/run-model-call";
 import { loadEnv, type Env } from "@/lib/agent-engine/env";
 import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
@@ -384,6 +385,24 @@ export async function startWorker(
         )
       : Promise.resolve();
 
+  // Organizador do funil: lê a conversa e move o card; sem canal de envio.
+  const organizadorLoop =
+    env.ORGANIZADOR_INTERVAL_MS > 0
+      ? runOrganizadorLoop(
+          pool,
+          {
+            llm: llmEdgeConfigFromEnv(env),
+            crm: crmEdgeConfigFromEnv({
+              SUPABASE_URL: urlDoSupabaseNoServidor(env.SUPABASE_SERVER_URL, env.NEXT_PUBLIC_SUPABASE_URL),
+              SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
+            }),
+          },
+          { intervalMs: env.ORGANIZADOR_INTERVAL_MS },
+          log,
+          loopsAbort.signal,
+        )
+      : Promise.resolve();
+
   // Cron persistente por contato (follow-up) — só enfileira em job_queue.
   const cronLoop = runCronLoop(
     pool,
@@ -575,6 +594,7 @@ export async function startWorker(
       cronLoop,
       sessionWatchdogLoop,
       flywheelLoop,
+      organizadorLoop,
       voiceCallsBridgeLoop,
     ]);
     await workerLoop;
