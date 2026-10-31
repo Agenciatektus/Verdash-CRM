@@ -1,4 +1,3 @@
-import { prospectingConversationContext } from "@/lib/prospecting/context";
 import { setExecutionAgentOperation } from '@/lib/atendimento/fronteira-server';
 import { TIPOS_DE_CASO, TIPOS_DE_CASO_PARA_A_IA } from "@/lib/ai/case-copy";
 import { DEFAULT_CHANNEL_PROVIDER } from '@/lib/channels/capabilities';
@@ -36,7 +35,6 @@ import { currentExecutionBoundary, guardServiceEffect } from '@/lib/atendimento/
  */
 import type pg from 'pg';
 import { z } from 'zod';
-import { auxModelArgs, type AuxModelArgs } from './aux-model-args';
 import type { ChannelAdapter, ChannelSendResult } from '../channel-adapter';
 
 import { withFields, type Logger } from '../obs/logger';
@@ -82,7 +80,6 @@ import {
 import { enqueueJob, rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
 import {
   applyLeadStateUpdate,
-  getLeadState,
   type LeadStage,
   type LeadStateRow,
 } from './lead-state';
@@ -138,7 +135,6 @@ import {
   type StageClassifierKnobs,
 } from './stage-classifier';
 import { classificadoresDoTurno } from './classificadores-do-turno';
-import { loadPlaybook } from './playbook';
 import { promessasEmAberto } from './declaracao';
 import {
   projetarContexto,
@@ -150,7 +146,6 @@ import {
   capacidadesEntreguesAoOperador,
   catalogoEntregueAoOperador,
 } from './entrega-de-capacidade';
-import { composeSystemPrompt, loadOrgMemory, renderOrgMemory } from './org-memory';
 import { loadPublishedAgentConfigById, matchesHandoffKeyword, type PublishedAgentConfig } from './agent-config';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno } from './roteiro-no-turno';
 import { validarRespostaDoFluxo } from './flow-validate';
@@ -173,11 +168,9 @@ import { cancelPendingCronsForLead } from '../cron/scheduler';
 import {
   latestInboundSignal,
   recentInboundSignal,
-  loadSkills,
   matchSkills,
   recordSkillMissCandidates,
   renderMatchedSkillBodies,
-  renderSkillIndex,
 } from './skills';
 import { readSkillReference, skillHasReferences } from './skill-references';
 import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } from './tool-breaker';
@@ -226,6 +219,7 @@ import {
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
+import { carregarContextoDoTurno } from './turno/contexto';
 import {
   nivelFinalDaManipulacao,
   perguntarManipulacaoAoJev,
@@ -877,7 +871,7 @@ async function briefingDoCheckpointDuravel(
  * cacheável junto do índice de skills quando `casesEnabled`, pra não sumir em
  * conversa longa (ao contrário do índice de skills, este bloco não some).
  */
-const CASES_SYSTEM_BLOCK =
+export const CASES_SYSTEM_BLOCK =
   '## Casos para um humano de retaguarda\n' +
   'Quando você NÃO conseguir resolver o pedido do lead sozinho (liberar acesso, corrigir algo num ' +
   'sistema, uma decisão que exige uma pessoa), use a tool open_human_case — você CONTINUA conversando ' +
@@ -903,7 +897,7 @@ const CASES_SYSTEM_BLOCK =
  * FORMA (identificador técnico), não sentença comum em português — então a única
  * cura possível aqui é instrução, não filtro.
  */
-const TRANSPARENCIA_SYSTEM_BLOCK =
+export const TRANSPARENCIA_SYSTEM_BLOCK =
   '## Nunca narre problema interno ao lead\n' +
   'Em QUALQUER mensagem — abrindo caso ou não — NUNCA diga ao lead que "houve um problema/erro no ' +
   'sistema", "falha na confirmação", "erro técnico" ou qualquer variação que admita que algo deu errado ' +
@@ -2254,131 +2248,13 @@ async function executarTurnoDoAgente(
       });
     }
   }
-  // Knobs por-turno: a versão publicada vence o env; sem ela, env (main.ts).
-  const maxSteps = agentConfig?.maxSteps ?? deps.knobs.maxSteps;
-  // Fallback de modelo das chamadas AUXILIARES (classificadores/compaction/promessa):
-  // knob de env → modelo do agente PUBLICADO na tela → organizations.settings.llm.
-  // Sem isso, self-host que configurou tudo pela tela (que não preenche default_model)
-  // morria no primeiro classificador: "modelo LLM não definido".
-  // A regra de ONDE o classificador auxiliar tira modelo + provider + credencial
-  // mora em `aux-model-args.ts`, fora daqui, para poder ser exercitada por unit:
-  // esta função precisa de banco, job e registry para rodar. Ver o defeito que a
-  // originou (PR #151) no cabeçalho de lá.
-  const argsAux = (configuredModel: string | undefined): AuxModelArgs =>
-    auxModelArgs(configuredModel, agentConfig);
-
-  /**
-   * Os DOIS limites do histórico vêm da versão publicada — e o segundo vinha da
-   * env, que é o defeito.
-   *
-   * A tela oferece "Tamanho máximo desse histórico" por agente e grava
-   * `history_token_window` (default 8.000). O turno lia `historyMessageWindow`
-   * dali e `maxTokens` de `LEAD_CONTEXT_MAX_TOKENS`, uma env com default 1.000
-   * que sequer aparece no `.env.example`: quem configurava 8.000 na tela recebia
-   * 1.000, sem nada dizer que o número não valia. Metade da versão publicada era
-   * lida, metade não.
-   *
-   * O corte não morde na conversa curta de WhatsApp — ali quem limita é a janela
-   * de mensagens (20 por padrão). Ele morde exatamente onde dói: mensagem longa
-   * e áudio transcrito, quando o histórico é a única coisa que sustenta o fio da
-   * conversa. O ramo sem versão publicada segue com os knobs da instalação, que
-   * é o único caso em que ela é a fonte legítima.
-   */
-  const turnContextKnobs =
-    agentConfig !== null
-      ? {
-          historyLimit: agentConfig.historyMessageWindow,
-          maxTokens: agentConfig.historyTokenWindow,
-        }
-      : contextKnobs;
-
-  // Ritual de abertura: playbook por ponteiro + checkpoint + contexto curado.
-  // Com agente publicado, o system_prompt DELE é a camada tenant (platform de
-  // compliance continua à frente, sempre).
-  //
-  // As leituras da abertura correm em QUATRO trilhas paralelas: nenhuma escreve,
-  // nenhuma está sob lock ou transação, e a única dependência entre elas — o
-  // playbook precisa do contexto de prospecção — fica dentro da mesma trilha.
-  // Em série eram 8 RTTs ao Supabase remoto antes de o modelo começar; assim são
-  // 2 (a trilha mais funda). As 4 consultas em voo por turno são o formato das
-  // trilhas, não um encaixe no pool: com QUEUE_MAX_CONCURRENCY=8 turnos abrindo
-  // juntos, o pico chega a 32 leituras sobre 10 conexões (default do pg, knob
-  // DB_POOL_MAX). O pg enfileira e nenhuma destas leituras segura conexão, então
-  // o pior caso é espera de fila no pico, não erro nem deadlock.
-  const [playbook, [skills, currentInboundText], orgMemory, [previous, leadState]] =
-    await Promise.all([
-      (async () => {
-        const prospectingContext =
-          !preview && input.conversationId
-            ? await prospectingConversationContext(pool, tenantId, input.conversationId)
-            : '';
-        return loadPlaybook(
-          pool,
-          tenantId,
-          agentConfig !== null ? { agentLayer: agentConfig.systemPrompt + prospectingContext } : undefined,
-        );
-      })(),
-      // Skills situacionais (F3-09): índice (name+description) SEMPRE residente — vai junto do
-      // system do playbook, no prefixo estável org-wide (disclosure progressivo; cacheável F2-17).
-      // O CORPO só carrega no match, no sufixo por-lead (mais abaixo). loadSkills resolve os
-      // ponteiros a cada run: trocar/rollback de skill = mover o ponteiro, sem restart.
-      (async () =>
-        [
-          await loadSkills(pool, tenantId),
-          input.inboundMessageId === undefined
-            ? null
-            : await loadInboundBodyForJob(pool, {
-                tenantId,
-                conversationId: input.conversationId,
-                inboundMessageId: input.inboundMessageId,
-              }),
-        ] as const)(),
-      // Fase 1 (harness): memória geral da org — prefixo estável, resolvida a cada
-      // turno como o playbook (publicar ⇒ próximo turno vale). composeSystemPrompt já
-      // encaixa playbook + memória + índice de skills no prefixo cacheável.
-      loadOrgMemory(pool, tenantId),
-      (async () =>
-        [
-          preview ? (preview.previous ?? null) : await latestCheckpoint(pool, tenantId, leadId),
-          preview?.kind === 'sandbox' ? null : await getLeadState(pool, tenantId, leadId),
-        ] as const)(),
-    ]);
-  const skillIndex = renderSkillIndex(skills);
-  const systemWithMemory = composeSystemPrompt({
-    playbookPrompt: playbook.prompt,
-    orgMemoryBlock: renderOrgMemory(orgMemory),
-    skillIndex,
-  });
-  // Spec 15 §5.2: bloco das tools de caso SEMPRE residente (não invalida o prefixo
-  // cacheável — mesmo espírito do índice de skills) quando a tela habilita. O bloco da
-  // Agenda segue o mesmo padrão, condicionado a `crm_book_appointment` estar entre as
-  // tools publicadas — ver comentário de `agendaSystemBlock`. `TRANSPARENCIA_SYSTEM_BLOCK`
-  // não depende de nenhuma feature — todo agente publicado o recebe.
-  const blocosResidentes = [systemWithMemory, TRANSPARENCIA_SYSTEM_BLOCK];
-  if (agentConfig !== null && agentConfig.casesEnabled) blocosResidentes.push(CASES_SYSTEM_BLOCK);
-  // Spec 15 §5.2 / doutrina da Agenda: a régua é o que o agente TEM — ver
-  // `blocosDeAgendaResidentes`, que decidiu isto num lugar só para poder ser
-  // testada (o bloco da cadeia nomeia `crm_list_event_types`, e nomear
-  // ferramenta ausente faz o modelo tentar chamá-la).
-  if (agentConfig !== null) blocosResidentes.push(...blocosDeAgendaResidentes(agentConfig.toolIds));
-  if (preview)
-    blocosResidentes.push(
-      'MODO PRÉVIA: proponha a resposta com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
-    );
-  const system = blocosResidentes.join('\n\n');
-  const openingContext = preview
-    ? preview.context
-    : await getLeadContext(
-        pool,
-        deps.crmCfg,
-        { tenantId, leadId, conversationId: input.conversationId, fuso: fusoDaOrg },
-        turnContextKnobs,
-      );
-  if (!openingContext.ok) {
-    // Sem contexto não há turno: transiente (CRM fora) OU permanente (lead
-    // sumiu) — ambos re-tentam pela fila e morrem em 'dead' se persistirem.
-    throw new Error(`abertura do turno falhou em get_lead_context (${openingContext.error.code})`);
-  }
+  // F4 — contexto e system prompt (ADR-0006, S2): leituras da abertura e montagem do `system`.
+  const {
+    maxSteps, argsAux, turnContextKnobs, skills, currentInboundText, previous, leadState, system, openingContext,
+  } = await carregarContextoDoTurno(
+    { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+    { agentConfig, contextKnobs, fusoDaOrg },
+  );
 
   // Seam de canal (F2-25): o envio vai SÓ pela interface ChannelAdapter — o
   // default WAHA-via-CRM envolve o sink F2-06. Instanciado por job (o pool é

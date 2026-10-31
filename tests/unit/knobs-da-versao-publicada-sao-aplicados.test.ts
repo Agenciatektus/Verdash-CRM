@@ -97,7 +97,7 @@ describe("knobs da versão publicada", () => {
     // acima ficaria verde com um uso qualquer do campo em outro lugar — e o que
     // importa é este ponto, o que monta o contexto do turno.
     const turno = readFileSync(
-      path.join(RAIZ, "lib", "agent-engine", "agent", "inbound-turn.ts"),
+      path.join(RAIZ, "lib", "agent-engine", "agent", "turno", "contexto.ts"),
       "utf8",
     );
     const ramo = /const turnContextKnobs =[\s\S]{0,300}?: contextKnobs;/.exec(turno)?.[0] ?? "";
