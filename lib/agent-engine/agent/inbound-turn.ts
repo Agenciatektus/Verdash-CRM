@@ -1,6 +1,6 @@
 import { TIPOS_DE_CASO, TIPOS_DE_CASO_PARA_A_IA } from "@/lib/ai/case-copy";
 import { DEFAULT_CHANNEL_PROVIDER } from '@/lib/channels/capabilities';
-import { applyPreviewPolicy, previewGateContext, type TurnPreview } from './preview';
+import { type TurnPreview } from './preview';
 import { claimOfJob } from '../queue/claim';
 import { currentExecutionBoundary, guardServiceEffect } from '@/lib/atendimento/fronteira-server';
 /**
@@ -40,7 +40,6 @@ import { withFields, type Logger } from '../obs/logger';
 import {
   corpoDaMensagem,
   getLeadContext,
-  textoDoClienteNaUltimaMensagem,
   type CorpoDaMensagemRow,
   type LeadContext,
   type LeadContextMessage,
@@ -59,15 +58,8 @@ import { HANDOFF_REASON_ORCAMENTO } from '../edge/llm/orcamento';
 import { criarConferidorDeAfirmacoes } from '@/lib/ai/decisao/afirmacao-de-fato';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { moverLeadParaEtapaDeHandoff } from '@/lib/leads/handoff-stage-move';
-import { buildNativeMediaParts } from './media-parts';
-import {
-  copiarFotoNoStorage,
-  prepararFotosDoProduto,
-  PASTA_DE_TESTE_DE_MIDIA,
-} from './fotos-do-produto';
 import { rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
 import {
-  type LeadStage,
   type LeadStateRow,
 } from './lead-state';
 
@@ -107,28 +99,16 @@ import {
 } from './compaction';
 import { pruneToolResults, toolPartsAsText, type PruneToolResultsKnobs } from './prune-tool-results';
 import {
-  classifyStage,
-  renderStageHint,
   type StageClassifierKnobs,
 } from './stage-classifier';
-import { classificadoresDoTurno } from './classificadores-do-turno';
-import {
-  turnoProjeta,
-} from './projecao';
-import {
-  capacidadesEntreguesAoOperador,
-  catalogoEntregueAoOperador,
-} from './entrega-de-capacidade';
 import { loadPublishedAgentConfigById, matchesHandoffKeyword, type PublishedAgentConfig } from './agent-config';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from './roteiro-no-turno';
 import { loadChannelKnobs } from '../pacing/store';
 import { resolveConversationTurn, type TurnAgentResolution } from './resolve-turn-agent';
 import {
   hasOpenCaseForContact,
-  getCaseAwaitingLead,
   openCase,
 } from './human-cases';
-import { buildMcpTurnTools } from '../edge/crm/mcp-tools';
 import { cancelPendingCronsForLead } from '../cron/scheduler';
 import {
   latestInboundSignal,
@@ -138,7 +118,7 @@ import {
   renderMatchedSkillBodies,
 } from './skills';
 import { skillHasReferences } from './skill-references';
-import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } from './tool-breaker';
+import { type ToolBreakerThresholds } from './tool-breaker';
 import {
   loadChannelProvider,
   nomesDasFerramentas,
@@ -147,7 +127,6 @@ import {
 } from '../guardrails/before-send';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
 import { manterDigitando } from './atraso-humano';
-import { instrucaoDeBolhas } from './split-message';
 import type { DisclosureMode } from '../guardrails/disclosure/template';
 import { loadPromiseTable } from '../guardrails/promise/table';
 import {
@@ -165,10 +144,8 @@ import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from './turno-mudo';
 import { corposEnviadosDesdeUltimaInbound } from './memoria-envio';
 import {
   JAILBREAK_ESCALATION_LEVEL,
-  classifyJailbreak,
   escalateJailbreakPromise,
   type JailbreakClassifierKnobs,
-  type JailbreakLevel,
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
@@ -183,26 +160,18 @@ import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
 import { resolverRoteamentoDoTurno } from './turno/roteamento';
 import { tratarDesviosDeterministicos } from './turno/desvios-deterministicos';
 import { prepararContextoDoTurno } from './turno/preparo-do-contexto';
-import {
-  nivelFinalDaManipulacao,
-  perguntarManipulacaoAoJev,
-  registrarManipulacaoDoJev,
-  type ManipulacaoDoJev,
-} from '@/lib/ai/decisao/manipulacao';
+import { montarConjuntoDeFerramentas } from './turno/conjunto-de-ferramentas';
+import { classificarOTurno } from './turno/classificadores-auxiliares';
+import { montarAberturaDaChamada } from './turno/montagem-da-chamada';
 import type { DependenciasDoPonto } from '@/lib/ai/decisao/ponto';
 import { fusoDaOrganizacao } from './fuso-da-org';
-import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 import { MAX_TURNOS_POR_CONDUCAO } from '@/lib/cadencia/conducao/settings';
-import { filtrarRawTools } from '@/lib/cadencia/conducao/presets';
-import { restringirAConducao } from '@/lib/cadencia/conducao/ferramentas';
 import {
   avisarEquipeDoRascunho,
-  blocoDaConducao,
   conducaoVivaDaConversa,
   contarTurno,
   encerrarConducaoEPassarParaHumano,
-  nomeDaEtapa,
   restringirConfigAConducao,
   type ConducaoViva,
 } from '@/lib/cadencia/conducao/turno';
@@ -1083,7 +1052,7 @@ export function blocosDeAgendaResidentes(toolIds: readonly string[]): string[] {
  * Tools de agenda cuja EXECUÇÃO neste turno arma o `agendaStallGate` (before-send.ts) —
  * ver o wrap no loop de montagem das tools MCP, mais abaixo.
  */
-const AGENDA_TOOL_NAMES = new Set([
+export const AGENDA_TOOL_NAMES = new Set([
   'crm_find_free_slots',
   'crm_book_appointment',
   'crm_reschedule_appointment',
@@ -2292,7 +2261,8 @@ async function executarTurnoDoAgente(
   // 2B-tools: tools do catálogo MCP habilitadas NA TELA entram no run (audit +
   // role/scope da ponte nativa; envio e handoff do catálogo são bloqueados —
   // ver edge/crm/mcp-tools.ts). As 8 tools do engine têm precedência de nome.
-  let mcpCleanup: (() => Promise<void>) | null = null;
+  // Tipo no valor: a atribuição vem do callback de `montarConjuntoDeFerramentas` e o TS não a enxerga.
+  let mcpCleanup = null as (() => Promise<void>) | null;
   try {
     // "digitando…" do INÍCIO do trabalho até a 1ª bolha, renovado a cada 10s.
     // Antes ele acendia uma vez, só na chamada principal ao modelo: os
@@ -2306,450 +2276,30 @@ async function executarTurnoDoAgente(
         runLog,
       );
     }
-    if (agentConfig !== null && agentConfig.toolIds.length > 0) {
-      try {
-        // As de OPERAÇÃO saem antes de serem montadas, quando o Operador as tem.
-        // Medido: são elas que carregavam 2 dos 3 vazamentos (o DADO que devolvem),
-        // e tirá-las levou a taxa de 30% para 10% — ver RELATORIO-passo6.md.
-        const catalogoEntregue = catalogoEntregueAoOperador({
-          operadorLigado: agentConfig.operatorEnabled,
-          ferramentasDoOperador: agentConfig.operatorToolIds,
-          ferramentasDoConversador: agentConfig.toolIds,
-        });
-        const configSemOperador =
-          catalogoEntregue.length === 0
-            ? agentConfig
-            : {
-                ...agentConfig,
-                toolIds: agentConfig.toolIds.filter((t) => !catalogoEntregue.includes(t)),
-              };
-        // Ponto 1 da allowlist da condução: ferramentas ∩ objetivo, funis ∩ o da
-        // cadência. Idempotente com a restrição que o handler já aplicou.
-        const conducaoDoTurno = input.conducao ?? preview?.conducao;
-        const configDoTurno = conducaoDoTurno
-          ? restringirConfigAConducao(configSemOperador, conducaoDoTurno)
-          : configSemOperador;
-        if (catalogoEntregue.length > 0) {
-          runLog.info('capacidades de catálogo entregues ao operador', {
-            entregues: catalogoEntregue,
-          });
-        }
-        const mcp = await buildMcpTurnTools(
-          deps.crmCfg,
-          {
-            organizationId: tenantId,
-            jobId: preview?.runId ?? liveJob().id,
-            contactId: leadId || null,
-            conversationId: input.conversationId,
-          },
-          configDoTurno,
-          runLog,
-          preview ? { readOnly: true } : undefined,
-        );
-        if (mcp !== null) {
-          mcpCleanup = mcp.cleanup;
-          for (const [name, mcpTool] of Object.entries(mcp.tools)) {
-            if (name in rawTools) continue;
-            if (
-              (name === 'crm_search_products' || name === 'crm_search_knowledge') &&
-              typeof mcpTool.execute === 'function'
-            ) {
-              const executeOriginal = mcpTool.execute.bind(mcpTool);
-              rawTools[name] = {
-                ...mcpTool,
-                execute: (async (...args: Parameters<typeof executeOriginal>) => {
-                  const resultado = await executeOriginal(...args);
-                  // O modelo escolhe a consulta, nunca fornece a autorização.
-                  // A ponte MCP já aplica organização, papel e escopo de leitura.
-                  if (name === 'crm_search_products') evidenciasComerciais.registrarCatalogo(resultado);
-                  else evidenciasComerciais.registrarConhecimento(resultado);
-                  return resultado;
-                }) as typeof mcpTool.execute,
-              };
-              continue;
-            }
-            // Marca a EXECUÇÃO (não só a decisão de chamar) — é isso que o agendaStallGate
-            // precisa saber para não vetar um turno que já checou a agenda de verdade.
-            if (AGENDA_TOOL_NAMES.has(name) && typeof mcpTool.execute === 'function') {
-              const executeOriginal = mcpTool.execute.bind(mcpTool);
-              rawTools[name] = {
-                ...mcpTool,
-                execute: (async (...args: Parameters<typeof executeOriginal>) => {
-                  estado.agendaToolCalledThisTurn = true;
-                  return executeOriginal(...args);
-                }) as typeof mcpTool.execute,
-              };
-            } else {
-              rawTools[name] = mcpTool;
-            }
-          }
-          mcpToolIdsDoTurno.push(...mcp.toolIds);
-          runLog.info('tools MCP da tela montadas no turno', { mcp_tool_ids: mcp.toolIds });
-        }
-      } catch (err) {
-        // Tool extra é privilégio, não invariante: falha no mint/montagem NÃO
-        // derruba o turno — a conversa do cliente não pode morrer porque uma tool
-        // extra falhou. Isso continua certo.
-        //
-        // O que estava errado era o DEPOIS. A versão anterior deste comentário
-        // dizia "o humano vê o log". Não vê: o log sai no stdout do worker, num
-        // contêiner de VPS que o dono do negócio nunca abre. Medido num turno
-        // real — o agente atendeu sem NENHUMA das capacidades que o humano tinha
-        // ligado na tela, e a única pista existia num log que ninguém lê. É
-        // falha-em-verde: anunciada na tela, ausente na execução, nada contando.
-        const detalhe = (err instanceof Error ? err.message : String(err)).slice(0, 200);
-        runLog.error('tools MCP da tela não montadas — turno segue sem elas', { error: detalhe });
-        if (preview)
-          preview.result.impediments.push({
-            code: 'capabilities_unavailable',
-            message: 'Não foi possível carregar as capacidades configuradas.',
-          });
-        else await avisarCapacidadesAusentes(pool, tenantId, input.conversationId, detalhe, runLog);
-      }
-    }
-
-    // ── A CURA (spec 16, passo 6) ───────────────────────────────────────────────
-    //
-    // As ferramentas de escrita saem do Conversador quando o Operador as assumiu.
-    // O gate de vazamento é rede — barra na saída e ensina; isto é a cura: o
-    // modelo não pode repetir o nome de uma ferramenta que nunca viu, e foi pelo
-    // NOME que o vazamento voltou depois de a descrição ser limpa.
-    //
-    // A remoção é CONDICIONAL a o novo dono existir (ver entrega-de-capacidade):
-    // tirar de um lado sem garantir o outro não separa papéis, perde capacidade.
-    const entregues = capacidadesEntreguesAoOperador({
-      operadorLigado: agentConfig?.operatorEnabled ?? false,
-      ferramentasDoOperador: agentConfig?.operatorToolIds ?? [],
-    });
-    for (const nome of entregues) delete rawTools[nome];
-    if (entregues.length > 0) {
-      runLog.info('capacidades entregues ao operador — fora do turno do conversador', {
-        entregues,
-      });
-    }
-
-    // Ponto 2 da allowlist da condução + anti-IDOR, ANTES da política de preview
-    // (no assistido o rascunho vê exatamente o que o automático veria). Fica só
-    // o que o objetivo permite, e toda ferramenta recusa ids de outra pessoa.
-    const conducaoDasTools = input.conducao ?? preview?.conducao;
-    if (conducaoDasTools) {
-      const alvo = conducaoDasTools;
-      const filtradas = restringirAConducao(filtrarRawTools(rawTools, alvo.preset), {
-        leadId: alvo.lead_id,
-        contactId: alvo.contact_id,
-        conversationId: alvo.conversation_id,
-        agendamentoEhDaConducao: async (appointmentId) => {
-          const { rows } = await pool.query<{ ok: boolean }>(
-            `select true as ok from calendar_appointments
-              where organization_id = $1 and id = $2 and contact_id = $3`,
-            [tenantId, appointmentId, alvo.contact_id],
-          );
-          return rows.length > 0;
+    const { tools, entregues } = await montarConjuntoDeFerramentas(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      {
+        agentConfig, rawTools, evidenciasComerciais, mcpToolIdsDoTurno, semanticClassifier, conferirAfirmacoes,
+        registrarLimpezaDoMcp: (limpar) => {
+          mcpCleanup = limpar;
         },
-      });
-      for (const nome of Object.keys(rawTools)) delete rawTools[nome];
-      Object.assign(rawTools, filtradas);
-      runLog.info('ferramentas restritas à condução da cadência', {
-        conducao_id: alvo.id,
-        ferramentas: Object.keys(rawTools),
-      });
-    }
-
-    // Circuit breaker de tools (F2-15): estado no closure DESTA invocação — zera
-    // entre runs por construção (mesma garantia de isolamento do resto do run).
-    if (preview && rawTools.get_lead_note)
-      rawTools.get_lead_note = {
-        ...rawTools.get_lead_note,
-        execute: async () => ({ ok: true, notes: preview.notes ?? [] }),
-      };
-    const previewContext = preview
-      ? await previewGateContext(pool, preview, runLog, clock())
-      : null;
-    const previewTools =
-      preview && previewContext
-        ? applyPreviewPolicy(
-            rawTools,
-            preview,
-            {
-              ...previewContext,
-              disclosure: {
-                ...previewContext.disclosure,
-                mode: deps.knobs.disclosureMode ?? 'inject',
-              },
-            },
-            () => estado.pendingCitations,
-            semanticClassifier,
-            () => ({
-              agenda: {
-                active: previewContext.agenda?.active ?? false,
-                ferramentas: previewContext.agenda?.ferramentas ?? [],
-                toolCalledThisTurn: estado.agendaToolCalledThisTurn,
-              },
-            }),
-            // #2490 — a MESMA `prepararFotosDoProduto` do caminho de produção,
-            // com a MESMA cópia por service role e a MESMA query no catálogo:
-            // a prévia só troca o destino, a pasta `dry-run` da organização em vez
-            // da conversa: anexo em pasta de conversa seria efeito no cliente —
-            // proibido no preview. Vale para o sandbox e para o rascunho assistido
-            // (que tem conversa, mas não pode anexar nela). A pasta é permanente:
-            // o nome da cópia é determinístico, então repetir o teste não duplica.
-            // Nada é enviado: o `send_message` da prévia nem chega perto do canal.
-            (codigo: string) =>
-              prepararFotosDoProduto(pool, copiarFotoNoStorage(runLog), {
-                tenantId,
-                conversationId: PASTA_DE_TESTE_DE_MIDIA,
-                codigo,
-              }),
-            // #2923 — a conferência de fato do turno entra na prévia: o mesmo
-            // conferidor criado acima, com as evidências que as ferramentas
-            // consultaram NESTE turno. É ele que grava a observação e que faz um
-            // `contradiz`/`nao_esta_na_base` aparecer para quem revisa o rascunho
-            // (impedimento no assistido, aviso no Teste) em vez de sair calado.
-            conferirAfirmacoes,
-          )
-        : rawTools;
-    const tools = wrapToolsWithBreaker(previewTools, {
-      thresholds: deps.knobs.breaker,
-      readOnlyTools: READ_ONLY_TOOLS,
-      log: runLog, // os warns dos gates do breaker saem carimbados com o run
-    });
-
-    // F3-11: stage-classifier auxiliar. Roda ANTES do turno (modelo BARATO pelo seam
-    // agnóstico) e sugere o estágio; a sugestão entra como HINT no SUFIXO por-lead — o modelo
-    // do agente decide e confirma via update_lead_state (a máquina F2-10 é a única porta). A
-    // sugestão fica guardada para comparar com o que o modelo confirmou (divergência, no fim).
-    const currentStage: LeadStage = leadState?.stage ?? 'new';
-    let stageSuggestion: LeadStage | null = null;
-    let stageHintBlock = '';
-    let jailbreakLevel: JailbreakLevel = 'none';
-
-    // Os dois classificadores auxiliares rodam EM PARALELO, e não em série.
-    //
-    // Eles são ADVISÓRIOS, leem sinais diferentes (o contexto e o estágio atual
-    // vs. a última mensagem do lead) e nenhum consome o resultado do outro — em
-    // série o turno pagava duas idas-e-voltas de LLM uma atrás da outra, e o
-    // cliente esperava a soma. `Promise.all` paga só a mais lenta das duas.
-    //
-    // O que NÃO muda por rodar junto: o orçamento mensal da organização é
-    // checado dentro de cada `runModelCall` (a mesma checagem que já corre
-    // concorrente entre turnos de leads diferentes), nenhuma decisão de
-    // guardrail depende de ordem entre os dois, e o `jailbreak` segue sem vetar
-    // o inbound — só flagra o turno no trace.
-    //
-    // A TERCEIRA perna é o Jev na mesma pergunta do jailbreak
-    // (`lib/ai/decisao/manipulacao.ts`), e só existe onde ela tem com quem
-    // comparar e o que medir: a camada ligada para a organização, fora da
-    // prévia — simulação não vira concordância (R5) — e no turno da mensagem
-    // NOVA (`inbound_turn`): o `case_reply_turn` responde a ação de um humano
-    // sobre uma mensagem que o turno dela já perguntou. A tarefa desligada, o
-    // interruptor e o aceite são conferidos lá dentro. Em paralelo, o turno só
-    // espera por ele o que ele passar do mais lento dos dois.
-    //
-    // O Jev recebe o que o CLIENTE digitou, e não o `skillSignal`: numa mídia, o
-    // `skillSignal` leva a transcrição, a descrição ou o texto do PDF e a moldura
-    // de instrução do agente, que o aceite ("cada mensagem, sozinha") não cobre
-    // (R4). Mídia fica de fora da pergunta dele.
-    const manipulacaoLigada = camadaLigada(camadas.jailbreak, deps.knobs.jailbreak !== undefined);
-    const perguntaAoJev =
-      manipulacaoLigada && !preview && job?.kind === 'inbound_turn'
-        ? perguntarManipulacaoAoJev(
-            pool,
-            {
-              organizationId: tenantId,
-              mensagem: textoDoClienteNaUltimaMensagem(effectiveContext.messages),
-              contactId: leadId || null,
-              jobId: job.id,
-            },
-            deps.jev,
-          )
-        : Promise.resolve(null);
-    const gravarOJev = async (
-      doJev: ManipulacaoDoJev | null,
-      nivelDaIa: JailbreakLevel | null,
-      nivelFinal: JailbreakLevel,
-    ): Promise<void> => {
-      if (doJev === null) return;
-      await registrarManipulacaoDoJev(pool, {
-        organizationId: tenantId,
-        contactId: leadId || null,
-        conversationId: input.conversationId || null,
-        messageId: input.inboundMessageId ?? null,
-        jobId: job?.id ?? null,
-        jev: doJev,
-        nivelDaIa,
-        nivelFinal,
-      });
-    };
-    // Só classifica quando há mensagem nova e quem use a resposta (ver
-    // `classificadores-do-turno.ts`).
-    const vaiClassificar = classificadoresDoTurno({
-      jobKind: job?.kind ?? null,
-      estagioLigado: deps.knobs.stageClassifier !== undefined,
-      temQuemConfirmeOEstagio: rawTools.update_lead_state !== undefined,
-      manipulacaoLigada,
-      ultimaMensagemDoCliente: skillSignal,
-    });
-    const [stageResultado, jailbreakVerdict, manipulacaoDoJev] = await Promise.all([
-      deps.knobs.stageClassifier !== undefined && vaiClassificar.estagio
-        ? classifyStage(
-            pool,
-            deps.llmCfg,
-            { tenantId, leadId: leadId || null, jobId: job?.id },
-            {
-              context: effectiveContext,
-              currentStage,
-              resumo: effectivePrevious?.rolling_summary ?? null,
-              ...argsAux(deps.knobs.stageClassifier.model),
-            },
-            { registry: deps.registry, log: runLog },
-          )
-        : Promise.resolve(null),
-      // F4-04: classifier ADVISÓRIO anti-jailbreak sobre a mensagem INBOUND do lead (o
-      // skillSignal já é a última inbound). Roda pelo seam agnóstico (modelo BARATO, budget
-      // checado nele). NÃO veta o inbound — só FLAGRA o turno no trace; flag/level não são PII
-      // (a mensagem/reason nunca vão a log). A correlação com promessa fora de tabela escala no fim.
-      vaiClassificar.manipulacao
-        ? classifyJailbreak(
-            pool,
-            deps.llmCfg,
-            { tenantId, leadId: leadId || null, jobId: job?.id },
-            {
-              message: skillSignal,
-              // Knob ausente + organização ligando = roda com o modelo padrão dela,
-              // que é a convenção já usada pelo stageClassifier.
-              ...argsAux(deps.knobs.jailbreak?.model),
-            },
-            { registry: deps.registry, log: runLog },
-          )
-        : Promise.resolve(null),
-      perguntaAoJev,
-    ]).catch(async (err: unknown) => {
-      // O teto de orçamento derruba o classificador de sempre (`LlmBudgetExceededError`
-      // sobe para a escolta do turno), mas não o Jev (R8): a chamada dele já saiu
-      // e foi cobrada, e o custo entra em `llm_calls` — a observação vai sem par,
-      // porque a IA de sempre não decidiu. `perguntaAoJev` nunca rejeita.
-      await gravarOJev(await perguntaAoJev, null, 'none');
-      throw err;
-    });
-
-    stageSuggestion = stageResultado;
-    if (stageSuggestion !== null) {
-      stageHintBlock = renderStageHint(stageSuggestion, currentStage);
-    }
-
-    // Observando, vale o nível da IA de sempre; decidindo, o maior dos dois; e
-    // sem veredito da IA de sempre, `none` — nunca o Jev no lugar dela (R2).
-    jailbreakLevel = nivelFinalDaManipulacao(jailbreakVerdict, manipulacaoDoJev);
-    if (jailbreakLevel !== 'none') {
-      // trace do turno: só flag/level (não PII) — a mensagem e o reason nunca são logados.
-      runLog.warn('jailbreak: sinal detectado na mensagem do lead', {
-        jailbreak_flag: true,
-        jailbreak_level: jailbreakLevel,
-        ...(jailbreakLevel !== jailbreakVerdict?.level ? { jailbreak_somado_pelo_jev: true } : {}),
-      });
-    }
-    await gravarOJev(
-      manipulacaoDoJev,
-      jailbreakVerdict === null || jailbreakVerdict.falhou ? null : jailbreakVerdict.level,
-      jailbreakLevel,
+      },
+      estado,
     );
 
-    // Spec 16 §4: a projeção arma quando NENHUMA ferramenta de catálogo entrou —
-    // é exatamente o turno em que os ids do contexto não têm uso, e portanto o
-    // único em que removê-los não custa nada. Logado porque "por que o prompt
-    // deste turno é diferente do daquele?" precisa ter resposta no trace.
-    const projetaContexto = turnoProjeta(mcpToolIdsDoTurno);
-    runLog.info('projeção do contexto do turno', {
-      projeta: projetaContexto,
-      mcp_tools_no_turno: mcpToolIdsDoTurno.length,
-    });
-    const openingBase = input.buildOpening({
-      previous: effectivePrevious,
-      leadState,
-      context: effectiveContext,
-      notesIndexBlock,
-      projeta: projetaContexto,
-      entregues,
-      compromissosBlock,
-      origemBlock,
-      ...(currentInboundText !== null ? { currentInboundText } : {}),
-    });
-    // Sufixos por-lead (situacionais, voláteis — depois do prefixo cacheável F2-17): corpos de
-    // skill casadas (F3-09) + hint do classificador (F3-11) + instrução de split (F4-xx, quando
-    // split_messages está on — Onda 4). Vazios são omitidos.
-    const splitHint = instrucaoDeBolhas(agentConfig?.splitMessages ?? false);
-    // Spec 15: o `case_id` real do caso 'awaiting_lead' desta conversa, se houver — sem
-    // isso o modelo nunca consegue chamar provide_case_update quando o lead simplesmente
-    // responde (o caminho comum; case_reply_turn só cobre a AÇÃO do humano). Sufixo
-    // por-lead (volátil) — nunca no prefixo cacheável (o case_id muda a cada caso).
-    const caseAwaitingLead =
-      preview?.kind !== 'sandbox' && agentConfig !== null && agentConfig.casesEnabled
-        ? await getCaseAwaitingLead(pool, tenantId, input.conversationId)
-        : null;
-    const caseAwaitingLeadBlock =
-      caseAwaitingLead !== null
-        ? `## Caso aguardando resposta deste cliente\n` +
-          `Há um caso aberto (case_id: ${caseAwaitingLead.id}) esperando uma informação dele: "${caseAwaitingLead.ask}". ` +
-          `Se a mensagem dele responde a isso, chame provide_case_update com este case_id e a informação recebida — ` +
-          `NÃO diga que já repassou/avisou o responsável sem chamar a tool.`
-        : '';
-    // ── O RELÓGIO DO TURNO ────────────────────────────────────────────────────
-    //
-    // Entra AQUI, e o lugar é a metade do conserto.
-    //
-    // No `system` (o prefixo estável org-wide, F2-17) ele invalidaria o cache de
-    // prompt de TODOS os leads a cada turno, porque muda a cada segundo — é o que
-    // `stable-prefix.ts` proíbe em letra. No sufixo por-lead ele é volátil entre
-    // iguais, e custa os ~50 tokens dele.
-    //
-    // PRIMEIRO da lista de propósito: a âncora temporal precede o material que o
-    // modelo vai usar para decidir data — corpo de skill, hint do classificador,
-    // caso pendente. E `executarTurnoDoAgente` é o ponto por onde passam os TRÊS
-    // turnos conversacionais (inbound, follow-up e resposta a caso), então um
-    // ponto só cobre os três — e alcança de carona a chamada de fechamento, que
-    // reusa `openingTextOnly` e é onde nasce o `prazo` ISO da declaração.
-    const agoraBlock = renderAgora(clock(), fusoDaOrg);
-    // O objetivo da condução da cadência vai no SUFIXO por lead, nunca no
-    // `system`: muda por conversa e invalidaria o prefixo cacheável da org.
-    const conducaoDoPrompt = input.conducao ?? preview?.conducao;
-    const conducaoBlock = conducaoDoPrompt
-      ? blocoDaConducao(
-          conducaoDoPrompt,
-          await nomeDaEtapa(pool, tenantId, conducaoDoPrompt.etapa_alvo_id),
-        )
-      : '';
-    const openingSuffixes = [
-      agoraBlock,
-      conducaoBlock,
-      matchedSkillsBlock,
-      stageHintBlock,
-      splitHint,
-      caseAwaitingLeadBlock,
-      roteiro?.bloco ?? '',
-      preview?.feedback ? '## Revisão humana deste atendimento\n' + preview.feedback : '',
-    ].filter((b) => b !== '');
-    const openingText =
-      openingSuffixes.length === 0
-        ? openingBase
-        : `${openingBase}\n\n${openingSuffixes.join('\n\n')}`;
-    // Onda 3 (aprimoramento): mídia inbound recente vira part nativa (image/file) SÓ para
-    // provider+modelo capazes (T2 modelCapabilities) — modelo incapaz/desconhecido → [] e o
-    // derivado textual (já embutido em openingText via LeadContextMessage) cobre sozinho.
-    const nativeParts =
-      preview?.kind === 'sandbox'
-        ? []
-        : await buildNativeMediaParts({
-            messages: effectiveContext.messages,
-            provider: agentConfig?.provider ?? 'anthropic',
-            model: agentConfig?.model ?? '',
-            multimodalInput: agentConfig?.multimodalInput ?? false,
-            admin: deps.crmCfg.supabase,
-          });
-    const openingTextOnly: ModelMessage[] = [{ role: 'user', content: openingText }];
-    const openingMessages: ModelMessage[] =
-      nativeParts.length === 0
-        ? openingTextOnly
-        : [{ role: 'user', content: [{ type: 'text', text: openingText }, ...nativeParts] }];
+    const { stageSuggestion, stageHintBlock, jailbreakLevel } = await classificarOTurno(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      { camadas, argsAux, leadState, effectivePrevious, effectiveContext, rawTools, skillSignal },
+    );
+
+    const { openingMessages, openingTextOnly } = await montarAberturaDaChamada(
+      { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
+      {
+        agentConfig, fusoDaOrg, leadState, currentInboundText, roteiro, effectivePrevious, effectiveContext,
+        notesIndexBlock, compromissosBlock, origemBlock, mcpToolIdsDoTurno, entregues, matchedSkillsBlock,
+        stageHintBlock,
+      },
+    );
 
     // MEMÓRIA DE DUPLICATA CRUZADA (near-dup): semeia a régua com o que JÁ saiu
     // para esta conversa desde a última inbound do cliente. Num turno fresco que

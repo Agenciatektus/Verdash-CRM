@@ -19,8 +19,6 @@
  * rodada: 6 — o caso "sem produto_codigo" entrou porque também afirma que o registro
  * `midia` existe. Restaurado por `git checkout HEAD --` com árvore limpa.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -41,6 +39,7 @@ import {
   type TurnPreview,
 } from "@/lib/agent-engine/agent/preview";
 import { ENVIO_S7 } from "./_fonte-do-send-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 const ORG = "aaaaaaaa-0000-4000-8000-000000000001";
 const PRODUTO = "bbbbbbbb-0000-4000-8000-000000000001";
@@ -259,7 +258,7 @@ describe("dry-run prepara a mídia do produto como o envio real (#2490)", () => 
     // A chamada real mora no fecho do turno (sem ponto de injeção barato), mesma
     // técnica de `send-message-manda-foto-do-produto.test.ts`: sem esta linha o
     // teste acima passaria com um injetor de mentira e nada provaria.
-    const fonte = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+    const fonte = fonteDoTurnoMontado();
     const inicio = fonte.indexOf("applyPreviewPolicy(");
     const fim = fonte.indexOf(": rawTools;", inicio);
     expect(inicio).toBeGreaterThan(-1);

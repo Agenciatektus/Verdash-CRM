@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -11,6 +9,7 @@ import {
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
 import { ENVIO_S7 } from "./_fonte-do-send-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * O GATE de "vou verificar/confirmar agenda sem checar" — a cura DETERMINÍSTICA para o
@@ -300,10 +299,8 @@ describe("agendaStallGate — veta a promessa vazia, nunca a checagem de verdade
  * FIAÇÃO — mesmo padrão de `gate-vazamento-interno.test.ts`: prova que o campo chega da
  * fonte real (`send_message` em `inbound-turn.ts`), não só que o gate decide certo isolado.
  */
-const FONTE_INBOUND = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE_INBOUND = fonteDoTurnoMontado();
 
 describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal, não a decisão de chamar", () => {
   it("send_message passa `agenda` calculado a partir de toolIds e da flag de execução", () => {

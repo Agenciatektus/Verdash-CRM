@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 const RAIZ = process.cwd();
 
@@ -69,6 +70,8 @@ const MODULOS_DO_TURNO: Record<string, string[]> = {
 };
 
 function fonte(arquivo: string): string {
+  // Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+  if (arquivo === "lib/agent-engine/agent/inbound-turn.ts") return fonteDoTurnoMontado();
   return readFileSync(path.join(RAIZ, arquivo), "utf8");
 }
 

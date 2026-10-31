@@ -1,9 +1,9 @@
 // tests/unit/agent-split-message.test.ts
 import { describe, expect, it } from "vitest";
 
-import { readFileSync } from "node:fs";
 
 import { instrucaoDeBolhas, splitIntoBubbles } from "@/lib/agent-engine/agent/split-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 describe("splitIntoBubbles", () => {
   it("texto curto vira uma bolha só (trim)", () => {
@@ -136,7 +136,7 @@ describe("instrucaoDeBolhas", () => {
   });
 
   it("o turno usa esta instrução, e não um texto próprio", () => {
-    const turno = readFileSync("lib/agent-engine/agent/inbound-turn.ts", "utf8");
+    const turno = fonteDoTurnoMontado();
     expect(turno).toMatch(/instrucaoDeBolhas\(agentConfig\?\.splitMessages/);
     expect(turno).not.toMatch(/Prefira várias mensagens curtas/);
   });

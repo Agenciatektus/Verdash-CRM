@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { loadInboundBodyForJob } from "@/lib/agent-engine/agent/inbound-turn";
 import type { Queryable } from "@/lib/agent-engine/queue/queue";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * A CORRIDA DO INBOUND — e por que este arquivo não é o `mensagem-atual-prioritaria`.
@@ -72,10 +73,8 @@ describe("a linha canônica é lida pelo id do job", () => {
   });
 });
 
-const FONTE = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE = fonteDoTurnoMontado();
 
 describe("fiação — o id sai do payload e chega ao sinal do turno", () => {
   it("o handler de inbound_turn repassa payload.inbound_message_id", () => {

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { sendInBubbles } from "@/lib/agent-engine/agent/split-message";
 import { ENVIO_S7 } from "./_fonte-do-send-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * A PERGUNTA QUE DECIDE ESTE RECURSO: o atraso humano SOMA ao anti-ban, ou SUBSTITUI?
@@ -117,10 +118,8 @@ describe("o atraso humano NÃO substitui o throttle anti-ban entre bolhas", () =
  * Desde a #654 a pausa é paga em `esperaForaDoLock` — fora da posse do lock do
  * número — e a guarda do flag migrou junto para lá.
  */
-const FONTE_INBOUND = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE_INBOUND = fonteDoTurnoMontado();
 // Desde a S6 do ADR-0006: o flag mora em `estado` (turno/estado-do-turno.ts) e o
 // `request_human_handoff` em `turno/ferramentas/equipe.ts`.
 const FONTE_ESTADO = fs.readFileSync(
@@ -139,7 +138,7 @@ describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha
     // e apagava no meio do caminho (o WhatsApp o segura ~25s).
     const modelo = FONTE_INBOUND.indexOf("    const turn = await runModelCall(");
     const auxiliares = FONTE_INBOUND.indexOf("await Promise.all([", FONTE_INBOUND.indexOf("    let jailbreakLevel: JailbreakLevel = 'none';"));
-    const inicio = FONTE_INBOUND.indexOf("  let mcpCleanup: (() => Promise<void>) | null = null;\n  try {");
+    const inicio = FONTE_INBOUND.indexOf("  let mcpCleanup = null as (() => Promise<void>) | null;\n  try {");
     expect(modelo).toBeGreaterThan(-1);
     expect(auxiliares).toBeGreaterThan(-1);
     expect(inicio).toBeGreaterThan(-1);

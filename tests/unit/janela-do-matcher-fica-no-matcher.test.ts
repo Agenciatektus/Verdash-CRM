@@ -7,12 +7,12 @@
  * estágio. Trocar o `skillSignal` inteiro pela janela fazia uma tentativa de
  * jailbreak de cinco mensagens atrás seguir marcando todo turno seguinte.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
-const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE = fonteDoTurnoMontado();
 
 describe("janela do matcher de skill", () => {
   it("o matcher lê a janela", () => {

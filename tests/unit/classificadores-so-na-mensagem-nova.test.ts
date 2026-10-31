@@ -12,8 +12,6 @@
  *     das últimas mensagens + resumo + proposta, sem telefone, e-mail, ids nem
  *     carimbos — o que antes ia como `JSON.stringify(context)` inteiro.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -23,6 +21,7 @@ import {
   MENSAGENS_PARA_O_ESTAGIO,
 } from "@/lib/agent-engine/agent/stage-classifier";
 import type { LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 const base = {
   jobKind: "inbound_turn" as string | null,
@@ -67,7 +66,8 @@ describe("classificadoresDoTurno", () => {
 });
 
 describe("a fiação no turno", () => {
-  const fonte = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+  // Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+  const fonte = fonteDoTurnoMontado();
   const inicio = fonte.indexOf("const [stageResultado, jailbreakVerdict, manipulacaoDoJev] = await Promise.all([");
   const array = fonte.slice(inicio, fonte.indexOf("perguntaAoJev,\n    ])", inicio));
 

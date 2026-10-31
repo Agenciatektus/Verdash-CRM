@@ -22,13 +22,11 @@
  * elementos do MESMO array passado a `Promise.all`. Contar `Promise.all(` no
  * texto, ou exigir que as duas apareçam "perto", aceitaria a regressão.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
-const INBOUND = join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts");
 /**
  * O Jev na camada anti-manipulação (`perguntarManipulacaoAoJev`) entra na lista:
  * ele é "latência adicional zero" só enquanto for elemento do MESMO array — o
@@ -117,7 +115,8 @@ function paralelismoDosClassificadores(texto: string) {
 }
 
 describe("classificadores auxiliares do turno — em paralelo, nunca em série", () => {
-  const fonte = readFileSync(INBOUND, "utf8");
+  // Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+  const fonte = fonteDoTurnoMontado();
 
   it("cada classificador é chamado exatamente uma vez no turno", () => {
     const achados = paralelismoDosClassificadores(fonte);
