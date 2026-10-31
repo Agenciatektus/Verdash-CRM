@@ -311,6 +311,14 @@ describe("rastro de efeitos do turno (ADR-0006, S0)", () => {
     const c = CENARIOS["ferramenta: nota do lead e resposta"]!;
     expect(await rodarCenario(c)).toEqual(await rodarCenario(c));
   });
+
+  // #470: payload recusado não pode virar "já estou chamando a equipe" sem passagem.
+  // Asserção explícita para um snapshot regravado em massa não engolir a regressão.
+  it("handoff com payload inválido não avisa o lead", async () => {
+    const rastro = await rodarCenario(CENARIOS["passa para humano: payload inválido"]!);
+    expect(rastro).toContain("tool:request_human_handoff recusou invalid_payload");
+    expect(rastro.filter((e) => e.startsWith("send:"))).toEqual([]);
+  });
 });
 
 describe("controle negativo: o snapshot versionado reprova ordem trocada", () => {

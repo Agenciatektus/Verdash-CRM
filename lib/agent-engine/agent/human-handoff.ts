@@ -492,6 +492,27 @@ export type RequestHumanHandoffResult =
   | { ok: false; error: { code: 'invalid_payload'; message: string } };
 
 /**
+ * Valida o payload da tool sem efeito nenhum. O turno chama ANTES de avisar o lead:
+ * aviso seguido de payload recusado é o lead ouvindo que a equipe foi chamada sem
+ * que a passagem aconteça.
+ */
+export function validarPayloadDoHandoff(
+  rawInput: unknown,
+):
+  | { ok: true; data: z.infer<typeof requestHumanHandoffInputSchema> }
+  | { ok: false; error: { code: 'invalid_payload'; message: string } } {
+  const forbidden = findForbiddenKey(rawInput);
+  if (forbidden !== null) {
+    return { ok: false, error: { code: 'invalid_payload', message: `campos não reconhecidos: ${forbidden}. ${PAYLOAD_TEACHING}` } };
+  }
+  const parsed = requestHumanHandoffInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: { code: 'invalid_payload', message: `payload inválido em request_human_handoff (${zodIssuesSummary(parsed.error)}). ${PAYLOAD_TEACHING}` } };
+  }
+  return { ok: true, data: parsed.data };
+}
+
+/**
  * Wrapper da tool request_human_handoff exposta ao modelo. Valida o payload e delega a
  * performHumanHandoff. Erros de DB (ex.: lead sumiu) sobem — o tool wrapper do run os
  * captura e ensina o modelo a encerrar (padrão F2-09).
@@ -526,14 +547,8 @@ export async function applyRequestHumanHandoff(
   },
   rawInput: unknown,
 ): Promise<RequestHumanHandoffResult> {
-  const forbidden = findForbiddenKey(rawInput);
-  if (forbidden !== null) {
-    return { ok: false, error: { code: 'invalid_payload', message: `campos não reconhecidos: ${forbidden}. ${PAYLOAD_TEACHING}` } };
-  }
-  const parsed = requestHumanHandoffInputSchema.safeParse(rawInput);
-  if (!parsed.success) {
-    return { ok: false, error: { code: 'invalid_payload', message: `payload inválido em request_human_handoff (${zodIssuesSummary(parsed.error)}). ${PAYLOAD_TEACHING}` } };
-  }
+  const parsed = validarPayloadDoHandoff(rawInput);
+  if (!parsed.ok) return parsed;
 
   // O que o MODELO declarou é dado NÃO CONFIÁVEL, e a montagem sabe disso: ela
   // rotula os blocos de leitura da IA e cita a fala do cliente entre aspas.
