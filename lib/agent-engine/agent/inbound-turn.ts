@@ -44,9 +44,7 @@ import {
   type CorpoDaMensagemRow,
   type LeadContext,
   type LeadContextMessage,
-  type LeadContextResult,
 } from '../edge/crm/get-lead-context';
-import { citationsFromHits, searchKnowledge } from './search-knowledge';
 import type { CrmEdgeConfig } from '../edge/crm/mcp-client';
 import { WahaChannelAdapter } from '../edge/channel/waha-adapter';
 import {
@@ -59,7 +57,6 @@ import {
 } from '../edge/llm/run-model-call';
 import type { ProviderRegistry } from '../edge/llm/providers';
 import { HANDOFF_REASON_ORCAMENTO } from '../edge/llm/orcamento';
-import { abreAvisoDoEspelhoRecusado, mirrorLeadStageToCrm } from '../edge/crm/move-lead-stage';
 import { criarConferidorDeAfirmacoes } from '@/lib/ai/decisao/afirmacao-de-fato';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { moverLeadParaEtapaDeHandoff } from '@/lib/leads/handoff-stage-move';
@@ -73,7 +70,6 @@ import {
 } from './fotos-do-produto';
 import { rescheduleJob, type JobRow, type Queryable } from '../queue/queue';
 import {
-  applyLeadStateUpdate,
   type LeadStage,
   type LeadStateRow,
 } from './lead-state';
@@ -93,9 +89,8 @@ import {
   type LeadCheckpointRow,
 } from "./abertura/checkpoint";
 import { buildOpeningMessage, ritualBlocks } from "./abertura/ritual";
-import { applySaveLeadNote, getLeadNoteBody } from './lead-notes';
 import { agendaNoFechamento } from './abertura/agenda-no-fechamento';
-import { applyScheduleFollowup, type FollowupWindowKnobs } from './schedule-followup';
+import { type FollowupWindowKnobs } from './schedule-followup';
 import { podeExporScheduleFollowup } from '@/lib/followup/callback-policy';
 import {
   avisarLeadDaEscalacao,
@@ -105,9 +100,6 @@ import {
   type DesfechoDoAviso,
 } from './aviso-de-escalacao';
 import {
-  applyRequestHumanHandoff,
-  buildHandoffSummary,
-  validarPayloadDoHandoff,
   detectAmbiguousOptOut,
   detectHumanHandoffRequest,
   isLeadInHandoff,
@@ -124,10 +116,7 @@ import {
 } from './stage-classifier';
 import { classificadoresDoTurno } from './classificadores-do-turno';
 import {
-  projetarContexto,
-  projetarRetornoDeTool,
   turnoProjeta,
-  type ContextoProjetado,
 } from './projecao';
 import {
   capacidadesEntreguesAoOperador,
@@ -141,9 +130,6 @@ import {
   hasOpenCaseForContact,
   getCaseAwaitingLead,
   openCase,
-  provideCaseUpdate,
-  openHumanCaseInputSchema,
-  provideCaseUpdateInputSchema,
 } from './human-cases';
 import { buildMcpTurnTools } from '../edge/crm/mcp-tools';
 import { definicaoNaConexao } from '@/lib/channels/linha-do-espelho';
@@ -155,7 +141,7 @@ import {
   recordSkillMissCandidates,
   renderMatchedSkillBodies,
 } from './skills';
-import { readSkillReference, skillHasReferences } from './skill-references';
+import { skillHasReferences } from './skill-references';
 import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } from './tool-breaker';
 import {
   loadChannelProvider,
@@ -179,13 +165,11 @@ import {
 import { criarRecuperadorDeEvidencias } from '../guardrails/promise/recuperar-evidencias';
 import { classifyPromise, memoizarPorCandidata } from '../guardrails/promise/semantic';
 import { montarContextoDaRevisao } from '../guardrails/promise/contexto-da-revisao';
-import { expectativaDeAtendimento } from '@/lib/escalacao/disponibilidade';
 import {
   montarBriefingDaPassagem,
   type BriefingDaPassagem,
 } from '@/lib/escalacao/briefing-da-passagem';
 import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from './turno-mudo';
-import { criarTravaDeDuplicata } from './near-dup';
 import { vetoReason } from '@/lib/leads/veto-activity';
 import { corposEnviadosDesdeUltimaInbound } from './memoria-envio';
 import { emitAgentActivityForContact } from '@/lib/leads/agent-activity';
@@ -198,6 +182,10 @@ import {
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
+import { criarEstadoDoTurno } from './turno/estado-do-turno';
+import { criarGetLeadContext, criarGetLeadNote, criarReadSkillReference, criarSearchKnowledge } from './turno/ferramentas/leitura';
+import { criarSaveLeadNote, criarScheduleFollowup, criarUpdateLeadState } from './turno/ferramentas/lead';
+import { criarOpenHumanCase, criarProvideCaseUpdate, criarRequestHumanHandoff } from './turno/ferramentas/equipe';
 import { carregarContextoDoTurno } from './turno/contexto';
 import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
 import { resolverRoteamentoDoTurno } from './turno/roteamento';
@@ -1997,39 +1985,14 @@ async function executarTurnoDoAgente(
       { routed, argsAux, currentInboundText, previous, openingContext, optedOutThisTurn },
     );
 
-  // Estado do RUN — vive só neste closure (isolamento por construção, acc 3).
-  let seq = 0;
-  // O que o modelo de fato mandou neste turno (depois da cadeia). A trava "a
-  // pergunta saiu?" do roteiro de atendimento lê daqui.
-  const corposEnviados: string[] = [];
-  // DUPLICATA PRÓXIMA NO MESMO TURNO: a trava `near-dup.ts` guarda DUAS memórias.
-  // `aceitos` = corpos de `send_message` que PASSARAM pela cadeia e foram aceitos
-  // neste turno (o corpo PRÉ-cadeia, para comparar candidato contra candidato) —
-  // a memória que a régua consulta para suprimir repetição (o defeito medido
-  // em produção: 4 respostas a 1 pergunta, 3 vindas da correção do turno mudo).
-  // Só conteúdos ACEITOS entram: um veto não é resposta. `emVoo` = candidatas cuja
-  // cadeia ainda roda: fecha a corrida de tool calls paralelas do MESMO passo (o
-  // SDK as executa juntas) — sem a reserva, todas passariam pela checagem antes de
-  // qualquer envio registrar (#2996, item 6).
-  const dupTrava = criarTravaDeDuplicata();
-  // #1943: o turno foi DESCARTADO como obsoleto (guard `resposta_obsoleta`, #1940)
-  // ainda no run — o cliente escreveu de novo enquanto o modelo pensava. Quando
-  // ligada, NADA mais sai dele, nem a pergunta pendente do roteiro (que segue
-  // feita para o turno da mensagem nova). Ver `perguntaDoRoteiroPodeSair`.
-  let turnoDescartado = false;
-  // TURNO MUDO: quantas vezes o modelo chamou `send_message` e se passou a conversa à
-  // equipe. Os dois dizem que o silêncio foi decisão — só sem eles o motor pede a
-  // correção do turno que terminou sem falar com o cliente (ver depois da chamada principal).
-  let tentativasDeEnvio = 0;
-  let passouParaAEquipe = false;
+  // Estado do turno (ADR-0006, D4): o MESMO objeto para as ferramentas, `send_message`
+  // e as fases de depois do modelo. Nasce aqui, uma vez; nenhum módulo de fase cria o seu.
+  const estado = criarEstadoDoTurno();
   // Teto de mensagens físicas por turno (F2-15b) — `seq` JÁ é a contagem certa: ele só
   // avança quando o envio de fato sai pro canal (send_message + send_template, bolhas
   // incluídas), nunca em veto de gate. Checar `seq` antes de tentar o próximo envio
   // barra o modelo sem gastar uma chamada de before-send à toa.
   const maxSendsPerTurn = deps.knobs.maxSendsPerTurn ?? DEFAULT_MAX_SENDS_PER_TURN;
-  // F3-11: estágio que o MODELO confirmou via update_lead_state neste turno (a máquina
-  // F2-10 é a única porta). Comparado com a sugestão do classificador no fim → divergência.
-  let confirmedStage: LeadStage | null = null;
   // F4-04: a tabela de promessa versionada do tenant (F4-01), carregada uma vez para
   // correlacionar tentativa de promessa fora de tabela com o sinal de jailbreak — a
   // detecção NÃO depende do gate estar na cadeia default (a ordem final é da F4-08).
@@ -2111,32 +2074,6 @@ async function executarTurnoDoAgente(
     },
     deps.jev ?? {},
   );
-  let outOfTablePromiseAttempted = false;
-  // Spec 15 (Wave 4 lê este flag): true quando open_human_case abriu um caso NESTE
-  // turno — aqui só declara e seta; o consumo (ex.: guardrail de promessa) é da Wave 4.
-  let openedCaseThisTurn = false;
-  // Wave 4 — contador do fail-safe do guardrail anti-alucinação (case_promise_without_case):
-  // 1º veto no turno é erro-de-ensino (o modelo re-tenta); persistir uma 2ª vez aciona o
-  // auto-abre-caso (ver send_message.execute). Por turno (closure), nunca cross-turno.
-  let casePromiseVetoCount = 0;
-  // Contador do fail-safe do gate de vazamento de vocabulário interno
-  // (`internal_vocabulary_leak`): 1º veto no turno ensina o modelo a reescrever; persistir
-  // solta o envio com registro. Por turno (closure), nunca cross-turno.
-  let internalVocabularyVetoCount = 0;
-  // Contador do fail-safe do gate de afirmação clínica (`clinical_claim`): 1º veto ensina;
-  // persistir abre caso para a equipe — e o envio continua barrado. Por turno (closure).
-  let clinicalClaimVetoCount = 0;
-  // Uma recusa deste tipo devolve o texto confirmado ao modelo para que ele
-  // reescreva antes de falar com o cliente. Não gasta envio nem toca no canal.
-  let falseEmptyInboundVetoCount = 0;
-  // A pausa humana (atraso-humano.ts) já foi paga NESTE turno? Por turno
-  // (closure), como os contadores acima. O turno pode passar pela cadeia
-  // `before_send` mais de uma vez — o modelo pode chamar `send_message` várias
-  // vezes, e os fail-safes de promessa/vocabulário re-rodam a cadeia inteira.
-  // Sem este flag, cada passagem cobraria do cliente uma espera nova, e um
-  // turno com dois vetos ficaria mudo por mais de 20 segundos: o conserto do
-  // "rápido demais" viraria o defeito simétrico, mais caro que o original.
-  let jaEsperouComoHumano = false;
   // Knobs de atraso humano por conexão (0499) — lidos UMA vez por turno para a
   // pausa antes da 1ª bolha (`esperarComoHumano`) e para o jitter entre bolhas
   // (`throttle_ms + jitter_max_ms`). Sem linha em channel_knobs caem nos defaults
@@ -2150,15 +2087,9 @@ async function executarTurnoDoAgente(
     atrasoMinimoMs: pacingDoTurno?.knobs.atrasoMinimoMs,
     atrasoMaximoMs: pacingDoTurno?.knobs.atrasoMaximoMs,
   };
-  // Cap de envio (warm-up/diário) vetado neste turno — capturado aqui porque o veto
-  // não empurra outcome nenhum a `outcomes` (ver comentário no ponto de captura, mais
-  // abaixo). Diferente da janela horária (checada ANTES do modelo rodar, linha ~1233):
-  // o cap depende de quanto já saiu HOJE, que muda com o turno concorrente — só dá pra
-  // saber com certeza no momento do envio, não antes.
-  let pacingCapVeto: { code: string; nextAllowedAt: Date } | null = null;
   // Lido por função: atribuído numa closure, comparar a variável direto estreita o tipo
   // para `null` e quebra o `if (pacingCapVeto !== null …)` do fim do turno.
-  const capDeEnvioAtingido = (): boolean => pacingCapVeto !== null;
+  const capDeEnvioAtingido = (): boolean => estado.pacingCapVeto !== null;
   // Best-effort: move o lead pra etapa `crm_stages.slug='chamar-humano'` do pipeline
   // dele (se o tenant tiver criado essa etapa — opt-in, ver `lib/leads/handoff-stage-move.ts`)
   // sempre que um caso humano abre neste turno, deliberado (open_human_case) ou pelo
@@ -2178,22 +2109,8 @@ async function executarTurnoDoAgente(
       });
     });
   };
-  // Arma o `agendaStallGate` (before-send.ts): true assim que crm_find_free_slots,
-  // crm_book_appointment ou crm_reschedule_appointment executar neste turno — marcado no
-  // wrapper das tools MCP, mais abaixo. `send_message` lê o valor NO MOMENTO do envio; como
-  // as tools do modelo rodam em passos anteriores do mesmo loop, o valor já está certo
-  // quando o modelo decide mandar a resposta.
-  let agendaToolCalledThisTurn = false;
-  // Lido pelo `casePromiseGate` (#1873): true só depois de `schedule_followup` AGENDAR com
-  // sucesso neste turno. Libera apenas a promessa de retorno do próprio assistente.
-  let followupAgendadoNesteTurno = false;
-  const outcomes: ChannelSendResult[] = [];
-  // Citações acumuladas por buscas de conhecimento DESTE turno — anexadas à
-  // próxima outbound enviada (shape de lib/ai/citations/types, que a UI já lê).
-  let pendingCitations: ReturnType<typeof citationsFromHits> = [];
-  let runError: Error | null = null;
   const noteRunError = (err: Error): void => {
-    runError ??= err;
+    estado.runError ??= err;
   };
 
   // Guideline-matching if-then (F3-09): o SINAL do turno (última mensagem inbound) decide
@@ -2281,66 +2198,22 @@ async function executarTurnoDoAgente(
    */
   const mcpToolIdsDoTurno: string[] = [];
 
+  // O que as ferramentas movidas para `turno/ferramentas/` leem de F1 (ADR-0006, S6).
+  const contextoDasFerramentas = { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob };
+
   const rawTools: ToolSet = {
-    get_lead_context: tool({
-      ...AGENT_TOOL_DEFS.get_lead_context,
-      execute: async (): Promise<
-        | LeadContextResult
-        // A variante PROJETADA é um tipo próprio, não um `LeadContext` disfarçado
-        // por cast: são payloads diferentes, e um `as` aqui faria o compilador
-        // parar de vigiar exatamente a fronteira que este código existe para
-        // manter. Note que `lgpd` não viaja nela — base legal e anonimização são
-        // dado de conformidade que o runtime usa nos gates, e que o modelo nunca
-        // precisou ler (no caminho não-projetado ele já ia junto; aqui para).
-        | { ok: true; context: ContextoProjetado; tokenCount: number }
-        | { ok: false; error: { code: string; message: string } }
-      > => {
-        try {
-          const releitura = preview
-            ? preview.context
-            : await getLeadContext(
-                pool,
-                deps.crmCfg,
-                { tenantId, leadId, conversationId: input.conversationId, fuso: fusoDaOrg },
-                turnContextKnobs,
-              );
-          // Sem esta linha a projeção da abertura seria decorativa: bastaria o
-          // modelo chamar esta ferramenta para receber o contexto CRU de volta,
-          // com `lead_id`, `conversation_id` e caminho de mídia. A releitura é a
-          // mesma superfície da abertura e tem de obedecer à mesma regra —
-          // proteger só a porta da frente é não ter protegido.
-          if (releitura.ok && turnoProjeta(mcpToolIdsDoTurno)) {
-            return {
-              ok: true,
-              context: projetarContexto(releitura.context),
-              tokenCount: releitura.tokenCount,
-            };
-          }
-          return releitura;
-        } catch (err) {
-          // bug de programação: ensina o modelo a encerrar E derruba o job no fim
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao ler o contexto — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    }),
+    get_lead_context: criarGetLeadContext(contextoDasFerramentas, { fusoDaOrg, turnContextKnobs, mcpToolIdsDoTurno, noteRunError }),
     send_template: tool({
       ...AGENT_TOOL_DEFS.send_template,
       execute: async ({ template_name, language, values }) => {
-        tentativasDeEnvio += 1;
-        if (seq >= maxSendsPerTurn) {
+        estado.tentativasDeEnvio += 1;
+        if (estado.seq >= maxSendsPerTurn) {
           return {
             ok: false,
             error: {
               code: 'max_sends_per_turn',
               message:
-                `você já enviou ${seq} mensagens neste turno (teto: ${maxSendsPerTurn}). ` +
+                `você já enviou ${estado.seq} mensagens neste turno (teto: ${maxSendsPerTurn}). ` +
                 'NÃO envie mais nada agora — encerre o turno e espere a resposta do lead.',
             },
           };
@@ -2421,14 +2294,14 @@ async function executarTurnoDoAgente(
           lgpd,
           send: (finalBody: string) => {
             pararDigitando(); // a mensagem sai agora; renovar depois dela mentiria
-            seq += 1;
+            estado.seq += 1;
             return liveChannel().send({
               tenantId,
               leadId,
               jobId: liveJob().id,
               jobClaim: claimOfJob(liveJob()),
               agentOperation,
-              seq,
+              seq: estado.seq,
               conversationId: input.conversationId,
               body: finalBody,
               template: { name: template_name, language, values },
@@ -2440,7 +2313,7 @@ async function executarTurnoDoAgente(
           return { ok: false, error: { code: chain.code, message: chain.message } };
         }
         const outcome = chain.outcome;
-        outcomes.push(outcome);
+        estado.outcomes.push(outcome);
         if (outcome.kind === 'sent' || outcome.kind === 'already_sent') {
           return {
             ok: true,
@@ -2454,51 +2327,11 @@ async function executarTurnoDoAgente(
         return { ok: true, status: 'aceita_aguardando_canal' };
       },
     }),
-    search_knowledge: tool({
-      ...AGENT_TOOL_DEFS.search_knowledge,
-      execute: async ({ query }) => {
-        const fontes = agentConfig?.knowledgeSourceIds ?? [];
-        if (fontes.length === 0 && agentConfig?.activeKbVersionId == null) {
-          return {
-            ok: false,
-            error: {
-              code: 'no_knowledge_base',
-              message: 'este agente não tem material de consulta habilitado — siga sem ele.',
-            },
-          };
-        }
-        const out = await searchKnowledge(
-          pool,
-          {
-            organizationId: tenantId,
-            knowledgeSourceIds: fontes,
-            kbVersionId: agentConfig?.activeKbVersionId ?? null,
-            query,
-            topK: agentConfig?.ragTopK ?? 5,
-            threshold: agentConfig?.ragSimilarityThreshold ?? 0.4,
-            jobId: job?.id,
-            agentId: agentConfig?.agentId ?? null,
-          },
-          { log: runLog, embed: deps.embed },
-        );
-        if (out.ok && out.results.length > 0) {
-          evidenciasComerciais.registrarConhecimento(out);
-          // As citações são montadas AQUI, pelo código, a partir do resultado
-          // cru — é por isso que os ids podem sair do que vai ao modelo sem
-          // perder nada: quem precisa deles é esta linha, não o modelo.
-          pendingCitations = citationsFromHits(out.results);
-        }
-        // `chunk_id` e `knowledge_source_id` viajavam CRUS para o modelo em toda
-        // busca com RAG — dois UUIDs por resultado, sem uso nenhum do lado dele
-        // (nenhuma ferramenta os aceita como argumento). UUID cru na resposta ao
-        // cliente foi MEDIDO nesta base; esta era uma fonte silenciosa dele.
-        return turnoProjeta(mcpToolIdsDoTurno) ? projetarRetornoDeTool(out) : out;
-      },
-    }),
+    search_knowledge: criarSearchKnowledge(contextoDasFerramentas, { agentConfig, evidenciasComerciais, mcpToolIdsDoTurno }, estado),
     send_message: tool({
       ...AGENT_TOOL_DEFS.send_message,
       execute: async ({ body: corpoDoModelo, produto_codigo }) => {
-        tentativasDeEnvio += 1;
+        estado.tentativasDeEnvio += 1;
         // O texto sai no formato do WhatsApp — sem `\n` literal nem
         // `**negrito**` de Markdown na tela do cliente. Antes de qualquer gate,
         // para que o corpo vazio, as bolhas e a pausa humana meçam o que sai.
@@ -2533,7 +2366,7 @@ async function executarTurnoDoAgente(
         // correção re-entra por aqui, na janela em memória. Bolhas de UM
         // send_message não se comparam entre si (só candidato contra candidato),
         // então fatiamento legítimo não se autossuprime.
-        const corpoRepetido = dupTrava.checar(body);
+        const corpoRepetido = estado.dupTrava.checar(body);
         if (corpoRepetido !== null) {
           runLog.info('duplicate_suppressed — candidato quase idêntico ao já aceito no turno', {
             job_id: job?.id ?? null,
@@ -2589,8 +2422,8 @@ async function executarTurnoDoAgente(
           };
         }
         if (claimsCurrentInboundIsEmpty(body, mensagemDoJob)) {
-          falseEmptyInboundVetoCount += 1;
-          if (falseEmptyInboundVetoCount < MAX_VETOS_DE_FALSO_VAZIO) {
+          estado.vetos.falseEmptyInbound += 1;
+          if (estado.vetos.falseEmptyInbound < MAX_VETOS_DE_FALSO_VAZIO) {
             return {
               ok: false,
               error: {
@@ -2598,7 +2431,7 @@ async function executarTurnoDoAgente(
                 message:
                   'O cliente enviou texto nesta mensagem. Não diga que ela veio vazia, em branco ou sem texto. ' +
                   `Responda ao pedido real agora: ${JSON.stringify(mensagemDoJob)}. ` +
-                  `Esta é a tentativa de correção ${falseEmptyInboundVetoCount}.`,
+                  `Esta é a tentativa de correção ${estado.vetos.falseEmptyInbound}.`,
               },
             };
           }
@@ -2607,16 +2440,16 @@ async function executarTurnoDoAgente(
           // barreira é local ao `execute`, então soltar é seguir para o resto do
           // caminho de envio, com a cadeia inteira ainda pela frente.
           runLog.warn('fail-safe do gate de falso-vazio: envio liberado após vetos seguidos', {
-            vetos: falseEmptyInboundVetoCount,
+            vetos: estado.vetos.falseEmptyInbound,
           });
         }
-        if (seq >= maxSendsPerTurn) {
+        if (estado.seq >= maxSendsPerTurn) {
           return {
             ok: false,
             error: {
               code: 'max_sends_per_turn',
               message:
-                `você já enviou ${seq} mensagens neste turno (teto: ${maxSendsPerTurn}). ` +
+                `você já enviou ${estado.seq} mensagens neste turno (teto: ${maxSendsPerTurn}). ` +
                 'NÃO envie mais nada agora — encerre o turno e espere a resposta do lead.',
             },
           };
@@ -2648,14 +2481,14 @@ async function executarTurnoDoAgente(
         let fotosDoProduto: FotoParaEnvio[] = [];
         let fotosQueFaltaram = 0;
         try {
-          dupTrava.reservar(body);
+          estado.dupTrava.reservar(body);
           // RESPOSTA OBSOLETA: o cliente escreveu de novo enquanto este turno pensava.
           // Só antes do PRIMEIRO envio — cortar a meio uma resposta já começada é pior
           // que a duplicata. A mensagem nova tem job próprio, que lê a conversa inteira
           // e responde a tudo de uma vez. Ver `respostaFicouObsoleta`.
           if (
             !preview &&
-            seq === 0 &&
+            estado.seq === 0 &&
             (await respostaFicouObsoleta(
               pool,
               { organizationId: tenantId, conversationId: input.conversationId, jobId: liveJob().id },
@@ -2669,10 +2502,10 @@ async function executarTurnoDoAgente(
             // #1943: marca o turno como descartado. NADA mais sai dele, nem a
             // pergunta pendente do roteiro — ela segue feita para o turno da
             // mensagem nova. Ver `perguntaDoRoteiroPodeSair` no `enviar`.
-            turnoDescartado = true;
+            estado.turnoDescartado = true;
             // Nada saiu: a reserva em voo não pode virar memória (nem sobreviver
             // ao turno como entrada órfã). #2996, item 6.
-            dupTrava.liberar(body);
+            estado.dupTrava.liberar(body);
             return {
               ok: false,
               error: {
@@ -2695,7 +2528,7 @@ async function executarTurnoDoAgente(
             });
             if (!preparadas.ok) {
               // Nada saiu: libera a reserva antes de devolver o erro ao modelo.
-              dupTrava.liberar(body);
+              estado.dupTrava.liberar(body);
               return { ok: false, error: { code: preparadas.code, message: preparadas.message } };
             }
             fotosDoProduto = preparadas.fotos;
@@ -2708,14 +2541,14 @@ async function executarTurnoDoAgente(
             promiseTable !== null &&
             !decidePromise({ candidate: body, table: promiseTable }).allow
           ) {
-            outOfTablePromiseAttempted = true;
+            estado.outOfTablePromiseAttempted = true;
           }
         } catch (err) {
           // EXCEÇÃO PRÉ-CADEIA (revisão do #2996, item 6): nada saiu — a reserva
           // órfã sai junto e o erro sobe idêntico ao de antes (nenhum code novo,
           // nenhum return inventado). `liberar` é idempotente: se um caminho já
           // tiver liberado, aqui é no-op.
-          dupTrava.liberar(body);
+          estado.dupTrava.liberar(body);
           throw err;
         }
         // Cadeia de guardrails (F2-13): stop/opt-out → anti-ban → spinning rodam
@@ -2758,7 +2591,7 @@ async function executarTurnoDoAgente(
             ...(input.conducao ? { disclosureDesde: input.conducao.aberta_em } : {}),
             casesEnabled: agentConfig?.casesEnabled ?? false,
             hasOpenCase,
-            openedCaseThisTurn,
+            openedCaseThisTurn: estado.openedCaseThisTurn,
             // Nome(s) próprio(s) que o prompt do tenant usa pra retaguarda humana (ex.:
             // "Fulano") — o mesmo vocabulário que `matchesHandoffKeyword` já usa do lado
             // do CLIENTE, agora somado ao alvo genérico do `casePromiseGate` do lado do
@@ -2785,11 +2618,11 @@ async function executarTurnoDoAgente(
             agenda: {
               active: agentConfig !== null && temFerramentaDeAgenda(agentConfig.toolIds),
               ferramentas: agentConfig === null ? [] : ferramentasDeAgendaDoAgente(agentConfig.toolIds),
-              toolCalledThisTurn: agendaToolCalledThisTurn,
+              toolCalledThisTurn: estado.agendaToolCalledThisTurn,
             },
             followup: {
               disponivel: rawTools.schedule_followup !== undefined,
-              agendadoNesteTurno: followupAgendadoNesteTurno,
+              agendadoNesteTurno: estado.followupAgendadoNesteTurno,
             },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
@@ -2820,8 +2653,8 @@ async function executarTurnoDoAgente(
             esperaForaDoLock: async (): Promise<void> => {
               // Uma vez por TURNO — o flag impede que um re-run do fail-safe (veto de
               // promessa/vocabulário) cobre a espera de novo do mesmo cliente.
-              if (jaEsperouComoHumano) return;
-              jaEsperouComoHumano = true;
+              if (estado.jaEsperouComoHumano) return;
+              estado.jaEsperouComoHumano = true;
               // A 1ª bolha vai sair: a renovação para aqui. Depois da mensagem, um
               // "digitando…" novo leria como uma segunda resposta a caminho.
               pararDigitando();
@@ -2836,7 +2669,7 @@ async function executarTurnoDoAgente(
                     body,
                     agentConfig?.splitMessages ?? false,
                     agentConfig?.splitMaxChars ?? 600,
-                    Math.max(1, maxSendsPerTurn - seq),
+                    Math.max(1, maxSendsPerTurn - estado.seq),
                   )[0] ?? body,
                 // Os quatro números do atraso por conexão (0499). Vazios (sem
                 // linha em channel_knobs / preview) = defaults históricos.
@@ -2862,7 +2695,7 @@ async function executarTurnoDoAgente(
             // disclosure via inject); é ELE que vai ao canal, não o `body` capturado da tool.
             send: (finalBody: string) => {
               pararDigitando(); // a mensagem sai agora; renovar depois dela mentiria
-              corposEnviados.push(finalBody);
+              estado.corposEnviados.push(finalBody);
               const sleep =
                 deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
               const jitter = () =>
@@ -2876,14 +2709,14 @@ async function executarTurnoDoAgente(
                 corpo: string,
                 media?: FotoParaEnvio,
               ): Promise<ChannelSendResult> => {
-                seq += 1;
+                estado.seq += 1;
                 return liveChannel().send({
                   tenantId,
                   leadId,
                   jobId: liveJob().id,
                   jobClaim: claimOfJob(liveJob()),
                   agentOperation,
-                  seq,
+                  seq: estado.seq,
                   conversationId: input.conversationId,
                   body: corpo,
                   ...(media ? { media } : {}),
@@ -2896,14 +2729,14 @@ async function executarTurnoDoAgente(
               return enviarComFotos(finalBody, fotosDoProduto, {
                 sleep,
                 jitter,
-                restantes: () => maxSendsPerTurn - seq,
+                restantes: () => maxSendsPerTurn - estado.seq,
                 enviarFoto: (foto, legenda) => enviar(legenda, foto),
                 enviarTexto: (texto) =>
                   sendInBubbles(texto, {
                     enabled: agentConfig?.splitMessages ?? false,
                     maxChars: agentConfig?.splitMaxChars ?? 600,
                     // O teto do turno vale para as bolhas: o que passa dele vai junto na última.
-                    maxBubbles: Math.max(1, maxSendsPerTurn - seq),
+                    maxBubbles: Math.max(1, maxSendsPerTurn - estado.seq),
                     sleep,
                     jitter,
                     // A pausa humana do turno NÃO mora mais aqui: ela subiu para
@@ -2920,8 +2753,8 @@ async function executarTurnoDoAgente(
             // humano sem caso aberto. 1ª vez no turno: erro-de-ensino (o modelo re-tenta —
             // abre o caso OU reformula sem prometer humano). Persistiu (2ª vez): o SISTEMA
             // abre um caso mínimo e libera o envio — nunca deixa a promessa passar sem caso.
-            casePromiseVetoCount += 1;
-            if (casePromiseVetoCount < 2) {
+            estado.vetos.casePromise += 1;
+            if (estado.vetos.casePromise < 2) {
               return { ok: false, error: { code: chain.code, message: chain.message } };
             }
             const auto = await openCase(
@@ -2945,7 +2778,7 @@ async function executarTurnoDoAgente(
               // prometendo humano sem caso; mantém a invariante com o erro de ensino original.
               return { ok: false, error: { code: chain.code, message: chain.message } };
             }
-            openedCaseThisTurn = true;
+            estado.openedCaseThisTurn = true;
             moverParaHandoffBestEffort('case_promise_autofallback');
             // Re-roda a cadeia INTEIRA agora que há caso aberto — o send real acontece
             // DENTRO do runBeforeSend (via args.send); nunca chamamos o canal por fora
@@ -2965,11 +2798,11 @@ async function executarTurnoDoAgente(
             // caso com a frase barrada — e o erro devolvido ao modelo passa a dizer que a
             // equipe foi acionada, para ele avisar a pessoa sem repetir a afirmação. A
             // resposta seguinte passa pelo `case_promise` porque o caso agora existe.
-            clinicalClaimVetoCount += 1;
+            estado.vetos.clinicalClaim += 1;
             if (
-              clinicalClaimVetoCount >= MAX_VETOS_DE_AFIRMACAO_CLINICA &&
+              estado.vetos.clinicalClaim >= MAX_VETOS_DE_AFIRMACAO_CLINICA &&
               agentConfig?.casesEnabled === true &&
-              !openedCaseThisTurn &&
+              !estado.openedCaseThisTurn &&
               !hasOpenCase
             ) {
               const auto = await openCase(
@@ -2990,7 +2823,7 @@ async function executarTurnoDoAgente(
                 },
               );
               if (auto.ok) {
-                openedCaseThisTurn = true;
+                estado.openedCaseThisTurn = true;
                 moverParaHandoffBestEffort('clinical_claim_autofallback');
                 return {
                   ok: false,
@@ -3020,22 +2853,22 @@ async function executarTurnoDoAgente(
             // O veto da 1ª tentativa já virou linha em `before_send_traces` (com a
             // categoria do vazamento) e atividade na timeline: a liberação não apaga a
             // medição, que é o produto deste gate.
-            internalVocabularyVetoCount += 1;
-            if (internalVocabularyVetoCount < MAX_VETOS_DE_VOCABULARIO_INTERNO) {
+            estado.vetos.internalVocabulary += 1;
+            if (estado.vetos.internalVocabulary < MAX_VETOS_DE_VOCABULARIO_INTERNO) {
               return { ok: false, error: { code: chain.code, message: chain.message } };
             }
             runLog.warn(
               'fail-safe do gate de vocabulário interno: envio liberado após vetos seguidos',
               {
-                vetos: internalVocabularyVetoCount,
+                vetos: estado.vetos.internalVocabulary,
               },
             );
             // `openedCaseThisTurn` vai pelo valor VIVO (o fail-safe de casos acima pode
             // tê-lo mudado); reusar o do objeto capturado re-vetaria no case_promise.
             chain = await runBeforeSend({
               ...beforeSendArgs,
-              openedCaseThisTurn,
-              hasOpenCase: hasOpenCase || openedCaseThisTurn,
+              openedCaseThisTurn: estado.openedCaseThisTurn,
+              hasOpenCase: hasOpenCase || estado.openedCaseThisTurn,
               enforceInternalVocabulary: false,
             });
           }
@@ -3049,30 +2882,30 @@ async function executarTurnoDoAgente(
               (chain.code === 'warmup_cap' || chain.code === 'daily_cap') &&
               chain.nextAllowedAt !== undefined
             ) {
-              pacingCapVeto = { code: chain.code, nextAllowedAt: chain.nextAllowedAt };
+              estado.pacingCapVeto = { code: chain.code, nextAllowedAt: chain.nextAllowedAt };
             }
             // Erro de ENSINO pt-br (mesmo shape de get_lead_context/breaker): o
             // modelo o vê no turno seguinte. NÃO é exceção — não derruba o run.
             return { ok: false, error: { code: chain.code, message: chain.message } };
           }
           const outcome = chain.outcome;
-          outcomes.push(outcome);
+          estado.outcomes.push(outcome);
           // MEMÓRIA DE DUPLICATA: só o que saiu de fato vira referência para a régua.
           // sent/already_sent/queued = o corpo (ou quase) chegou/chegará ao cliente;
           // blocked/failed/unavailable não é resposta — não deve suprimir a próxima.
           // `promover` = transição exatamente uma vez: sai de `emVoo` e entra em
           // `aceitos` (o `finally` depois disso é no-op nesta candidata).
           if (outcome.kind === 'sent' || outcome.kind === 'already_sent' || outcome.kind === 'queued') {
-            dupTrava.promover(body);
+            estado.dupTrava.promover(body);
           }
-          if (outcome.kind === 'sent' && pendingCitations.length > 0) {
+          if (outcome.kind === 'sent' && estado.pendingCitations.length > 0) {
             try {
               await pool.query(
                 `update messages
                  set metadata = coalesce(metadata, '{}'::jsonb)
                    || jsonb_build_object('citations', $3::jsonb, 'ai_generated', true)
                  where organization_id = $1 and id = $2`,
-                [tenantId, outcome.messageId, JSON.stringify(pendingCitations)],
+                [tenantId, outcome.messageId, JSON.stringify(estado.pendingCitations)],
               );
             } catch (err) {
               // citação é enriquecimento, não invariante — falha só loga.
@@ -3081,7 +2914,7 @@ async function executarTurnoDoAgente(
                 error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
               });
             }
-            pendingCitations = [];
+            estado.pendingCitations = [];
           }
           switch (outcome.kind) {
             case 'sent':
@@ -3156,219 +2989,14 @@ async function executarTurnoDoAgente(
           // timeout saem de `emVoo` sem virar memória. Nenhuma reserva sobrevive
           // à tentativa, então nada fica preso "em voo" suprimindo re-tentativas
           // legítimas.
-          dupTrava.liberar(body);
+          estado.dupTrava.liberar(body);
         }
       },
     }),
-    update_lead_state: tool({
-      ...AGENT_TOOL_DEFS.update_lead_state,
-      execute: async (raw) => {
-        try {
-          const update = await applyLeadStateUpdate(
-            pool,
-            { tenantId, leadId, jobId: liveJob().id },
-            raw,
-          );
-          if (!update.ok) {
-            return update; // erro de ensino (payload fora da whitelist / transição inválida)
-          }
-          if (update.transition !== null) {
-            // Espelho no CRM. Falha NUNCA reverte o harness (fonte da verdade do
-            // funil) nem falha o job: humano resolve via inbox_items. Os motivos
-            // de MIRROR_WARN_ONLY (tenant sem mapa; humano moveu o card antes) são
-            // só warn — estado legítimo do produto não é incidente. Os outros dois
-            // merecem aviso PRÓPRIO, cada um no seu: `fora_do_escopo` (nada quebrou,
-            // o dono decide se libera o funil) e `perda_sem_motivo` (#917 — o card
-            // não anda porque a perda exige um motivo que só o humano pode dar).
-            const mirror = await mirrorLeadStageToCrm(pool, deps.crmCfg, {
-              tenantId,
-              leadId,
-              toStage: update.transition.to,
-              ...(agentConfig !== null ? { pipelineIds: agentConfig.pipelineIds } : {}),
-              ...(update.transition.reason !== undefined
-                ? { reason: update.transition.reason }
-                : {}),
-            });
-            if (!mirror.ok) {
-              runLog.warn('espelho de stage no CRM falhou — harness mantido', {
-                to_stage: update.transition.to,
-                reason: mirror.reason,
-              });
-              // QUAL aviso cada recusa produz, e como ele deixa de se repetir, é
-              // decisão de `move-lead-stage` — aqui só se passa o motivo e o
-              // lead. Ver `abreAvisoDoEspelhoRecusado`: escrever o
-              // `insertInboxItem` à mão neste ponto é o que deixava o `dedupe`
-              // sem guarda.
-              await abreAvisoDoEspelhoRecusado(pool, tenantId, {
-                leadId,
-                motivo: mirror.reason,
-                detalhe: mirror.detail,
-                etapaDeDestino: update.transition.to,
-              });
-            }
-          }
-          // F3-11: o estágio que o modelo confirmou (a máquina F2-10 gravou) — base da
-          // comparação com a sugestão do classificador no fechamento do run.
-          confirmedStage = update.state.stage;
-          return {
-            ok: true,
-            status: 'estado_atualizado',
-            stage: update.state.stage,
-            message: update.message,
-          };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao atualizar o estado do lead — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    }),
-    // F3-05: memória durável por lead. save_lead_note é MUTANTE (fora de
-    // READ_ONLY_TOOLS); tenant/lead vêm da ROW do job (closure), nunca do payload.
-    // Hard cap do índice imposto AQUI na escrita (applySaveLeadNote) — estouro vira
-    // ensino pedindo consolidação, sem gravar (padrão Hermes).
-    save_lead_note: tool({
-      ...AGENT_TOOL_DEFS.save_lead_note,
-      execute: async (raw) => {
-        try {
-          const res = await applySaveLeadNote(
-            pool,
-            { tenantId, leadId },
-            { budgetTokens: deps.knobs.notesIndexMaxTokens },
-            raw,
-          );
-          if (!res.ok) {
-            return res; // ensino (payload fora da whitelist / orçamento do índice estourado)
-          }
-          return {
-            ok: true,
-            status: 'nota_salva',
-            superseded: res.superseded,
-            message: res.message,
-          };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao salvar a nota — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    }),
-    // get_lead_note é READ-ONLY: relê o corpo de UMA nota do lead pelo id (sob demanda —
-    // o índice só traz headline). Escopado por (tenant, lead) do closure.
-    get_lead_note: tool({
-      ...AGENT_TOOL_DEFS.get_lead_note,
-      execute: async ({ note_id }) => {
-        try {
-          const noteId = note_id.trim();
-          const body = noteId === '' ? null : await getLeadNoteBody(pool, tenantId, leadId, noteId);
-          if (body === null) {
-            return {
-              ok: false,
-              error: {
-                code: 'note_not_found',
-                message:
-                  'não há nota com esse id na memória deste lead — confira o id no índice de memória.',
-              },
-            };
-          }
-          return { ok: true, note_id: noteId, body };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao ler a nota — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    }),
-    // F4-06: handoff humano acionado pelo PRÓPRIO modelo (cidadão de 1ª classe). MUTANTE
-    // (seta force_human no CRM + cancela crons + inbox), fora de READ_ONLY_TOOLS. tenant/
-    // lead/conversation vêm da ROW do job (closure), nunca do payload do modelo.
-    request_human_handoff: tool({
-      ...AGENT_TOOL_DEFS.request_human_handoff,
-      execute: async (raw) => {
-        // Payload recusado não passa a conversa: valida ANTES de avisar o lead, senão
-        // ele ouve "já estou chamando alguém da equipe" e ninguém é chamado.
-        const payload = validarPayloadDoHandoff(raw);
-        if (!payload.ok) return payload;
-        passouParaAEquipe = true;
-        // A conversa vai para a equipe: o robô não fala mais neste turno. O aviso
-        // do piso logo abaixo sai pelo canal SEM passar pelos `send` que param a
-        // renovação — sem esta linha o "digitando…" reacendia DEPOIS do "vou te
-        // passar para a equipe", até o `finally`.
-        pararDigitando();
-        try {
-          // ═══ O PISO: se o modelo não falou, o sistema fala ═══
-          //
-          // A descrição da tool manda avisar o lead ANTES de chamá-la, e a
-          // mensagem de retorno repete. Mas capacidade que depende de o modelo
-          // LEMBRAR é capacidade que não existe metade das vezes — a mesma
-          // conclusão que fez `expectativaDeAtendimento` parar de esperar que
-          // ele consultasse a disponibilidade sozinho.
-          //
-          // `seq` é o contador de mensagens FÍSICAS já enviadas neste turno. Zero
-          // significa: o modelo decidiu passar a conversa sem dizer nada a
-          // ninguém — e depois desta tool ele não consegue mais falar, porque
-          // `force_human` arma o `stopGate`. Então o aviso determinístico sai
-          // AGORA, antes do handoff.
-          //
-          // `seq > 0` significa que ele JÁ falou neste turno; mandar o aviso ali
-          // em cima seria o robô dizendo duas vezes a mesma coisa, com palavras
-          // diferentes. Confiamos na fala dele e registramos que o piso não foi
-          // preciso.
-          const aviso =
-            seq === 0
-              ? await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
-                  ...avisoDaEscalacao().base,
-                  motivo: 'pediu_humano',
-                })
-              : ({ avisado: true } as const);
-          // O contexto do TURNO vai junto, e sai da closure: `previous` é o
-          // checkpoint durável e `inboundsPendentes` é o que o cliente disse e
-          // ainda não foi respondido — os dois já estão em memória, então o
-          // briefing enriquecido não custa uma consulta a mais.
-          const res = await applyRequestHumanHandoff(
-            pool,
-            { tenantId, leadId, conversationId: input.conversationId },
-            {
-              conversationSummary: buildHandoffSummary(previous),
-              contextoDoTurno: { checkpoint: previous, pendentesDoCliente: inboundsPendentes },
-              avisoAoLead: aviso,
-              // #2210: com a mensagem na mão o handoff pergunta ao banco se a
-              // derivação da mídia ainda estava em aberto — e aí grava a marca
-              // que permite devolver o atendimento sozinho quando o texto chegar.
-              gatilho: { inboundMessageId: input.inboundMessageId },
-              log: runLog,
-            },
-            raw,
-          );
-          if (!res.ok) return res; // erro de ensino (payload fora da whitelist)
-          return { ok: true, status: res.status, message: res.message };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao acionar o handoff humano — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    }),
+    update_lead_state: criarUpdateLeadState(contextoDasFerramentas, { agentConfig, noteRunError }, estado),
+    save_lead_note: criarSaveLeadNote(contextoDasFerramentas, { noteRunError }),
+    get_lead_note: criarGetLeadNote(contextoDasFerramentas, { noteRunError }),
+    request_human_handoff: criarRequestHumanHandoff(contextoDasFerramentas, { pararDigitando: () => pararDigitando(), avisoDaEscalacao, previous, inboundsPendentes, noteRunError }, estado),
   };
 
   // F3-02: a tool nativa só entra com janela configurada e callback habilitado
@@ -3377,41 +3005,7 @@ async function executarTurnoDoAgente(
   // READ_ONLY_TOOLS.
   const followupKnobs = deps.knobs.followup;
   if (podeExporScheduleFollowup(agentConfig?.followup, followupKnobs)) {
-    rawTools.schedule_followup = tool({
-      ...AGENT_TOOL_DEFS.schedule_followup,
-      execute: async (raw) => {
-        try {
-          // agentId vai junto para a atividade da timeline nascer com AUTORIA: sem
-          // ele a linha entra como "Sistema" e o humano não sabe qual agente
-          // prometeu voltar — numa org com três agentes isso não responde nada.
-          const res = await applyScheduleFollowup(
-            pool,
-            { clock, knobs: followupKnobs },
-            { tenantId, leadId, agentId: agentConfig?.agentId ?? null },
-            raw,
-          );
-          if (!res.ok) {
-            return res; // erro de ensino (payload / data no passado / fora da janela)
-          }
-          followupAgendadoNesteTurno = true;
-          return {
-            ok: true,
-            status: 'agendado',
-            agendado_para: res.promisedAt.toISOString(),
-            message: res.message,
-          };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao agendar o retorno — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    });
+    rawTools.schedule_followup = criarScheduleFollowup(contextoDasFerramentas, { followupKnobs, agentConfig, noteRunError }, estado);
   }
 
   // Fase 2 (Task 6): read_skill_reference só entra quando alguma skill CASADA neste
@@ -3419,31 +3013,7 @@ async function executarTurnoDoAgente(
   // ruído. Read-only (tool-breaker.ts); tenant/matched skills vêm do closure
   // (skillMatch, calculado acima), nunca do payload do modelo.
   if (skillMatch.matched.some((s) => skillHasReferences(s))) {
-    rawTools.read_skill_reference = tool({
-      ...AGENT_TOOL_DEFS.read_skill_reference,
-      execute: async ({ skill_name, ref_path }) => {
-        try {
-          return await readSkillReference(
-            { admin: deps.crmCfg.supabase },
-            {
-              organizationId: tenantId,
-              matchedSkills: skillMatch.matched,
-              skillName: skill_name,
-              refPath: ref_path,
-            },
-          );
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao ler a reference da skill — encerre o turno agora.',
-            },
-          };
-        }
-      },
-    });
+    rawTools.read_skill_reference = criarReadSkillReference(contextoDasFerramentas, { skillMatch, noteRunError });
   }
 
   // Fase 2B: a tela pode DESLIGAR a tool de handoff do modelo (a detecção
@@ -3478,85 +3048,8 @@ async function executarTurnoDoAgente(
   // Ids do closure (row do job), nunca do payload; payload inválido é erro de ENSINO
   // ({ok:false}), exceção real vira internal_error (mesma disciplina dos irmãos).
   if (agentConfig !== null && agentConfig.casesEnabled) {
-    rawTools.open_human_case = tool({
-      ...AGENT_TOOL_DEFS.open_human_case,
-      execute: async (raw) => {
-        const parsed = openHumanCaseInputSchema.safeParse(raw);
-        if (!parsed.success) {
-          return {
-            ok: false,
-            error: {
-              code: 'invalid_payload',
-              message: 'campos do caso inválidos — informe title, summary e blocker (texto).',
-            },
-          };
-        }
-        try {
-          const res = await openCase(
-            pool,
-            { tenantId, conversationId: input.conversationId, agentId: agentConfig.agentId },
-            { ...parsed.data, contextSnapshot: buildCaseContextSnapshot() },
-          );
-          if (!res.ok) return res;
-          openedCaseThisTurn = true;
-          moverParaHandoffBestEffort('open_human_case');
-          // ACH-03: a expectativa vai junto com a confirmação. Medido num turno
-          // real: o agente abria o caso e prometia ao cliente que "alguém entra
-          // em contato" sem nunca ter olhado se havia alguém — a capacidade de
-          // consultar existia, estava ligada e montada no turno, e ele não a
-          // usou. Capacidade que depende de o modelo lembrar não existe metade
-          // das vezes; esta o sistema garante.
-          const { frase } = await expectativaDeAtendimento(pool, tenantId, new Date());
-          return {
-            ok: true,
-            case_id: res.caseId,
-            message: `caso aberto; continue a conversa com o lead normalmente. ${frase}`,
-          };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao abrir o caso — encerre o turno.',
-            },
-          };
-        }
-      },
-    });
-    rawTools.provide_case_update = tool({
-      ...AGENT_TOOL_DEFS.provide_case_update,
-      execute: async (raw) => {
-        const parsed = provideCaseUpdateInputSchema.safeParse(raw);
-        if (!parsed.success) {
-          return {
-            ok: false,
-            error: { code: 'invalid_payload', message: 'informe case_id e info (texto).' },
-          };
-        }
-        try {
-          const res = await provideCaseUpdate(
-            pool,
-            { tenantId, conversationId: input.conversationId },
-            { caseId: parsed.data.case_id, info: parsed.data.info },
-          );
-          if (!res.ok) return res;
-          return {
-            ok: true,
-            message: 'informação enviada ao responsável; aguarde o retorno pelo caso.',
-          };
-        } catch (err) {
-          noteRunError(err instanceof Error ? err : new Error(String(err)));
-          return {
-            ok: false,
-            error: {
-              code: 'internal_error',
-              message: 'erro interno ao atualizar o caso — encerre o turno.',
-            },
-          };
-        }
-      },
-    });
+    rawTools.open_human_case = criarOpenHumanCase(contextoDasFerramentas, { agentConfig, buildCaseContextSnapshot, moverParaHandoffBestEffort, noteRunError }, estado);
+    rawTools.provide_case_update = criarProvideCaseUpdate(contextoDasFerramentas, { noteRunError });
   }
 
   // A tool de conhecimento só entra quando o agente publicado tem material para
@@ -3670,7 +3163,7 @@ async function executarTurnoDoAgente(
               rawTools[name] = {
                 ...mcpTool,
                 execute: (async (...args: Parameters<typeof executeOriginal>) => {
-                  agendaToolCalledThisTurn = true;
+                  estado.agendaToolCalledThisTurn = true;
                   return executeOriginal(...args);
                 }) as typeof mcpTool.execute,
               };
@@ -3772,13 +3265,13 @@ async function executarTurnoDoAgente(
                 mode: deps.knobs.disclosureMode ?? 'inject',
               },
             },
-            () => pendingCitations,
+            () => estado.pendingCitations,
             semanticClassifier,
             () => ({
               agenda: {
                 active: previewContext.agenda?.active ?? false,
                 ferramentas: previewContext.agenda?.ferramentas ?? [],
-                toolCalledThisTurn: agendaToolCalledThisTurn,
+                toolCalledThisTurn: estado.agendaToolCalledThisTurn,
               },
             }),
             // #2490 — a MESMA `prepararFotosDoProduto` do caminho de produção,
@@ -4065,7 +3558,7 @@ async function executarTurnoDoAgente(
           conversationId: input.conversationId,
         });
         if (jaDito.length > 0) {
-          dupTrava.semear(jaDito);
+          estado.dupTrava.semear(jaDito);
         }
       } catch (err) {
         runLog.warn('memória de duplicata não carregada — dedup cai só para o turno', {
@@ -4136,7 +3629,7 @@ async function executarTurnoDoAgente(
     if (saidaTruncada) {
       runLog.warn('output_truncated — resposta do modelo cortada no teto de tokens', {
         job_id: job?.id ?? null,
-        enviadas_ate_aqui: outcomes.length,
+        enviadas_ate_aqui: estado.outcomes.length,
         finish_reason: turn.result.finishReason,
       });
     }
@@ -4147,7 +3640,7 @@ async function executarTurnoDoAgente(
     // inbox_items (dedup por episódio). Advisório: o classifier sozinho nunca escala — o gate
     // determinístico é que confirma a promessa indevida. Feito antes do runError/veto para
     // não se perder num turno que falha o envio depois.
-    if (!preview && jailbreakLevel === JAILBREAK_ESCALATION_LEVEL && outOfTablePromiseAttempted) {
+    if (!preview && jailbreakLevel === JAILBREAK_ESCALATION_LEVEL && estado.outOfTablePromiseAttempted) {
       const created = await escalateJailbreakPromise(pool, {
         tenantId,
         leadId,
@@ -4163,10 +3656,10 @@ async function executarTurnoDoAgente(
       }
     }
 
-    if (runError !== null) {
-      throw runError; // job falha → retry da fila; o ledger segura duplicata de envio
+    if (estado.runError !== null) {
+      throw estado.runError; // job falha → retry da fila; o ledger segura duplicata de envio
     }
-    if (outcomes.some((o) => o.kind === 'failed')) {
+    if (estado.outcomes.some((o) => o.kind === 'failed')) {
       // ponytail: retry re-roda o run inteiro (LLM incluso); seq N re-encontra a
       // linha do ledger — 'accepted' pula, 'failed' rotaciona a key (F2-06).
       throw new Error('envio marcado como failed pelo CRM — run re-tentado pela fila');
@@ -4190,10 +3683,10 @@ async function executarTurnoDoAgente(
       !preview &&
       liveJob().kind === 'inbound_turn' &&
       turnoMudoPedeCorrecao({
-        tentativasDeEnvio,
-        enviadas: outcomes.length,
-        turnoDescartado,
-        passouParaAEquipe,
+        tentativasDeEnvio: estado.tentativasDeEnvio,
+        enviadas: estado.outcomes.length,
+        turnoDescartado: estado.turnoDescartado,
+        passouParaAEquipe: estado.passouParaAEquipe,
         capDeEnvio: capDeEnvioAtingido(),
       });
     if (correcaoDoTurnoMudoPedida) {
@@ -4230,11 +3723,11 @@ async function executarTurnoDoAgente(
       // finishReason normal (stop/tool-calls) é resposta escolhida, não defeito.
       correcaoTruncou = correcao.result.finishReason === 'length';
       mensagensDoTurno = [...mensagensDoTurno, pedidoDeCorrecao, ...correcao.result.responseMessages];
-      if (runError !== null) throw runError;
-      if (outcomes.some((o) => o.kind === 'failed')) {
+      if (estado.runError !== null) throw estado.runError;
+      if (estado.outcomes.some((o) => o.kind === 'failed')) {
         throw new Error('envio marcado como failed pelo CRM — run re-tentado pela fila');
       }
-      runLog.info('correção do turno mudo concluída', { messages_sent: outcomes.length });
+      runLog.info('correção do turno mudo concluída', { messages_sent: estado.outcomes.length });
     }
 
     // FALHA TERMINAL VISÍVEL — só com sinal de FALHA, nunca por silêncio
@@ -4259,11 +3752,11 @@ async function executarTurnoDoAgente(
       !preview &&
       // Só turno que RESPONDE ao cliente: retomada (followup) cortada não é "cliente sem resposta".
       eTurnoDeResposta(liveJob()) &&
-      outcomes.length === 0 &&
-      seq === 0 &&
-      tentativasDeEnvio === 0 &&
-      !turnoDescartado &&
-      !passouParaAEquipe &&
+      estado.outcomes.length === 0 &&
+      estado.seq === 0 &&
+      estado.tentativasDeEnvio === 0 &&
+      !estado.turnoDescartado &&
+      !estado.passouParaAEquipe &&
       !capDeEnvioAtingido();
     if (silencioSemRazaoLegitima && (saidaTruncada || correcaoTruncou)) {
       const desfechoTerminal = saidaTruncada
@@ -4284,7 +3777,7 @@ async function executarTurnoDoAgente(
         agentConfig?.casesEnabled === true
           ? await hasOpenCaseForContact(pool, tenantId, input.conversationId)
           : false;
-      if (agentConfig?.casesEnabled === true && !openedCaseThisTurn && !haCasoAberto) {
+      if (agentConfig?.casesEnabled === true && !estado.openedCaseThisTurn && !haCasoAberto) {
         try {
           const caso = await openCase(
             pool,
@@ -4306,7 +3799,7 @@ async function executarTurnoDoAgente(
             },
           );
           if (caso.ok) {
-            openedCaseThisTurn = true;
+            estado.openedCaseThisTurn = true;
             moverParaHandoffBestEffort(desfechoTerminal);
           } else {
             // Caso não abriu (já existe um aberto) — a falha fica visível pelo log
@@ -4336,12 +3829,12 @@ async function executarTurnoDoAgente(
         {
           organizationId: tenantId,
           roteiro,
-          corposEnviados,
+          corposEnviados: estado.corposEnviados,
           enviar: async (texto) => {
             // #1943: turno descartado como obsoleto → a pergunta do roteiro NÃO
             // sai (segue pendente para o turno seguinte). Também vigia o teto
             // de mensagens físicas do turno (F2-15b).
-            if (!perguntaDoRoteiroPodeSair({ turnoDescartado, seq, maxSendsPerTurn })) return false;
+            if (!perguntaDoRoteiroPodeSair({ turnoDescartado: estado.turnoDescartado, seq: estado.seq, maxSendsPerTurn })) return false;
             const chain = await runBeforeSend({
               pool,
               log: runLog,
@@ -4368,14 +3861,14 @@ async function executarTurnoDoAgente(
                 : {}),
               send: (finalBody: string) => {
                 pararDigitando(); // a mensagem sai agora; renovar depois dela mentiria
-                seq += 1;
+                estado.seq += 1;
                 return liveChannel().send({
                   tenantId,
                   leadId,
                   jobId: liveJob().id,
                   jobClaim: claimOfJob(liveJob()),
                   agentOperation,
-                  seq,
+                  seq: estado.seq,
                   conversationId: input.conversationId,
                   body: finalBody,
                 });
@@ -4507,8 +4000,8 @@ async function executarTurnoDoAgente(
     await executarEfeitosPosTurno(
       { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
       {
-        agentConfig, content, checkpointAnterior, closing, stageSuggestion, confirmedStage,
-        outcomes, pacingCapVeto, inboundsPendentes, turn,
+        agentConfig, content, checkpointAnterior, closing, stageSuggestion, confirmedStage: estado.confirmedStage,
+        outcomes: estado.outcomes, pacingCapVeto: estado.pacingCapVeto, inboundsPendentes, turn,
       },
     );
   } finally {

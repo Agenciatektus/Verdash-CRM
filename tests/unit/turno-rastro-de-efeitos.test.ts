@@ -223,6 +223,13 @@ const AGENTE = {
   historyMessageWindow: 20, historyTokenWindow: 1000,
 };
 
+/** Resumo estável (djb2) do JSON devolvido pela ferramenta: muda se o retorno muda. */
+function resumoDoRetorno(r: unknown): string {
+  let h = 5381;
+  for (const ch of JSON.stringify(r) ?? "undefined") h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+  return h.toString(16);
+}
+
 /** O seam de modelo roteirizado: classificadores degradam, o turno chama as ferramentas do cenário. */
 function roteirizarModelo(rastro: Rastro, c: Cenario) {
   vi.mocked(runModelCall).mockImplementation((async (_db: unknown, _cfg: unknown, input: SeamDeModelo.RunModelCallInput) => {
@@ -239,7 +246,9 @@ function roteirizarModelo(rastro: Rastro, c: Cenario) {
           | { ok?: boolean; code?: string; reason?: string; error?: string | { code?: string } }
           | undefined;
         const motivo = r?.code ?? r?.reason ?? (typeof r?.error === "string" ? r.error : r?.error?.code) ?? "?";
-        rastro.push(`tool:${f.nome} ${r?.ok === false ? `recusou ${motivo}` : "ok"}`);
+        // S6: o retorno de cada ferramenta entra no rastro por um resumo do JSON. Sem ele,
+        // mudar o desfecho de `update_lead_state` (o que volta ao modelo) passava verde.
+        rastro.push(`tool:${f.nome} ${r?.ok === false ? `recusou ${motivo}` : `ok #${resumoDoRetorno(r)}`}`);
       }
       return { result: { finishReason: "stop", responseMessages: [], text: "", steps: [] }, model: "fake-model", callId: "call-turno" };
     }
@@ -353,6 +362,22 @@ const CENARIOS: Record<string, Cenario> = {
     ferramentas: [
       { nome: "get_lead_context", args: {} },
       { nome: "send_message", args: { body: "Vi aqui seu histórico, já te respondo." } },
+    ],
+  },
+  // F8 (ADR-0006, S6), gravados contra o código de antes da extração.
+  "ferramentas de leitura: nota inexistente e busca no conhecimento": {
+    agente: { knowledgeSourceIds: ["fonte-1"], ragTopK: 3 },
+    ferramentas: [
+      { nome: "get_lead_note", args: { note_id: "nota-que-nao-existe" } },
+      { nome: "search_knowledge", args: { query: "preço da limpeza de pele" } },
+      { nome: "send_message", args: { body: "Já te passo o valor." } },
+    ],
+  },
+  "ferramentas de caso: abre e complementa": {
+    agente: { casesEnabled: true },
+    ferramentas: [
+      { nome: "open_human_case", args: { title: "Desconto", summary: "pediu desconto fora da tabela", blocker: "só o dono libera" } },
+      { nome: "provide_case_update", args: { case_id: "caso-1", info: "aceita pagar à vista" } },
     ],
   },
   "erro do modelo: provedor fora": { modeloFalha: new Error("upstream 503") },

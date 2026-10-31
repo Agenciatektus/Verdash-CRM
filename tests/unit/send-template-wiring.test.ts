@@ -47,7 +47,7 @@ const FONTE = fs.readFileSync(
 function corpoDoExecute(): string {
   const i = FONTE.indexOf("send_template: tool({");
   expect(i, "âncora `send_template: tool({` sumiu do turno").toBeGreaterThan(-1);
-  const j = FONTE.indexOf("search_knowledge: tool({", i);
+  const j = FONTE.indexOf("search_knowledge: criarSearchKnowledge(", i);
   expect(j, "âncora de fim (a tool seguinte) sumiu").toBeGreaterThan(i);
   return FONTE.slice(i, j);
 }

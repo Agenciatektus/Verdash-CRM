@@ -128,7 +128,7 @@ describe("fiação — as duas perguntas leem de fontes diferentes", () => {
 
   it("o veto do falso-vazio segue na mensagem PINADA — é sobre o que o turno responde", () => {
     const i = FONTE.indexOf("send_message: tool({");
-    const j = FONTE.indexOf("update_lead_state: tool({", i);
+    const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
     expect(FONTE.slice(i, j)).toMatch(/claimsCurrentInboundIsEmpty\(body, mensagemDoJob\)/);

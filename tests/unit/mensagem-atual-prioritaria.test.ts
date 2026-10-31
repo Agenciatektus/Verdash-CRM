@@ -119,7 +119,7 @@ describe("a barreira está no caminho do envio, não numa função de ninguém",
   );
   const corpoDoSend = (() => {
     const i = FONTE.indexOf("send_message: tool({");
-    const j = FONTE.indexOf("update_lead_state: tool({", i);
+    const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
     return FONTE.slice(i, j);
@@ -135,10 +135,10 @@ describe("a barreira está no caminho do envio, não numa função de ninguém",
     // inteiro: o cliente ficava sem resposta por causa de uma frase NOSSA. O
     // padrão da casa é `MAX_VETOS_DE_VOCABULARIO_INTERNO` — 1ª vez ensina, a 2ª
     // decide —, e soltar sem registrar seria trocar um erro visível por um mudo.
-    expect(corpoDoSend).toMatch(/falseEmptyInboundVetoCount \+= 1/);
-    expect(corpoDoSend).toMatch(/falseEmptyInboundVetoCount < MAX_VETOS_DE_FALSO_VAZIO/);
+    expect(corpoDoSend).toMatch(/estado\.vetos\.falseEmptyInbound \+= 1/);
+    expect(corpoDoSend).toMatch(/estado\.vetos\.falseEmptyInbound < MAX_VETOS_DE_FALSO_VAZIO/);
     expect(corpoDoSend).toMatch(
-      /runLog\.warn\(\s*'fail-safe do gate de falso-vazio[\s\S]{0,160}?vetos: falseEmptyInboundVetoCount/,
+      /runLog\.warn\(\s*'fail-safe do gate de falso-vazio[\s\S]{0,160}?vetos: estado\.vetos\.falseEmptyInbound/,
     );
   });
 

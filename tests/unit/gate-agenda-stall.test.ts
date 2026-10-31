@@ -307,7 +307,7 @@ const FONTE_INBOUND = fs.readFileSync(
 describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal, não a decisão de chamar", () => {
   it("send_message passa `agenda` calculado a partir de toolIds e da flag de execução", () => {
     const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: tool({", i);
+    const j = FONTE_INBOUND.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
     const corpo = FONTE_INBOUND.slice(i, j);
@@ -323,7 +323,7 @@ describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal
     expect(corpo).toMatch(
       /ferramentas:\s*agentConfig === null \? \[\] : ferramentasDeAgendaDoAgente\(agentConfig\.toolIds\)/,
     );
-    expect(corpo).toMatch(/toolCalledThisTurn:\s*agendaToolCalledThisTurn/);
+    expect(corpo).toMatch(/toolCalledThisTurn:\s*estado\.agendaToolCalledThisTurn/);
   });
 
   it("as três tools de agenda são marcadas na montagem — não só crm_book_appointment", () => {
@@ -332,7 +332,7 @@ describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal
     expect(FONTE_INBOUND).toContain("'crm_book_appointment'");
     expect(FONTE_INBOUND).toContain("'crm_reschedule_appointment'");
     expect(FONTE_INBOUND).toContain("'crm_find_and_book_appointment'");
-    expect(FONTE_INBOUND).toMatch(/agendaToolCalledThisTurn = true/);
+    expect(FONTE_INBOUND).toMatch(/estado\.agendaToolCalledThisTurn = true/);
   });
 });
 

@@ -19,12 +19,17 @@ const FONTE_EFEITOS = fs.readFileSync(
   path.join(process.cwd(), "lib/agent-engine/agent/turno/desfecho-do-envio.ts"),
   "utf8",
 );
+// `open_human_case` mora em `turno/ferramentas/equipe.ts` desde a S6 do ADR-0006.
+const FONTE_EQUIPE = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/equipe.ts"),
+  "utf8",
+);
 const FONTE_INGEST = fs.readFileSync(path.join(process.cwd(), "lib/waha/ingest.ts"), "utf8");
 
 describe("fiação — casePromiseGate recebe o nome do gerente do tenant", () => {
   it("send_message passa humanPromiseExtraTargets a partir de agentConfig.handoffKeywords", () => {
     const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: tool({", i);
+    const j = FONTE_INBOUND.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
     const corpo = FONTE_INBOUND.slice(i, j);
@@ -41,10 +46,10 @@ describe("fiação — caso humano aberto move o lead pra etapa de handoff", () 
   });
 
   it("a tool open_human_case (caso deliberado do modelo) também chama moverParaHandoffBestEffort", () => {
-    const i = FONTE_INBOUND.indexOf("rawTools.open_human_case = tool({");
+    const i = FONTE_EQUIPE.indexOf("export function criarOpenHumanCase(");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 1500);
-    expect(janela).toMatch(/openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
+    const janela = FONTE_EQUIPE.slice(i, i + 1500);
+    expect(janela).toMatch(/estado\.openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
   });
 
   it("moverParaHandoffBestEffort é best-effort — nunca derruba o turno (.catch, não throw)", () => {

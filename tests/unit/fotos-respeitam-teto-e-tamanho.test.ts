@@ -14,7 +14,7 @@ describe("fotos do catálogo", () => {
     // acima do teto de legenda, sai à parte e também gasta o teto. O
     // comportamento é provado em lib/agent-engine/agent/fotos-do-produto.test.ts.
     const envio = turno.slice(turno.indexOf("return enviarComFotos("));
-    expect(envio.slice(0, envio.indexOf("});"))).toMatch(/restantes:\s*\(\)\s*=>\s*maxSendsPerTurn\s*-\s*seq/);
+    expect(envio.slice(0, envio.indexOf("});"))).toMatch(/restantes:\s*\(\)\s*=>\s*maxSendsPerTurn\s*-\s*estado\.seq/);
     expect(recorte).not.toMatch(/fotosDoProduto\.slice\(0,/);
   });
 

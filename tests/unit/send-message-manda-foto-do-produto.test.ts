@@ -18,7 +18,7 @@ import { AGENT_TOOL_DEFS } from "@/lib/agent-engine/agent/inbound-turn";
 const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
 const corpoDoSend = (() => {
   const i = FONTE.indexOf("send_message: tool({");
-  const j = FONTE.indexOf("update_lead_state: tool({", i);
+  const j = FONTE.indexOf("update_lead_state: criarUpdateLeadState(", i);
   expect(i).toBeGreaterThan(-1);
   expect(j).toBeGreaterThan(i);
   return FONTE.slice(i, j);

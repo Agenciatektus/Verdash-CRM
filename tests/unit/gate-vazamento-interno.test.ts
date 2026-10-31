@@ -223,7 +223,7 @@ function corpoDoExecute(ancora: string, fim: string): string {
 
 describe("fiação do gate — armado no agente, desarmado onde o veto seria silêncio", () => {
   it("send_message ARMA o gate", () => {
-    expect(corpoDoExecute("send_message: tool({", "update_lead_state: tool({"))
+    expect(corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState("))
       .toMatch(/enforceInternalVocabulary:\s*true/);
   });
 
@@ -236,17 +236,17 @@ describe("fiação do gate — armado no agente, desarmado onde o veto seria sil
   it("send_template NÃO arma — o texto é do humano e já aprovado pela Meta", () => {
     // Vetar aqui devolveria ao modelo a culpa por uma frase que não é dele, e a única
     // saída seria o silêncio: ele não pode reescrever um template aprovado.
-    expect(corpoDoExecute("send_template: tool({", "search_knowledge: tool({"))
+    expect(corpoDoExecute("send_template: tool({", "search_knowledge: criarSearchKnowledge("))
       .not.toMatch(/enforceInternalVocabulary/);
   });
 
   it("o fail-safe existe: conta vetos e, ao persistir, libera DESARMANDO só este gate", () => {
     // O cliente nunca fica sem resposta. E "liberar" é re-rodar a cadeia inteira com
     // este gate desarmado — nunca chamar o canal por fora (perderia stop/LGPD/pacing).
-    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: tool({");
+    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(");
     expect(corpo).toMatch(/chain\.code === 'internal_vocabulary_leak'/);
-    expect(corpo).toMatch(/internalVocabularyVetoCount \+= 1/);
-    expect(corpo).toMatch(/internalVocabularyVetoCount < MAX_VETOS_DE_VOCABULARIO_INTERNO/);
+    expect(corpo).toMatch(/estado\.vetos\.internalVocabulary \+= 1/);
+    expect(corpo).toMatch(/estado\.vetos\.internalVocabulary < MAX_VETOS_DE_VOCABULARIO_INTERNO/);
     expect(corpo).toMatch(/runBeforeSend\(\{[\s\S]*?enforceInternalVocabulary: false/);
   });
 

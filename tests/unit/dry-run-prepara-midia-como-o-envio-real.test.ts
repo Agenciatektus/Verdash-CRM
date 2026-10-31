@@ -267,7 +267,11 @@ describe("dry-run prepara a mídia do produto como o envio real (#2490)", () => 
     expect(bloco).toContain("prepararFotosDoProduto(pool, copiarFotoNoStorage(");
     expect(bloco).toContain(`conversationId: PASTA_DE_TESTE_DE_MIDIA`);
     // E o envio real continua com a dele — a prévia não pode tê-la substituído.
-    const send = fonte.slice(fonte.indexOf("send_message: tool({"), fonte.indexOf("update_lead_state: tool({"));
+    const iSend = fonte.indexOf("send_message: tool({");
+    const fimSend = fonte.indexOf("update_lead_state: criarUpdateLeadState(", iSend);
+    expect(iSend).toBeGreaterThan(-1);
+    expect(fimSend).toBeGreaterThan(iSend);
+    const send = fonte.slice(iSend, fimSend);
     expect(send).toContain("prepararFotosDoProduto(pool, copiarFotoNoStorage(runLog),");
   });
 });

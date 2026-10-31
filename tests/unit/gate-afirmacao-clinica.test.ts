@@ -168,7 +168,7 @@ function corpoDoExecute(ancora: string, fim: string): string {
 
 describe("fiação do gate — a escolha da organização chega ao send_message", () => {
   it("send_message arma pela camada da organização, com padrão desligado", () => {
-    expect(corpoDoExecute("send_message: tool({", "update_lead_state: tool({")).toMatch(
+    expect(corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(")).toMatch(
       /enforceClinicalClaim:\s*camadaLigada\(camadas\.afirmacao_clinica,\s*false\)/,
     );
   });
@@ -178,7 +178,7 @@ describe("fiação do gate — a escolha da organização chega ao send_message"
   });
 
   it("send_template NÃO arma — o texto é do humano e já aprovado pela Meta", () => {
-    expect(corpoDoExecute("send_template: tool({", "search_knowledge: tool({")).not.toMatch(
+    expect(corpoDoExecute("send_template: tool({", "search_knowledge: criarSearchKnowledge(")).not.toMatch(
       /enforceClinicalClaim/,
     );
   });
@@ -186,10 +186,10 @@ describe("fiação do gate — a escolha da organização chega ao send_message"
   it("o fail-safe abre caso e NUNCA libera a frase desarmando o gate", () => {
     // Ao contrário do vocabulário interno, não existe "diagnóstico, mas melhor que
     // silêncio": a insistência chama a equipe, não solta a mensagem.
-    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: tool({");
+    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(");
     expect(corpo).toMatch(/chain\.code === 'clinical_claim'/);
-    expect(corpo).toMatch(/clinicalClaimVetoCount \+= 1/);
-    expect(corpo).toMatch(/clinicalClaimVetoCount >= MAX_VETOS_DE_AFIRMACAO_CLINICA/);
+    expect(corpo).toMatch(/estado\.vetos\.clinicalClaim \+= 1/);
+    expect(corpo).toMatch(/estado\.vetos\.clinicalClaim >= MAX_VETOS_DE_AFIRMACAO_CLINICA/);
     const bloco = corpo.slice(corpo.indexOf("chain.code === 'clinical_claim'"));
     expect(bloco.slice(0, bloco.indexOf("internal_vocabulary_leak"))).toMatch(/openCase\(/);
     expect(FONTE_INBOUND).not.toMatch(/enforceClinicalClaim:\s*false/);

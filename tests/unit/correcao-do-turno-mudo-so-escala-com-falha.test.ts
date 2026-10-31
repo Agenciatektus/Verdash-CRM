@@ -73,7 +73,7 @@ describe("recuperação limitada do turno mudo (preservada)", () => {
     // chegam a corrigir (turno-mudo.ts é a definição única).
     const cabeca = turno.slice(idxCorrecaoConst, idxCorrecaoIf);
     expect(cabeca).toContain("turnoMudoPedeCorrecao({");
-    expect(cabeca).toContain("enviadas: outcomes.length,");
+    expect(cabeca).toContain("enviadas: estado.outcomes.length,");
     expect(cabeca).toContain("liveJob().kind === 'inbound_turn'");
     // O sinal de falha da correção é declarado junto com o pedido, falso por
     // padrão (logo acima da const) — silêncio deliberado não nasce escalado.
@@ -113,16 +113,16 @@ describe("decisão terminal: DEPOIS da correção, com os flags re-avaliados", (
     const bloco = blocoTerminal();
     // Proteção por mensagem existente: quem já despachou (ou tentou e levou
     // veto — o veto é a razão e já ensinou) não escala a caso humano.
-    expect(bloco).toContain("outcomes.length === 0");
-    expect(bloco).toContain("tentativasDeEnvio === 0");
-    expect(bloco).toContain("seq === 0");
+    expect(bloco).toContain("estado.outcomes.length === 0");
+    expect(bloco).toContain("estado.tentativasDeEnvio === 0");
+    expect(bloco).toContain("estado.seq === 0");
     expect(bloco).toContain("!preview");
   });
 
   it("isenta silêncio legítimo: descartado, handoff da equipe e teto de pacing", () => {
     const bloco = blocoTerminal();
-    expect(bloco).toContain("!turnoDescartado");
-    expect(bloco).toContain("!passouParaAEquipe");
+    expect(bloco).toContain("!estado.turnoDescartado");
+    expect(bloco).toContain("!estado.passouParaAEquipe");
     expect(bloco).toContain("!capDeEnvioAtingido()");
   });
 
@@ -166,7 +166,7 @@ describe("desfecho distinto, caso humano único, nunca duplica", () => {
   it("casesEnabled gateia o caso — mesma régua dos fail-safes clínico e de promessa", () => {
     const bloco = blocoTerminal();
     expect(bloco).toContain("agentConfig?.casesEnabled === true");
-    expect(bloco).toContain("!openedCaseThisTurn");
+    expect(bloco).toContain("!estado.openedCaseThisTurn");
     expect(bloco).toContain("hasOpenCaseForContact(pool, tenantId, input.conversationId)");
     // A FALHA continua visível pelo log mesmo com cases desligados.
     expect(bloco).toContain("runLog.error(`${desfechoTerminal} — sem nenhuma mensagem entregue`");
@@ -175,7 +175,7 @@ describe("desfecho distinto, caso humano único, nunca duplica", () => {
   it("um caso por turno: `caso.ok` gateia o move do funil e a falha fica visível", () => {
     const bloco = blocoTerminal();
     expect(bloco).toContain("if (caso.ok) {");
-    expect(bloco).toContain("openedCaseThisTurn = true;");
+    expect(bloco).toContain("estado.openedCaseThisTurn = true;");
     expect(bloco).toContain("moverParaHandoffBestEffort(desfechoTerminal);");
     // Caso já aberto → log distinto, sem segundo move; openCase que lançou
     // também fica visível (não engole a causa original).

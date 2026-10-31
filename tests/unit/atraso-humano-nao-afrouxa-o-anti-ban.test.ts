@@ -120,6 +120,16 @@ const FONTE_INBOUND = fs.readFileSync(
   path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
   "utf8",
 );
+// Desde a S6 do ADR-0006: o flag mora em `estado` (turno/estado-do-turno.ts) e o
+// `request_human_handoff` em `turno/ferramentas/equipe.ts`.
+const FONTE_ESTADO = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/estado-do-turno.ts"),
+  "utf8",
+);
+const FONTE_EQUIPE = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/equipe.ts"),
+  "utf8",
+);
 
 describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha", () => {
   it("acende no INÍCIO do trabalho (antes dos auxiliares e do modelo), só em turno que fala com o lead", () => {
@@ -154,11 +164,14 @@ describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha
     // O aviso do piso (`seq === 0`) vai ao canal por `avisarLeadDaEscalacao`, que
     // NÃO passa pelos `send` acima. Sem parar aqui, a renovação de 10s reacendia
     // o "digitando…" depois do "vou te passar para a equipe".
-    const tool = FONTE_INBOUND.indexOf("    request_human_handoff: tool({");
+    const tool = FONTE_EQUIPE.indexOf("export function criarRequestHumanHandoff(");
     expect(tool).toBeGreaterThan(-1);
-    const aviso = FONTE_INBOUND.indexOf("avisarLeadDaEscalacao(", tool);
+    const aviso = FONTE_EQUIPE.indexOf("avisarLeadDaEscalacao(", tool);
     expect(aviso).toBeGreaterThan(tool);
-    expect(FONTE_INBOUND.slice(tool, aviso)).toMatch(/^\s*pararDigitando\(\);$/m);
+    expect(FONTE_EQUIPE.slice(tool, aviso)).toMatch(/^\s*pararDigitando\(\);$/m);
+    // A ferramenta é criada ANTES de `pararDigitando` ser reatribuído (S6 do ADR-0006):
+    // passar a função direto congelaria o no-op inicial. A seta lê o valor na hora.
+    expect(FONTE_INBOUND).toMatch(/criarRequestHumanHandoff\([^)]*pararDigitando: \(\) => pararDigitando\(\)/);
   });
 });
 
@@ -168,13 +181,21 @@ describe("fiação — a espera humana é paga UMA vez por turno", () => {
     expect(i).toBeGreaterThan(-1);
     const janela = FONTE_INBOUND.slice(i, i + 400);
     // Ordem importa: guardar DEPOIS de esperar não impediria a segunda espera.
-    expect(janela).toMatch(/if \(jaEsperouComoHumano\) return;\s*\n\s*jaEsperouComoHumano = true;/);
+    expect(janela).toMatch(/if \(estado\.jaEsperouComoHumano\) return;\s*\n\s*estado\.jaEsperouComoHumano = true;/);
   });
 
   it("o flag é do TURNO — declarado no closure do turno, nunca em módulo", () => {
     // Em escopo de módulo ele vazaria entre turnos e entre tenants: o 2º cliente
     // do processo deixaria de receber a pausa.
-    expect(FONTE_INBOUND).toMatch(/^ {2}let jaEsperouComoHumano = false;$/m);
+    // O estado nasce na fábrica, chamada no corpo do turno (cerca: estado-do-turno-nasce-uma-vez).
+    const inicioDaFabrica = FONTE_ESTADO.indexOf("export function criarEstadoDoTurno(");
+    expect(inicioDaFabrica).toBeGreaterThan(-1);
+    const fabrica = FONTE_ESTADO.slice(inicioDaFabrica);
+    expect(fabrica).toMatch(/^ {4}jaEsperouComoHumano: false,$/m);
+    expect(FONTE_INBOUND).toMatch(/^ {2}const estado = criarEstadoDoTurno\(\);$/m);
+    for (const fonte of [FONTE_INBOUND, FONTE_ESTADO]) {
+      expect(fonte).not.toMatch(/^(let|var|const) jaEsperouComoHumano\b/m);
+    }
   });
 
   it("o call site mantém o jitter anti-ban entre bolhas, sem a pausa humana dentro do lock", () => {
