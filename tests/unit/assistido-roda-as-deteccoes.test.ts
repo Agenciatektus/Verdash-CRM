@@ -382,7 +382,15 @@ describe('fiação — a detecção vem ANTES do desvio para o rascunho', () => 
   });
 
   it('executarTurnoDoAgente detecta antes de rascunhar, e o follow-up entra no ramo', () => {
-    const t = trecho('async function executarTurnoDoAgente(');
+    // Desde a S4 do ADR-0006 o ramo assistido mora em `turno/roteamento.ts`; o
+    // orquestrador só chama. Ler daqui o resto do inbound-turn passaria por
+    // `createInboundTurnHandler`, que também detecta e rascunha.
+    const orquestrador = trecho('async function executarTurnoDoAgente(');
+    expect(orquestrador.slice(0, orquestrador.indexOf('\n}\n'))).toContain('await resolverRoteamentoDoTurno(');
+    const ROTEAMENTO = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/roteamento.ts'), 'utf8');
+    const i = ROTEAMENTO.indexOf('export async function resolverRoteamentoDoTurno(');
+    expect(i, 'resolverRoteamentoDoTurno sumiu de turno/roteamento.ts').toBeGreaterThan(-1);
+    const t = ROTEAMENTO.slice(i);
     const det = t.indexOf('deteccoesDeterministicasDoAssistido(');
     const rascunho = t.indexOf('generateReplyDraft(');
     expect(det, 'o ramo assistido do turno não roda as detecções').toBeGreaterThan(-1);

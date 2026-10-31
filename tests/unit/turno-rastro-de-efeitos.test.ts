@@ -29,6 +29,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as SeamDeModelo from "@/lib/agent-engine/edge/llm/run-model-call";
 import type * as Handoff from "@/lib/agent-engine/agent/human-handoff";
+import type * as Roteador from "@/lib/agent-engine/agent/resolve-turn-agent";
 
 vi.mock("@/lib/agent-engine/edge/llm/run-model-call", async (importOriginal) => {
   const real = await importOriginal<typeof SeamDeModelo>();
@@ -38,10 +39,17 @@ vi.mock("@/lib/agent-engine/agent/human-handoff", async (importOriginal) => {
   const real = await importOriginal<typeof Handoff>();
   return { ...real, isLeadInHandoff: vi.fn(async () => false) };
 });
+// O roteador só roda quando o cenário não traz `resolvedAgent` (ADR-0006, S4): cada
+// chamada entra no rastro, para a contagem de chamadas do roteador ficar fixada.
+vi.mock("@/lib/agent-engine/agent/resolve-turn-agent", async (importOriginal) => {
+  const real = await importOriginal<typeof Roteador>();
+  return { ...real, resolveConversationTurn: vi.fn() };
+});
 
 import { runAgentTurn } from "@/lib/agent-engine/agent/inbound-turn";
 import { isLeadInHandoff } from "@/lib/agent-engine/agent/human-handoff";
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
+import { resolveConversationTurn } from "@/lib/agent-engine/agent/resolve-turn-agent";
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const CONTATO = "33333333-3333-4333-8333-333333333333";
@@ -161,7 +169,7 @@ function canalQueGrava(rastro: Rastro) {
 }
 
 function logQueGrava(rastro: Rastro) {
-  const saida = /^turno |turno do agente concluído|não executado|turno pulado/;
+  const saida = /^turno |turno do agente concluído|não executado|turno pulado|^aviso de fora do horário/;
   return {
     info: (msg: string) => { if (saida.test(msg)) rastro.push(`log:info ${msg}`); },
     warn: (msg: string) => rastro.push(`log:warn ${msg}`),
@@ -176,6 +184,9 @@ type Cenario = {
   agente?: Record<string, unknown>;
   modeloFalha?: Error;
   emHandoff?: boolean;
+  /** Sem `resolvedAgent`: o turno chama o roteador (dublê) e recebe esta decisão. */
+  roteador?: Record<string, unknown>;
+  conducao?: Record<string, unknown>;
   /** Texto do checkpoint do fechamento; ausente = `CHECKPOINT` (sem mudança, sem emissão). */
   checkpoint?: string;
   /** O pool devolve um negócio ativo do contato (a nota da F13 escreve). */
@@ -220,6 +231,10 @@ export async function rodarCenario(c: Cenario): Promise<Rastro> {
   const rastro: Rastro = [];
   vi.mocked(isLeadInHandoff).mockResolvedValue(c.emHandoff ?? false);
   roteirizarModelo(rastro, c);
+  vi.mocked(resolveConversationTurn).mockImplementation((async () => {
+    rastro.push("roteador:resolveConversationTurn");
+    return { config: { ...AGENTE, ...c.agente }, ...c.roteador };
+  }) as never);
   const pool = poolQueGrava(rastro, c);
   const deps = {
     log: logQueGrava(rastro),
@@ -244,10 +259,13 @@ export async function rodarCenario(c: Cenario): Promise<Rastro> {
   };
   try {
     await runAgentTurn(deps as never, job as never, pool as never, { workerId: "w" }, {
-      resolvedAgent: {
-        config: { ...AGENTE, ...c.agente },
-        routerId: null, intentName: null, confidence: null, outcome: "fallback",
-      },
+      ...(c.roteador ? {} : {
+        resolvedAgent: {
+          config: { ...AGENTE, ...c.agente },
+          routerId: null, intentName: null, confidence: null, outcome: "fallback",
+        },
+      }),
+      ...(c.conducao ? { conducao: c.conducao } : {}),
       channelSessionId: "44444444-4444-4444-8444-444444444444",
       conversationId: CONVERSA,
       inboundMessageId: "66666666-6666-4666-8666-666666666666",
@@ -312,6 +330,20 @@ const CENARIOS: Record<string, Cenario> = {
     ],
   },
   "erro do modelo: provedor fora": { modeloFalha: new Error("upstream 503") },
+  // F3 (ADR-0006, S4), gravados contra o código de antes da extração.
+  "roteamento: fora do horário avisa e adia": {
+    agente: { janelaDeAtendimento: { timezone: "America/Sao_Paulo", start: "20:00", end: "22:00", weekdays: [0, 1, 2, 3, 4, 5, 6] } },
+  },
+  "roteamento: condução encerrada no meio-tempo": {
+    conducao: { id: "77777777-7777-4777-8777-777777777777" },
+  },
+  "roteamento: roteador decide e grava a decisão (destino do card cai no catch)": {
+    roteador: {
+      routerId: "88888888-8888-4888-8888-888888888888", intentName: "orcamento", confidence: 0.9,
+      outcome: "matched", destinationPipelineId: "99999999-9999-4999-8999-999999999999", destinationStageId: null,
+    },
+    ferramentas: [{ nome: "send_message", args: { body: "Oi! Posso te ajudar com o orçamento." } }],
+  },
   // F13 com os ramos ligados (ADR-0006, S3): Operador enfileirado, checkpoint que muda
   // (emissão), negócio ativo (nota), divergência classificador×modelo (golden).
   "pós-turno: tentativa do Operador, emissão e golden (nota fora do rastro)": {

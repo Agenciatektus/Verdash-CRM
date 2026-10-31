@@ -1,4 +1,3 @@
-import { setExecutionAgentOperation } from '@/lib/atendimento/fronteira-server';
 import { TIPOS_DE_CASO, TIPOS_DE_CASO_PARA_A_IA } from "@/lib/ai/case-copy";
 import { DEFAULT_CHANNEL_PROVIDER } from '@/lib/channels/capabilities';
 import { applyPreviewPolicy, previewGateContext, type TurnPreview } from './preview';
@@ -143,8 +142,6 @@ import { loadPublishedAgentConfigById, matchesHandoffKeyword, type PublishedAgen
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno } from './roteiro-no-turno';
 import { validarRespostaDoFluxo } from './flow-validate';
 import { moduloLigadoComMemo } from '@/lib/instalacao/modulos';
-import { msAteAJanelaAbrir } from './janela-de-atendimento';
-import { enviaAvisoForaDoHorario, portasDeProducao } from './aviso-fora-do-horario';
 import { loadChannelKnobs } from '../pacing/store';
 import { resolveConversationTurn, type TurnAgentResolution } from './resolve-turn-agent';
 import {
@@ -199,7 +196,6 @@ import { criarTravaDeDuplicata } from './near-dup';
 import { vetoReason } from '@/lib/leads/veto-activity';
 import { corposEnviadosDesdeUltimaInbound } from './memoria-envio';
 import { emitAgentActivityForContact } from '@/lib/leads/agent-activity';
-import { aplicaDestinoDaIntencao, funisDeProdutoDoRoteador } from './destino-da-intencao';
 import {
   JAILBREAK_ESCALATION_LEVEL,
   classifyJailbreak,
@@ -211,6 +207,7 @@ import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
 import { carregarContextoDoTurno } from './turno/contexto';
 import { executarEfeitosPosTurno } from './turno/efeitos-pos-turno';
+import { resolverRoteamentoDoTurno } from './turno/roteamento';
 import {
   nivelFinalDaManipulacao,
   perguntarManipulacaoAoJev,
@@ -1971,273 +1968,13 @@ async function executarTurnoDoAgente(
   if (!portoes.seguir) return;
   const { camadas, fusoDaOrg } = portoes.valor;
 
-  const routed = preview
-    ? { config: preview.agent, routerId: null, intentName: null, confidence: null, outcome: 'preview' }
-    : input.resolvedAgent ?? await resolveConversationTurn(pool, deps.llmCfg, {
-        tenantId, leadId, jobId: liveJob().id,
-        channelSessionId: input.channelSessionId,
-        conversationId: input.conversationId,
-        inbound: liveJob().kind === 'inbound_turn',
-      }, { log: runLog, jev: deps.jev });
-  const agentConfig = routed.config;
-  if (!preview && input.conducao && agentConfig?.operationMode === 'assisted') {
-    // Defensivo: o handler só manda condução AUTOMÁTICA para cá com agente
-    // automático. Rascunho aqui sairia sem a condução — não gera nada.
-    runLog.warn('condução automática com agente assistido — turno não executado', {
-      conducao_id: input.conducao.id,
-    });
-    return;
-  }
-  // #2155 — o destino do card. `in` porque o ramo de preview/campanha devolve um
-  // objeto literal SEM estes campos: sem a guarda, o tipo da união recusa a leitura.
-  const destinoPipelineId = 'destinationPipelineId' in routed ? (routed.destinationPipelineId ?? null) : null;
-  const destinoStageId = 'destinationStageId' in routed ? (routed.destinationStageId ?? null) : null;
-  if (
-    !preview &&
-    agentConfig?.operationMode === 'assisted' &&
-    job !== null &&
-    (job.kind === 'inbound_turn' || job.kind === 'followup_turn')
-  ) {
-    // #1648 — as detecções DETERMINÍSTICAS (STOP/opt-out e pedido de humano)
-    // rodam ANTES do desvio para o rascunho. Elas não gastam token e não
-    // dependem do modo de operação, e o pedido de parar não pode esperar
-    // aprovação humana para ser registrado (LGPD). `true` = turno silenciado
-    // (aviso já enviado, silêncio durável e crons cancelados): aí não há
-    // rascunho o que rascunhar.
-    if (
-      await deteccoesDeterministicasDoAssistido(pool, deps, {
-        job,
-        tenantId,
-        conversationId: input.conversationId,
-        channelSessionId: input.channelSessionId,
-        leadId,
-        agent: agentConfig,
-        log: runLog,
-        ...(input.inboundMessageId !== undefined
-          ? { inboundMessageId: input.inboundMessageId }
-          : {}),
-      })
-    ) {
-      return;
-    }
-    const { generateReplyDraft } = await import('./reply-drafts');
-    await generateReplyDraft(pool, deps, {
-      organizationId: tenantId,
-      conversationId: input.conversationId,
-      contactId: leadId,
-      channelId: input.channelSessionId,
-      boundary: currentExecutionBoundary() ?? undefined,
-      agent: agentConfig,
-    });
-    if (job.kind === 'followup_turn') {
-      // #1648 (3): o follow-up do assistido caía no `return` genérico de baixo
-      // e sumia — sem envio, sem rascunho e sem aviso. Vira rascunho, como o
-      // inbound: o humano vê, edita, aprova ou rejeita.
-      runLog.info('follow-up de agente assistido virou rascunho — nada sai sem aprovação', {
-        conversation_id: input.conversationId,
-      });
-    }
-    return;
-  }
-  if (!preview && agentConfig && (agentConfig.pausedAt || agentConfig.operationMode === 'assisted'))
-    return;
-  const agentOperation =
-    !preview && agentConfig?.operationRevision
-      ? {
-          organizationId: tenantId,
-          agentId: agentConfig.agentId,
-          versionId: agentConfig.versionId,
-          revision: agentConfig.operationRevision,
-        }
-      : undefined;
-  if (agentOperation) setExecutionAgentOperation(agentOperation);
-  if (agentConfig !== null) {
-    runLog.info('config do agente publicada em uso', {
-      agent_id: agentConfig.agentId,
-      agent_version_id: agentConfig.versionId,
-      model: agentConfig.model,
-      router_outcome: routed.outcome,
-      intent: routed.intentName,
-    });
-  }
-  // Horário de funcionamento da versão publicada (spec da tela: TriggerEditor).
-  // Vale SÓ para o turno inbound: a janela do lojista é sobre QUANDO ele atende
-  // quem chega, e adiar por ela um follow-up já prometido ao lead atrasaria uma
-  // promessa que não é dele. O que segura o follow-up é a janela anti-ban logo
-  // acima (`pacing/engine.ts`), que vale para os dois.
-  //
-  // Adia, não descarta: o job volta a 'pending' na abertura, SEM consumir
-  // attempts (`rescheduleJob`) — quem escreveu 22h é atendido às 8h. O throw é
-  // o contrato de `JobSettledError`: o run já dispôs do job, main.ts no-opa.
-  if (!preview && liveJob().kind === 'inbound_turn' && agentConfig?.janelaDeAtendimento != null) {
-    const esperaMs = msAteAJanelaAbrir(agentConfig.janelaDeAtendimento, clock());
-    if (esperaMs !== null) {
-      // O AVISO DE FORA DO HORÁRIO (#1926) — ANTES do adiamento, para sair na
-      // hora em que a mensagem chegou. É resposta a quem escreveu primeiro (o
-      // pacing lê a janela `resposta*` e o aviso CONTA no ledger); as réguas de
-      // opt-out, teto de envio e LGPD continuam valendo — a ordem e os vetores
-      // moram em `aviso-fora-do-horario.ts`. Qualquer erro aqui só PERDE um
-      // aviso: o turno é adiado de qualquer forma, e a resposta não pode morrer
-      // por causa de um recado.
-      try {
-        const aviso = await enviaAvisoForaDoHorario(
-          portasDeProducao(pool, deps.crmCfg.supabase, runLog),
-          {
-            organizationId: tenantId,
-            conversationId: input.conversationId,
-            contactId: leadId,
-            channelSessionId: input.channelSessionId,
-            texto: agentConfig.avisoForaDoHorario ?? null,
-            janela: agentConfig.janelaDeAtendimento,
-            agora: clock(),
-          },
-        );
-        runLog.info(
-          aviso.enviar
-            ? 'aviso de fora do horário enviado'
-            : 'aviso de fora do horário não enviado',
-          { motivo: aviso.enviar ? 'enviado' : aviso.motivo },
-        );
-      } catch (err) {
-        runLog.warn('aviso de fora do horário falhou — o turno segue adiado para a abertura', {
-          error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
-        });
-      }
-      await rescheduleJob(pool, liveJob().id, ctx.workerId, {
-        acquiredAt: claimOfJob(liveJob())?.acquired_at,
-        delayMs: esperaMs,
-        reason:
-          'fora do horário de funcionamento do agente — turno adiado para a abertura da janela',
-      });
-      runLog.info(
-        'turno adiado — fora do horário de funcionamento configurado na versão publicada',
-        {
-          agent_id: agentConfig.agentId,
-          espera_ms: esperaMs,
-          janela: `${agentConfig.janelaDeAtendimento.start}-${agentConfig.janelaDeAtendimento.end}`,
-        },
-      );
-      throw new JobSettledError(
-        'fora do horário de funcionamento — job reagendado para a abertura da janela',
-      );
-    }
-  }
-
-  // CONDUÇÃO DA CADÊNCIA: cada turno conta. Depois dos adiamentos (janela
-  // anti-ban e horário do agente), para o job reagendado não contar duas vezes.
-  // Passou do teto, a IA para e uma pessoa assume.
-  if (!preview && input.conducao) {
-    const turnos = await contarTurno(pool, tenantId, input.conducao.id);
-    if (turnos === null) {
-      runLog.info('condução da cadência encerrada no meio-tempo — turno não executado', {
-        conducao_id: input.conducao.id,
-      });
-      return;
-    }
-    if (turnos > MAX_TURNOS_POR_CONDUCAO) {
-      await encerrarConducaoEPassarParaHumano(
-        pool,
-        input.conducao,
-        'teto_de_turnos',
-        runLog,
-        avisoAoLeadDoTurno(deps, pool, liveJob(), input.channelSessionId, input.conversationId, runLog),
-      );
-      return;
-    }
-  }
-
-  // Fase 3: grava a decisão de roteamento e a aderência da conversa ao agente.
-  // Fire-and-forget — falha de telemetria nunca derruba a resposta ao lead.
-  if (!preview && routed.routerId !== null) {
-    try {
-      if (agentConfig !== null) {
-        await pool.query(
-          `update conversations
-           set active_ai_agent_id = $3, active_intent = $4, active_agent_set_at = now()
-           where organization_id = $1 and id = $2`,
-          [tenantId, input.conversationId, agentConfig.agentId, routed.intentName],
-        );
-      }
-      // A intenção e a confiança que ROTEARAM — do classificador, ou do Jev
-      // quando a tarefa do roteador dele decide (`resolve-turn-agent.ts`). Quem
-      // decidiu mora em `llm_calls` do mesmo `job_id` (purpose `intent_router`,
-      // `origem_da_escolha = 'jev'`); o único leitor desta tabela
-      // (`app/api/v1/ai/evolution`) conta roteamento, não quem o fez.
-      await pool.query(
-        `insert into ai_router_decisions
-           (organization_id, router_id, conversation_id, intent_name, confidence, agent_id, outcome, job_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [
-          tenantId,
-          routed.routerId,
-          input.conversationId,
-          routed.intentName,
-          routed.confidence,
-          agentConfig?.agentId ?? null,
-          routed.outcome,
-          liveJob().id,
-        ],
-      );
-    } catch (err) {
-      runLog.warn('decisão do router não gravada', {
-        error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
-      });
-    }
-  }
-  // #2155 — A INTENÇÃO TAMBÉM DIZ PARA ONDE O CARD VAI. O roteador escolhia o
-  // agente e o card ficava no funil de entrada: o agente do produto não escrevia
-  // nele, a conversa morria no time errado. Aplicado DEPOIS da decisão de
-  // roteamento (mesmo agente, mesma intenção) e ANTES do turno do agente, para
-  // que ele já responda com o card no funil certo. Silencioso por design: card
-  // já no destino, destino já ocupado e alvo ambíguo não são erro (ver
-  // `destino-da-intencao.ts`).
-  if (!preview && destinoPipelineId !== null) {
-    try {
-      const destino = await aplicaDestinoDaIntencao({
-        admin: deps.crmCfg.supabase,
-        organizationId: tenantId,
-        contactId: leadId,
-        destinoPipelineId,
-        destinoStageId,
-        // Os funis de produto do roteador: quem tem card num deles e fala de outro
-        // ganha um card a mais, não troca de funil (consórcio ↔ investimentos).
-        funisDeProduto:
-          routed.routerId === null
-            ? []
-            : await funisDeProdutoDoRoteador(deps.crmCfg.supabase, tenantId, routed.routerId),
-        handlerCtx: {
-          organization_id: tenantId,
-          actor: {
-            type: 'ai_agent',
-            id: 'agent-engine',
-            role: 'ai_operator',
-            ...(agentConfig === null ? {} : { agent_id: agentConfig.agentId }),
-          },
-          requestId: liveJob().id,
-        },
-      });
-      runLog.info('destino da intenção aplicado', {
-        status: destino.status,
-        pipeline_id: destinoPipelineId,
-        intent: routed.intentName,
-        ...(destino.error === undefined ? {} : { error: destino.error }),
-        ...(destino.origemId === undefined ? {} : { origem: destino.origemId }),
-        ...(destino.cloneId === undefined ? {} : { clone: destino.cloneId }),
-      });
-    } catch (err) {
-      // Nunca derruba a resposta ao lead por causa do destino do card.
-      //
-      // A recusa da RÉGUA (#2297, caminho 1) não chega mais aqui: ela é
-      // capturada dentro de `aplicaDestinoDaIntencao`, que conhece o negócio de
-      // origem e abre o aviso na Central antes de devolver `recusado` — este
-      // `catch` é a rede para o que não é recusa prevista (falha de banco na
-      // leitura, por exemplo), e segue sem aviso porque não há negócio a apontar.
-      runLog.warn('destino da intenção não aplicado', {
-        error: (err instanceof Error ? err.message : String(err)).slice(0, 160),
-        pipeline_id: destinoPipelineId,
-      });
-    }
-  }
+  // F3 — roteamento e configuração do agente (ADR-0006, S4): roteador, assistido, pausado,
+  // horário de atendimento, condução, decisão do roteador e destino do card.
+  const roteamento = await resolverRoteamentoDoTurno({
+    deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob,
+  });
+  if (!roteamento.seguir) return;
+  const { routed, agentConfig, agentOperation } = roteamento.valor;
   // F4 — contexto e system prompt (ADR-0006, S2): leituras da abertura e montagem do `system`.
   const {
     maxSteps, argsAux, turnContextKnobs, skills, currentInboundText, previous, leadState, system, openingContext,
@@ -5120,7 +4857,7 @@ export async function runAgentPreview(
  * cadência (teto de turnos, agente indisponível). Mesmo emissor e mesmo canal
  * da escolta do orçamento; chamado ANTES da passagem.
  */
-function avisoAoLeadDoTurno(
+export function avisoAoLeadDoTurno(
   deps: InboundTurnDeps,
   pool: pg.Pool,
   job: JobRow,

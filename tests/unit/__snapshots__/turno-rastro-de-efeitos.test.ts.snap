@@ -260,6 +260,48 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: uma mensagem 1`] 
 ]
 `;
 
+exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: condução encerrada no meio-tempo 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "db:update cadencia_conducoes",
+  "log:info condução da cadência encerrada no meio-tempo — turno não executado",
+  "fim:ok",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: fora do horário avisa e adia 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "log:info aviso de fora do horário não enviado",
+  "job:update job_queue",
+  "log:info turno adiado — fora do horário de funcionamento configurado na versão publicada",
+  "fim:lançou fora do horário de funcionamento — job reagendado para a abertura da janela",
+]
+`;
+
+exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: roteador decide e grava a decisão (destino do card cai no catch) 1`] = `
+[
+  "db:update agent_inbox_items status='resolved'",
+  "roteador:resolveConversationTurn",
+  "db:update conversations",
+  "db:insert ai_router_decisions",
+  "log:warn destino da intenção não aplicado",
+  "llm:agent_turn",
+  "db:begin",
+  "send:text "Oi! Posso te ajudar com o orçamento."",
+  "db:insert pacing_ledger",
+  "db:insert outbound_copies",
+  "db:commit",
+  "db:insert before_send_traces",
+  "tool:send_message ok",
+  "llm:checkpoint",
+  "db:insert lead_checkpoints",
+  "log:info turno do operador não enfileirado",
+  "log:info turno do agente concluído",
+  "fim:ok",
+]
+`;
+
 exports[`rastro de efeitos do turno (ADR-0006, S0) > turno mudo: modelo não chama ferramenta 1`] = `
 [
   "db:update agent_inbox_items status='resolved'",

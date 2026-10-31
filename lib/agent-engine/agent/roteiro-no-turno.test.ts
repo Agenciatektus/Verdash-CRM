@@ -469,7 +469,8 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
   it('o roteiro entra DEPOIS da pausa, do pedido de humano e do opt-out ambíguo', () => {
     expect(chamada).toBeGreaterThan(0);
     for (const trava of [
-      'agentConfig.pausedAt',
+      // A pausa mora em turno/roteamento.ts (ADR-0006, S4); idem: ordena-se a chamada.
+      'await resolverRoteamentoDoTurno(',
       'detectHumanHandoffRequest(texto)',
       'detectAmbiguousOptOut(texto)',
       // O veto de handoff mora em turno/portoes-de-entrada.ts (ADR-0006, S1);
@@ -491,6 +492,14 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
     expect(veto).toBeGreaterThan(-1);
     // O veto vem antes da saída que libera o turno.
     expect(veto).toBeLessThan(portoes.indexOf('return { seguir: true'));
+  });
+
+  it('o roteamento ainda carrega a saída do agente pausado', () => {
+    const roteamento = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/roteamento.ts'), 'utf8');
+    const pausa = roteamento.indexOf('agentConfig.pausedAt');
+    expect(pausa).toBeGreaterThan(-1);
+    // A pausa vem antes da saída que libera o turno.
+    expect(pausa).toBeLessThan(roteamento.indexOf('return { seguir: true'));
   });
 
   it('e nunca para contato bloqueado, nem fora do turno de inbound', () => {
