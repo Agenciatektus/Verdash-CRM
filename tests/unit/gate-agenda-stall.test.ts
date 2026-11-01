@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -10,6 +8,8 @@ import {
 } from "@/lib/agent-engine/guardrails/before-send";
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * O GATE de "vou verificar/confirmar agenda sem checar" — a cura DETERMINÍSTICA para o
@@ -299,18 +299,16 @@ describe("agendaStallGate — veta a promessa vazia, nunca a checagem de verdade
  * FIAÇÃO — mesmo padrão de `gate-vazamento-interno.test.ts`: prova que o campo chega da
  * fonte real (`send_message` em `inbound-turn.ts`), não só que o gate decide certo isolado.
  */
-const FONTE_INBOUND = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE_INBOUND = fonteDoTurnoMontado();
 
 describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal, não a decisão de chamar", () => {
   it("send_message passa `agenda` calculado a partir de toolIds e da flag de execução", () => {
-    const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: tool({", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    const corpo = FONTE_INBOUND.slice(i, j);
+    const corpo = ENVIO_S7.slice(i, j);
     // Desde a #831 o `send_message` não compara com uma ferramenta só: ele pergunta
     // às duas funções de fiação, e `temFerramentaDeMarcacao` cobre também a que
     // consulta e marca numa chamada só (`crm_find_and_book_appointment`).
@@ -323,7 +321,7 @@ describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal
     expect(corpo).toMatch(
       /ferramentas:\s*agentConfig === null \? \[\] : ferramentasDeAgendaDoAgente\(agentConfig\.toolIds\)/,
     );
-    expect(corpo).toMatch(/toolCalledThisTurn:\s*agendaToolCalledThisTurn/);
+    expect(corpo).toMatch(/toolCalledThisTurn:\s*estado\.agendaToolCalledThisTurn/);
   });
 
   it("as três tools de agenda são marcadas na montagem — não só crm_book_appointment", () => {
@@ -332,7 +330,7 @@ describe("fiação do gate — a EXECUÇÃO da ferramenta de agenda arma o sinal
     expect(FONTE_INBOUND).toContain("'crm_book_appointment'");
     expect(FONTE_INBOUND).toContain("'crm_reschedule_appointment'");
     expect(FONTE_INBOUND).toContain("'crm_find_and_book_appointment'");
-    expect(FONTE_INBOUND).toMatch(/agendaToolCalledThisTurn = true/);
+    expect(FONTE_INBOUND).toMatch(/estado\.agendaToolCalledThisTurn = true/);
   });
 });
 

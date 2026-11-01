@@ -15,10 +15,9 @@
  * - a correção nomeia os campos que não existem e lista os certos, tirados do schema;
  * - o `.strict()` da declaração continua valendo — a correção não apaga campo.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { describe, expect, it, vi } from "vitest";
+
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 import {
   CHECKPOINT_INSTRUCTION,
@@ -131,7 +130,8 @@ describe("o fechamento do turno corrige antes de repetir o turno", () => {
   });
 
   it("o turno fecha por aqui — e com a instrução de sempre como primeira pergunta", () => {
-    const fonte = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+    // ADR-0006, S9: o fechamento saiu para `turno/fechamento-do-turno.ts`; a remontagem o devolve ao lugar.
+    const fonte = fonteDoTurnoMontado();
     expect(fonte).toContain("await fecharOTurno({");
     expect(fonte).toMatch(/\{ role: 'user', content: CHECKPOINT_INSTRUCTION \},\s*\.\.\.correcao,/);
     expect(CHECKPOINT_INSTRUCTION).toContain("Sem texto fora do JSON.");

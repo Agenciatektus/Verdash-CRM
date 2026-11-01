@@ -22,6 +22,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const MARCA_DA_ENTRADA = "entrada_pela_troca_de_funil";
 
@@ -54,7 +55,7 @@ export async function emiteEntradaNaEtapa(
   const regra = a.actor.type === "webhook_source" ? a.actor.id : null;
   // `service_origin` fica de fora: `emit_event` carimba a origem de
   // `lead.stage_changed` no servidor (0279), como no arrasto.
-  const { error } = await db.rpc("emit_event" as never, {
+  const { error } = await rpc(db, "emit_event", {
     p_event_type: "lead.stage_changed",
     p_entity_kind: "crm_lead",
     p_entity_id: a.leadId,
@@ -74,7 +75,7 @@ export async function emiteEntradaNaEtapa(
       ...(regra ? { troca_por_regra: regra } : { actor_user_id: a.actor.id }),
     },
     p_organization_id: a.organizationId,
-  } as never);
+  });
   if (error) {
     logger.error("[entrada-pela-troca] emit_event lead.stage_changed falhou", {
       lead_id: a.leadId,

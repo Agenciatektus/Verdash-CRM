@@ -51,6 +51,7 @@ import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual
 import type { InboundWebhookInput, InboundWebhookOutcome } from "../inbound";
 import { logger } from "@/lib/logger";
 import { ehEcoDeEnvioNosso } from "../eco-de-envio-nosso";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * Como a pessoa se chama: o nome do perfil, senão o `@`. `null` só quando o
@@ -282,14 +283,14 @@ async function pedirPersistenciaDaMidia(
   conversationId: string,
   messageId: string,
 ): Promise<void> {
-  const { error } = await admin.rpc("emit_event" as never, {
+  const { error } = await rpc(admin, "emit_event", {
     p_event_type: "media.persist_requested",
     p_entity_kind: "message",
     p_entity_id: messageId,
     p_payload: { message_id: messageId, conversation_id: conversationId },
     p_metadata: { source: "instagram_webhook" },
     p_organization_id: organizationId,
-  } as never);
+  });
   if (error) {
     logger.warn("[instagram] emit media.persist_requested falhou", { messageId, detail: error.message });
   }

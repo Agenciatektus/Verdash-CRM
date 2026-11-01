@@ -29,14 +29,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { criarTravaDeDuplicata } from "@/lib/agent-engine/agent/near-dup";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
 const corpoDoSend = (() => {
-  const i = FONTE.indexOf("send_message: tool({");
-  const j = FONTE.indexOf("update_lead_state: tool({", i);
+  const i = ENVIO_S7.indexOf("send_message: tool({");
+  const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
   expect(i).toBeGreaterThan(-1);
   expect(j).toBeGreaterThan(i);
-  return FONTE.slice(i, j);
+  return ENVIO_S7.slice(i, j);
 })();
 
 describe("send_message nunca reenvia repetição do mesmo turno", () => {
@@ -45,7 +46,7 @@ describe("send_message nunca reenvia repetição do mesmo turno", () => {
     // resposta_obsoleta. Não há `outcomes.push`, ledger nem chamada de canal
     // dentro do ramo: nada é marcado como entregue.
     expect(corpoDoSend).toMatch(
-      /const corpoRepetido = dupTrava\.checar\(body\);\s*if \(corpoRepetido !== null\) \{\s*runLog\.info\('duplicate_suppressed/,
+      /const corpoRepetido = estado\.dupTrava\.checar\(body\);\s*if \(corpoRepetido !== null\) \{\s*runLog\.info\('duplicate_suppressed/,
     );
     expect(corpoDoSend).toContain("code: 'duplicate_suppressed'");
     expect(corpoDoSend).toMatch(/code: 'duplicate_suppressed',\s*message:/);
@@ -71,8 +72,8 @@ describe("a memória de duplicata só cresce com envio REAL e é semeada por his
   it("candidato aceito (sent/already_sent/queued) PROMOVE de em-voo para a memória", () => {
     // O `promover` está DEPOIS de `outcomes.push(outcome)` e sob os kinds que
     // saíram — transição exatamente uma vez (em-voo → aceitos), nunca dupla.
-    expect(FONTE).toMatch(
-      /if \(outcome\.kind === 'sent' \|\| outcome\.kind === 'already_sent' \|\| outcome\.kind === 'queued'\) \{\s*dupTrava\.promover\(body\);/,
+    expect(ENVIO_S7).toMatch(
+      /if \(outcome\.kind === 'sent' \|\| outcome\.kind === 'already_sent' \|\| outcome\.kind === 'queued'\) \{\s*estado\.dupTrava\.promover\(body\);/,
     );
   });
 
@@ -80,7 +81,7 @@ describe("a memória de duplicata só cresce com envio REAL e é semeada por his
     // Janela "desde a última inbound": vazia num turno fresco (não suprime
     // resposta legítima), cheia num follow-up que re-responde conversa calada.
     expect(FONTE).toContain("corposEnviadosDesdeUltimaInbound(");
-    expect(FONTE).toMatch(/dupTrava\.semear\(jaDito\)/);
+    expect(FONTE).toMatch(/estado\.dupTrava\.semear\(jaDito\)/);
   });
 });
 
@@ -103,8 +104,8 @@ describe("preview safety: o seeding não chama liveJob() em preview", () => {
 // ─── #2996 item 6: reserva em voo / promoção / liberação ────────────────────
 describe("reserva em voo fecha a corrida de tool calls paralelas", () => {
   it("`checar` → `reservar` síncronos no caminho de passagem e antes da cadeia", () => {
-    const gi = corpoDoSend.indexOf("dupTrava.checar(body)");
-    const ri = corpoDoSend.indexOf("dupTrava.reservar(body)");
+    const gi = corpoDoSend.indexOf("estado.dupTrava.checar(body)");
+    const ri = corpoDoSend.indexOf("estado.dupTrava.reservar(body)");
     expect(gi).toBeGreaterThan(-1);
     expect(ri).toBeGreaterThan(gi);
     // O ramo de SUPRESSÃO termina em `return` e pode conter await (o emit do
@@ -128,31 +129,31 @@ describe("reserva em voo fecha a corrida de tool calls paralelas", () => {
     // do return (estão FORA do try/catch da cadeia).
     const obs = corpoDoSend.indexOf("turnoDescartado = true;");
     expect(obs).toBeGreaterThan(-1);
-    expect(corpoDoSend.slice(obs, obs + 220)).toContain("dupTrava.liberar(body)");
+    expect(corpoDoSend.slice(obs, obs + 220)).toContain("estado.dupTrava.liberar(body)");
     const prep = corpoDoSend.indexOf("if (!preparadas.ok) {");
     expect(prep).toBeGreaterThan(-1);
-    expect(corpoDoSend.slice(prep, prep + 240)).toContain("dupTrava.liberar(body);");
+    expect(corpoDoSend.slice(prep, prep + 240)).toContain("estado.dupTrava.liberar(body);");
     // Vetos, outcomes não-aceitos, exception e timeout saem pelo finally da
     // cadeia: nenhuma reserva sobrevive à tentativa.
     expect(corpoDoSend).toMatch(
-      /code: 'internal_error'[\s\S]*\} finally \{[\s\S]*dupTrava\.liberar\(body\);/,
+      /code: 'internal_error'[\s\S]*\} finally \{[\s\S]*estado\.dupTrava\.liberar\(body\);/,
     );
   });
 
   it("a candidata checada nunca se auto-suprime (reservar DEPOIS do checar)", () => {
-    const gi = corpoDoSend.indexOf("dupTrava.checar(body)");
-    const ri = corpoDoSend.indexOf("dupTrava.reservar(body)");
+    const gi = corpoDoSend.indexOf("estado.dupTrava.checar(body)");
+    const ri = corpoDoSend.indexOf("estado.dupTrava.reservar(body)");
     expect(ri).toBeGreaterThan(gi);
     // O corpo só entra em `emVoo` depois da própria checagem — `checar` consulta
     // aceitos ∪ emVoo, então a ordem é a garantia contra auto-supressão.
-    expect(corpoDoSend.slice(gi, ri)).not.toContain("dupTrava.reservar");
+    expect(corpoDoSend.slice(gi, ri)).not.toContain("estado.dupTrava.reservar");
   });
 });
 
 // ─── #2996 item 6 (revisão): exceção pré-cadeia não deixa reserva órfã ──────
 describe("janela pré-cadeia sob try/catch: libera a reserva e re-lança o erro intacto", () => {
   const janela = (() => {
-    const ri = corpoDoSend.indexOf("dupTrava.reservar(body)");
+    const ri = corpoDoSend.indexOf("estado.dupTrava.reservar(body)");
     const fim = corpoDoSend.indexOf("// Cadeia de guardrails", ri);
     expect(ri).toBeGreaterThan(-1);
     expect(fim).toBeGreaterThan(ri);
@@ -169,7 +170,7 @@ describe("janela pré-cadeia sob try/catch: libera a reserva e re-lança o erro 
     // Ordem obrigatória dentro da janela: try → reservar → resposta obsoleta →
     // preparo de fotos → catch. Uma exceção em QUALQUER das duas consultas passa
     // pelo catch, que é quem tem que soltar a reserva.
-    const iReserva = fonte.indexOf("dupTrava.reservar(body);");
+    const iReserva = fonte.indexOf("estado.dupTrava.reservar(body);");
     const iObs = fonte.indexOf("await respostaFicouObsoleta(");
     const iFotos = fonte.indexOf("await prepararFotosDoProduto(");
     const iCatch = fonte.indexOf("} catch (err) {");
@@ -180,7 +181,7 @@ describe("janela pré-cadeia sob try/catch: libera a reserva e re-lança o erro 
     // O catch da janela SOLTA a reserva e RE-LANÇA o erro original — sem
     // `return` com code novo e sem traduzir para `internal_error` (a tradução
     // continua sendo exclusivamente da cadeia, que vem depois).
-    expect(fonte).toMatch(/\} catch \(err\) \{[\s\S]*?dupTrava\.liberar\(body\);\s*throw err;/);
+    expect(fonte).toMatch(/\} catch \(err\) \{[\s\S]*?estado\.dupTrava\.liberar\(body\);\s*throw err;/);
     expect(fonte).not.toContain("internal_error");
     // Sem este catch, a janela não teria fecho nenhum: o `finally` que libera
     // pertence à cadeia e roda DEPOIS — uma exceção aqui escaparia por cima dele.
@@ -190,9 +191,9 @@ describe("janela pré-cadeia sob try/catch: libera a reserva e re-lança o erro 
   it("a tradução de falha e o finally que libera seguem intocados DENTRO da cadeia", () => {
     const cadeia = corpoDoSend.slice(janela.fim);
     expect(cadeia).toMatch(
-      /code: 'internal_error'[\s\S]*\} finally \{[\s\S]*dupTrava\.liberar\(body\);/,
+      /code: 'internal_error'[\s\S]*\} finally \{[\s\S]*estado\.dupTrava\.liberar\(body\);/,
     );
-    expect(cadeia).toContain("dupTrava.promover(body);");
+    expect(cadeia).toContain("estado.dupTrava.promover(body);");
   });
 
   it("liberada a reserva órfã, a tentativa equivalente NÃO é suprimida (trava real)", () => {
@@ -215,7 +216,7 @@ describe("janela pré-cadeia sob try/catch: libera a reserva e re-lança o erro 
 // ─── #2996 item 7: rastro visível para o operador ───────────────────────────
 describe("supressão vira atividade na timeline do negócio (sem PII)", () => {
   it("emite `send_vetoed` pelo vocabulário existente, dentro do ramo de supressão", () => {
-    const gi = corpoDoSend.indexOf("dupTrava.checar(body)");
+    const gi = corpoDoSend.indexOf("estado.dupTrava.checar(body)");
     const emit = corpoDoSend.indexOf("await emitAgentActivityForContact({", gi);
     // Fim do ramo: o próximo statement depois do `return` de ensino. O emit
     // precisa estar ENTRE o checar e esse fim — ou seja, dentro do ramo que

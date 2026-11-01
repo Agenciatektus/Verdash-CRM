@@ -10,6 +10,7 @@ import {
   settingsDoFunil,
   validaCamposExigidos,
 } from "@/lib/leads/campos-exigidos";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * Move o card do lead para a etapa do funil que o tenant marcou como destino
@@ -239,7 +240,7 @@ export async function moverLeadParaEtapaDeHandoff(
   // Mesmo evento que `agent-stage-sync.ts` emite ao mover pelo agente — para
   // que regras de automação e follow-up que escutam `lead.stage_changed`
   // reajam igual, tenha o card se movido pela mão, pelo agente ou por handoff.
-  const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+  const { error: erroEvento } = await rpc(admin, "emit_event", {
     p_event_type: "lead.stage_changed",
     p_entity_kind: "crm_lead",
     p_entity_id: leadRow.id,
@@ -252,7 +253,7 @@ export async function moverLeadParaEtapaDeHandoff(
     },
     p_metadata: { actor_kind: "system", source: "handoff-stage-move", motivo_do_handoff: input.reason },
     p_organization_id: input.organizationId,
-  } as never);
+  });
   if (erroEvento) {
     logger.error("[handoff-stage-move] emit_event lead.stage_changed falhou", {
       lead_id: leadRow.id,

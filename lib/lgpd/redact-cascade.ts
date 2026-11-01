@@ -20,6 +20,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 export interface CascadeResult {
   alreadyAnonymized: boolean;
@@ -232,17 +233,17 @@ export async function cascadeRedactContact(args: CascadeArgs): Promise<CascadeRe
     }
   }
 
-  const { data, error } = await admin.rpc("fn_lgpd_cascade_redact_contact" as never, {
+  const { data, error } = await rpc(admin, "fn_lgpd_cascade_redact_contact", {
     p_organization_id: args.organizationId,
     p_contact_id: args.contactId,
     p_request_id: args.requestId,
-  } as never);
+  });
 
   if (error) {
     throw new Error(`[lgpd-redact-cascade] rpc failed: ${error.message}`);
   }
 
-  const result = (data ?? {}) as RpcResult;
+  const result = (data ?? {}) as unknown as RpcResult;
   return {
     alreadyAnonymized: result.already_anonymized === true,
     counts: result.counts ?? {},

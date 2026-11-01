@@ -20,6 +20,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export async function POST(
   }
 
   // Emit knowledge_source.updated (fire-and-forget).
-  const { error: emitErr } = await admin.rpc("emit_event" as never, {
+  const { error: emitErr } = await rpc(admin, "emit_event", {
     p_event_type: "knowledge_source.updated",
     p_entity_kind: "ai_knowledge_source",
     p_entity_id: id,
@@ -109,7 +110,7 @@ export async function POST(
       triggered_by: "manual_reindex",
     },
     p_organization_id: activeOrg.orgId,
-  } as never);
+  });
 
   if (emitErr) {
     console.warn("[ai-knowledge-reindex] emit_event failed (non-blocking):", emitErr.message);

@@ -14,14 +14,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
 const corpoDoSend = (() => {
-  const i = FONTE.indexOf("send_message: tool({");
-  const j = FONTE.indexOf("update_lead_state: tool({", i);
+  const i = ENVIO_S7.indexOf("send_message: tool({");
+  const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
   expect(i).toBeGreaterThan(-1);
   expect(j).toBeGreaterThan(i);
-  return FONTE.slice(i, j);
+  return ENVIO_S7.slice(i, j);
 })();
 
 describe("send_message nunca manda bolha em branco", () => {

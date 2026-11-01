@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FlowGraph } from "@/lib/followup/graph-schema";
 import type { PublishFlowResult } from "@/lib/followup/publish";
 import type { ConducaoDaCadencia } from "./conducao/settings";
+import { rpc } from "@/lib/supabase/rpc";
 
 export async function publicarVersaoDaCadencia(
   admin: SupabaseClient,
@@ -25,13 +26,13 @@ export async function publicarVersaoDaCadencia(
     conducao: ConducaoDaCadencia;
   },
 ): Promise<PublishFlowResult> {
-  const { data, error } = await admin.rpc("fn_cadencia_publicar_versao", {
+  const { data, error } = await rpc(admin, "fn_cadencia_publicar_versao", {
     p_org: params.orgId,
     p_pointer: params.pointerId,
     p_graph: params.graph,
     p_created_by: params.createdBy,
     p_conducao: params.conducao,
-  } as never);
+  });
 
   if (error) {
     const raw = (error.message ?? "").trim();

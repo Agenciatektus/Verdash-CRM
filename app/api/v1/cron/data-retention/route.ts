@@ -95,6 +95,7 @@ import {
   type ResultadoDaVarredura,
 } from "@/lib/lgpd/cascata";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -860,9 +861,9 @@ async function handle(req: NextRequest): Promise<Response> {
       // próprio em vez de mais uma entrada na união do `rpc` — ver a JSDoc de
       // `PodaDb.enfileirarMidia`.
       async enfileirarMidia(lote) {
-        const { data, error } = await admin.rpc("fn_enfileirar_midia_vencida" as never, {
+        const { data, error } = await rpc(admin, "fn_enfileirar_midia_vencida", {
           p_limite: lote,
-        } as never);
+        });
         return { data: (data ?? null) as RetornoDaFilaDeMidia | null, error };
       },
     };

@@ -35,9 +35,12 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
+
 const ler = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const seam = ler("lib/agent-engine/edge/llm/run-model-call.ts");
-const turno = ler("lib/agent-engine/agent/inbound-turn.ts");
+// ADR-0006, S9: F10 a F12 saíram para `turno/`; a remontagem os devolve ao lugar.
+const turno = fonteDoTurnoMontado();
 
 describe("seam: finishReason chega nos dois ramos", () => {
   it("o tipo do seam EXIGE finishReason (tirar vira erro de tipo na hora)", () => {
@@ -66,20 +69,20 @@ describe("turno: detecção, retry limitado e falha terminal visível", () => {
     expect(i).toBeGreaterThan(-1);
     const bloco = turno.slice(i - 700, i);
     expect(bloco).toContain("saidaTruncada");
-    expect(bloco).toContain("outcomes.length === 0");
-    expect(bloco).toContain("seq === 0");
-    expect(bloco).toContain("tentativasDeEnvio === 0");
+    expect(bloco).toContain("estado.outcomes.length === 0");
+    expect(bloco).toContain("estado.seq === 0");
+    expect(bloco).toContain("estado.tentativasDeEnvio === 0");
   });
 
   it("isenta toda razão LEGÍTIMA de silêncio — só o trucamento sobra", () => {
     const i = turno.indexOf("output_truncated_recovered_failed");
     const bloco = turno.slice(i - 900, i);
-    expect(bloco).toContain("!turnoDescartado");
-    expect(bloco).toContain("!passouParaAEquipe");
+    expect(bloco).toContain("!estado.turnoDescartado");
+    expect(bloco).toContain("!estado.passouParaAEquipe");
     expect(bloco).toContain("!capDeEnvioAtingido()");
     // `tentativasDeEnvio === 0` cobre o caso do veto: o modelo CHAMOU e levou
     // veto → o veto é a razão (e já ensinou), não o trucamento.
-    expect(bloco).toContain("tentativasDeEnvio === 0");
+    expect(bloco).toContain("estado.tentativasDeEnvio === 0");
     // Preview nunca abre caso humano real.
     expect(bloco).toContain("!preview");
   });

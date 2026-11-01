@@ -193,7 +193,8 @@ describe("as contagens saem de UMA chamada, com todos os filtros", () => {
   const sqlDaFuncao = readFileSync(FUNCAO, "utf8");
 
   it("uma chamada à função, e nenhuma contagem montada direto em conversations", () => {
-    expect(fonte.match(/\.rpc\(\s*"fn_contagens_da_caixa"/g) ?? []).toHaveLength(1);
+    // `rpc(cliente, "fn_contagens_da_caixa", …)` desde a #465 (lib/supabase/rpc.ts).
+    expect(fonte.match(/\brpc\(\s*\w+,\s*"fn_contagens_da_caixa"/g) ?? []).toHaveLength(1);
     expect(
       fonte,
       "contagem montada direto no supabase: ela não herda nem a organização nem os filtros",
@@ -203,8 +204,8 @@ describe("as contagens saem de UMA chamada, com todos os filtros", () => {
   it("a rota manda a organização, os auxiliares, o não-lidas, a fila e os terminais", () => {
     for (const parametro of [
       /p_organizacao:\s*org/,
-      /p_canal:\s*auxiliares\.get\("channel_session_id"\)/,
-      /p_entrada:\s*auxiliares\.get\("instagram_entrada"\)/,
+      /p_canal:\s*textoOuNulo\(auxiliares\.get\("channel_session_id"\)\)/,
+      /p_entrada:\s*textoOuNulo\(auxiliares\.get\("instagram_entrada"\)\)/,
       /p_so_nao_lidas:\s*soNaoLidas/,
       /p_comandos_da_fila:\s*comandosDaFila\(/,
       /p_terminais:\s*\[\.\.\.CONVERSATION_TERMINAL_STATUSES\]/,

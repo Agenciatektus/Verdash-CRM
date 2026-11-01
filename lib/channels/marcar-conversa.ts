@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 /**
  * O CARIMBO DA CONVERSA, E O QUE FAZER QUANDO ELE FALHA — um lugar só.
@@ -57,15 +58,15 @@ export async function marcarConversaComMensagem(
     canal: string;
   },
 ): Promise<void> {
-  const { error } = await admin.rpc("fn_mark_conversation_message" as never, {
+  const { error } = await rpc(admin, "fn_mark_conversation_message", {
     p_conv: args.conversationId,
     p_direction: args.direction,
     p_preview: args.preview,
     p_at: args.at,
-  } as never);
+  });
   if (!error) return;
 
-  const { error: erroAviso } = await admin.rpc("emit_event" as never, {
+  const { error: erroAviso } = await rpc(admin, "emit_event", {
     p_event_type: "whatsapp.conversation_mark_failed",
     p_entity_kind: "conversation",
     p_entity_id: args.conversationId,
@@ -75,7 +76,7 @@ export async function marcarConversaComMensagem(
     p_payload: { direction: args.direction, canal: args.canal, erro: error.message },
     p_metadata: { severity: "warn" },
     p_organization_id: args.organizationId,
-  } as never);
+  });
 
   if (erroAviso) {
     // Segunda linha de defesa: o próprio canal de aviso caiu. Aqui o log do

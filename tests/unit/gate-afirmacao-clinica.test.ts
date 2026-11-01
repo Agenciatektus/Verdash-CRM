@@ -15,6 +15,8 @@ import type { Logger } from "@/lib/agent-engine/obs/logger";
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
 
+import { ENVIO_S7, TEMPLATE_S7 } from "./_fonte-do-send-message";
+
 /**
  * O GATE de afirmação clínica (`clinical_claim`). O detector tem os próprios casos em
  * `lib/agent-engine/guardrails/afirmacao-clinica.test.ts`; aqui se prova o resto do
@@ -158,17 +160,20 @@ const FONTE_PREVIEW = fs.readFileSync(
   "utf8",
 );
 
+// `send_message` e `send_template` saíram do turno na S7 do ADR-0006: lê-se a remontagem deles.
+const FONTE_FERRAMENTAS = `${ENVIO_S7}\n${TEMPLATE_S7}`;
+
 function corpoDoExecute(ancora: string, fim: string): string {
-  const i = FONTE_INBOUND.indexOf(ancora);
+  const i = FONTE_FERRAMENTAS.indexOf(ancora);
   expect(i, `âncora \`${ancora}\` sumiu do turno`).toBeGreaterThan(-1);
-  const j = FONTE_INBOUND.indexOf(fim, i);
+  const j = FONTE_FERRAMENTAS.indexOf(fim, i);
   expect(j, `âncora de fim \`${fim}\` sumiu`).toBeGreaterThan(i);
-  return FONTE_INBOUND.slice(i, j);
+  return FONTE_FERRAMENTAS.slice(i, j);
 }
 
 describe("fiação do gate — a escolha da organização chega ao send_message", () => {
   it("send_message arma pela camada da organização, com padrão desligado", () => {
-    expect(corpoDoExecute("send_message: tool({", "update_lead_state: tool({")).toMatch(
+    expect(corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(")).toMatch(
       /enforceClinicalClaim:\s*camadaLigada\(camadas\.afirmacao_clinica,\s*false\)/,
     );
   });
@@ -178,7 +183,7 @@ describe("fiação do gate — a escolha da organização chega ao send_message"
   });
 
   it("send_template NÃO arma — o texto é do humano e já aprovado pela Meta", () => {
-    expect(corpoDoExecute("send_template: tool({", "search_knowledge: tool({")).not.toMatch(
+    expect(corpoDoExecute("send_template: tool({", "search_knowledge: criarSearchKnowledge(")).not.toMatch(
       /enforceClinicalClaim/,
     );
   });
@@ -186,13 +191,14 @@ describe("fiação do gate — a escolha da organização chega ao send_message"
   it("o fail-safe abre caso e NUNCA libera a frase desarmando o gate", () => {
     // Ao contrário do vocabulário interno, não existe "diagnóstico, mas melhor que
     // silêncio": a insistência chama a equipe, não solta a mensagem.
-    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: tool({");
+    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(");
     expect(corpo).toMatch(/chain\.code === 'clinical_claim'/);
-    expect(corpo).toMatch(/clinicalClaimVetoCount \+= 1/);
-    expect(corpo).toMatch(/clinicalClaimVetoCount >= MAX_VETOS_DE_AFIRMACAO_CLINICA/);
+    expect(corpo).toMatch(/estado\.vetos\.clinicalClaim \+= 1/);
+    expect(corpo).toMatch(/estado\.vetos\.clinicalClaim >= MAX_VETOS_DE_AFIRMACAO_CLINICA/);
     const bloco = corpo.slice(corpo.indexOf("chain.code === 'clinical_claim'"));
     expect(bloco.slice(0, bloco.indexOf("internal_vocabulary_leak"))).toMatch(/openCase\(/);
     expect(FONTE_INBOUND).not.toMatch(/enforceClinicalClaim:\s*false/);
+    expect(FONTE_FERRAMENTAS).not.toMatch(/enforceClinicalClaim:\s*false/);
   });
 
   it("o teto do fail-safe deixa ao menos UMA chance de reescrita", () => {

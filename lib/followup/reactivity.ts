@@ -64,6 +64,7 @@ import {
   reagirNaCadencia,
   type CadenciaRespostaDb,
 } from "@/lib/cadencia/resposta";
+import { rpc } from "@/lib/supabase/rpc";
 
 /** Grace pós-resume (spec §4: "grace configurável, default 30min, knob"). */
 export const RESUME_GRACE_MS = 30 * 60_000;
@@ -644,7 +645,7 @@ export function createSupabaseReactivityClient(admin: SupabaseClient): Reactivit
       if (error) throw new Error(error.message);
     },
     async agoraNoBanco() {
-      const { data, error } = await admin.rpc("fn_agora" as never);
+      const { data, error } = await rpc(admin, "fn_agora");
       if (error) throw new Error(`fn_agora: ${error.message}`);
       return data as unknown as string;
     },

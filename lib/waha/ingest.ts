@@ -49,6 +49,7 @@ import {
   ehNumeroInternoDeAviso,
   registrarMensagemIgnorada,
 } from "@/lib/escalacao/numero-interno-de-aviso";
+import { rpc } from "@/lib/supabase/rpc";
 
 export type Admin = ReturnType<typeof createAdminClient>;
 
@@ -202,14 +203,14 @@ async function avisarChatNaoReconhecido(
   chatId: string,
   direction: "inbound" | "outbound",
 ): Promise<void> {
-  const { error } = await admin.rpc("emit_event" as never, {
+  const { error } = await rpc(admin, "emit_event", {
     p_event_type: "whatsapp.chat_id_not_recognized",
     p_entity_kind: "channel_session",
     p_entity_id: sessionId,
     p_payload: { sufixo: sufixoDeChatId(chatId), direction },
     p_metadata: { severity: "warn" },
     p_organization_id: organizationId,
-  } as never);
+  });
   if (error) {
     console.error("[waha.ingest] o aviso de chat não reconhecido também falhou", error.message);
   }
@@ -586,7 +587,7 @@ async function upsertContact(
   // fronteira com uma RPC que não valida nada. Quem mexer aqui não vai ser
   // avisado por teste nenhum — só por este comentário.
   if (!ehEnderecavel(parsed)) return null;
-  const { data, error } = await admin.rpc("fn_upsert_wa_contact" as never, {
+  const { data, error } = await rpc(admin, "fn_upsert_wa_contact", {
     p_org: orgId,
     p_kind: parsed.kind,
     // O telefone vem de dois lugares e é UM parâmetro: do próprio chatId quando
@@ -601,7 +602,7 @@ async function upsertContact(
     p_lid: parsed.kind === "lid" ? parsed.lid : null,
     p_chat_id: chatId,
     p_notify: notifyName,
-  } as never);
+  });
   if (error) {
     lancarFalhaDeIngestao("fn_upsert_wa_contact", error);
   }
@@ -614,11 +615,11 @@ async function upsertConversation(
   contactId: string,
   sessionId: string,
 ): Promise<string | null> {
-  const { data, error } = await admin.rpc("fn_upsert_wa_conversation" as never, {
+  const { data, error } = await rpc(admin, "fn_upsert_wa_conversation", {
     p_org: orgId,
     p_contact: contactId,
     p_session: sessionId,
-  } as never);
+  });
   if (error) {
     lancarFalhaDeIngestao("fn_upsert_wa_conversation", error);
   }
@@ -1025,15 +1026,14 @@ async function handleInbound(
   if (insertedMessage?.id) {
     const inboundMessageId = insertedMessage.id;
     if (mediaUrlOf(p)) {
-      admin
-        .rpc("emit_event" as never, {
+      rpc(admin, "emit_event", {
           p_event_type: "media.persist_requested",
           p_entity_kind: "message",
           p_entity_id: inboundMessageId,
           p_payload: { message_id: inboundMessageId, conversation_id: conversationId },
           p_metadata: { source: "waha_webhook", request_id: requestId },
           p_organization_id: session.organization_id,
-        } as never)
+        })
         .then(({ error }) => {
           if (error) console.error("[waha.ingest] emit media.persist_requested failed", error.message);
         });
@@ -1515,15 +1515,14 @@ async function handleOutboundFromUserPhone(
   });
 
   if (insertedOutbound?.id && mediaUrlOf(p)) {
-    admin
-      .rpc("emit_event" as never, {
+    rpc(admin, "emit_event", {
         p_event_type: "media.persist_requested",
         p_entity_kind: "message",
         p_entity_id: insertedOutbound.id,
         p_payload: { message_id: insertedOutbound.id, conversation_id: conversationId },
         p_metadata: { source: "waha_webhook", request_id: requestId },
         p_organization_id: session.organization_id,
-      } as never)
+      })
       .then(({ error }) => {
         if (error) console.error("[waha.ingest] emit media.persist_requested failed", error.message);
       });

@@ -1,5 +1,5 @@
 import { protecaoAgendaSupabase } from "@/lib/agenda/protecao-followup";
-import { consultarEmLotes } from "@/lib/supabase/lotes";
+import { buscarTodasAsPaginas, consultarEmLotes } from "@/lib/supabase/lotes";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { classifyRisk, resolveStageWindow, type RiskBucket } from "@/lib/leads/risk-radar";
@@ -106,13 +106,26 @@ async function coletaEClassifica(
   organizationId: string,
   now: Date,
 ): Promise<{ estados: EstadoCalculado[]; semRelogio: number }> {
-  const { data: leadRows, error: leadErr } = await admin
-    .from("crm_leads")
-    .select("id, stage_id, contact_id, last_activity_at, created_at")
-    .eq("organization_id", organizationId)
-    .eq("status", "open");
-  if (leadErr) throw new Error(`seed de risco: ${leadErr.message}`);
-  const leads = (leadRows ?? []) as LeadRow[];
+  // Paginado e ordenado: sem isso o PostgREST corta em 1.000 (PGRST_DB_MAX_ROWS)
+  // e, sem ordem, cada passada via um recorte diferente dos leads abertos.
+  const {
+    data: lidos,
+    error: leadErr,
+    truncado,
+  } = await buscarTodasAsPaginas<LeadRow>((de, ate) =>
+    admin
+      .from("crm_leads")
+      .select("id, stage_id, contact_id, last_activity_at, created_at")
+      .eq("organization_id", organizationId)
+      .eq("status", "open")
+      .order("id")
+      .range(de, ate),
+  );
+  if (leadErr) throw new Error(`seed de risco: ${leadErr}`);
+  if (truncado) throw new Error("seed de risco: leads abertos passaram do teto de páginas");
+  // Lead aberto durante a varredura pode vir em duas páginas; repetido derruba o
+  // upsert em lote do seed ("cannot affect row a second time").
+  const leads = [...new Map(lidos.map((l) => [l.id, l])).values()];
 
   const stageIds = [...new Set(leads.map((l) => l.stage_id).filter(Boolean))];
   const janelaPorEstagio = new Map<string, ReturnType<typeof resolveStageWindow>>();

@@ -15,6 +15,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { aceitaTextoColado, canonizarTipoDeFonte } from "@/lib/ai/rag/tipos-de-fonte";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -220,7 +221,7 @@ export async function PATCH(
   }
 
   // Emit knowledge_source.updated (fire-and-forget).
-  const { error: emitErr } = await admin.rpc("emit_event" as never, {
+  const { error: emitErr } = await rpc(admin, "emit_event", {
     p_event_type: "knowledge_source.updated",
     p_entity_kind: "ai_knowledge_source",
     p_entity_id: sourceId,
@@ -230,7 +231,7 @@ export async function PATCH(
       source_type: ksRow.source_type,
     },
     p_organization_id: activeOrg.orgId,
-  } as never);
+  });
 
   if (emitErr) {
     console.warn("[ai-knowledge-sources] emit_event failed (non-blocking):", emitErr.message);

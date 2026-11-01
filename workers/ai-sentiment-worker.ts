@@ -49,6 +49,7 @@ import { logger } from "@/lib/logger";
 import { aiDispatchModeSchema } from "@/lib/schemas/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aConversaAgora, perguntarOsPedidosDoCliente } from "@/workers/ai-sentiment-worker.pedidos";
+import { rpc } from "@/lib/supabase/rpc";
 
 const SENTIMENT_MODEL = DEFAULT_CLASSIFIER_MODEL; // "anthropic/claude-haiku-4-5"
 const CLASSIFY_TIMEOUT_MS = 5_000;
@@ -566,8 +567,9 @@ export async function processSentiment(event: EventRow): Promise<SentimentResult
 
       // ── Emit alert if below threshold ────────────────────────────────────
       if (decisao.score < threshold) {
-        const { error: emitErr } = await admin.rpc(
-          "emit_event" as never,
+        const { error: emitErr } = await rpc(
+          admin,
+          "emit_event",
           {
             p_event_type: "ai.sentiment_alert",
             p_entity_kind: "message",
@@ -591,7 +593,7 @@ export async function processSentiment(event: EventRow): Promise<SentimentResult
               agente_resolvido_por: motivoDoAgente,
             },
             p_organization_id: event.organization_id,
-          } as never,
+          },
         );
 
         if (emitErr) {

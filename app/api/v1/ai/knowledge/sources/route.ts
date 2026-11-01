@@ -12,6 +12,7 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * `organization_id` SEMPRE sai da sessão autenticada — nunca do corpo.
  */
 
+import { rpc } from "@/lib/supabase/rpc";
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
@@ -297,7 +298,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     itemsCount = rows.length;
   }
 
-  const { error: emitErr } = await admin.rpc("emit_event" as never, {
+  const { error: emitErr } = await rpc(admin, "emit_event", {
     p_event_type: "knowledge_source.updated",
     p_entity_kind: "ai_knowledge_source",
     p_entity_id: ksId,
@@ -307,7 +308,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       source_type: tipo,
     },
     p_organization_id: activeOrg.orgId,
-  } as never);
+  });
 
   if (emitErr) {
     console.warn("[ai-knowledge-sources] emit_event falhou (não bloqueia):", emitErr.message);

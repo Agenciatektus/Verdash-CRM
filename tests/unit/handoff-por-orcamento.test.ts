@@ -44,9 +44,9 @@ import type { DesfechoDoAviso } from "@/lib/agent-engine/agent/aviso-de-escalaca
 import { corpoDoBloqueio } from "@/lib/agent-engine/edge/llm/orcamento";
 import { LlmBudgetExceededError } from "@/lib/agent-engine/edge/llm/run-model-call";
 import { montarBriefingDaPassagem } from "@/lib/escalacao/briefing-da-passagem";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 const RAIZ = process.cwd();
-const INBOUND = join(RAIZ, "lib/agent-engine/agent/inbound-turn.ts");
 const WORKER = join(RAIZ, "workers/agent-worker/main.ts");
 const DISPOSICAO = join(RAIZ, "workers/agent-worker/dispor-job-apos-falha.ts");
 const CABECALHO = join(RAIZ, "components/inbox/ConversationHeader.tsx");
@@ -358,7 +358,8 @@ function chamadasDoNucleo(texto: string) {
 }
 
 describe("o call site — AST separa prévia sem job do turno operacional escoltado", () => {
-  const fonteInbound = readFileSync(INBOUND, "utf8");
+  // Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+  const fonteInbound = fonteDoTurnoMontado();
   const ESCOLTADO = "() => executarTurnoDoAgente(deps, job, pool, ctx, input),";
 
   it("há uma única entrada operacional escoltada e uma prévia explicitamente sem job", () => {
@@ -374,7 +375,7 @@ describe("o call site — AST separa prévia sem job do turno operacional escolt
     const ast = ts.createSourceFile("inbound.ts", texto, ts.ScriptTarget.Latest, true);
     const encontrados: Array<{ nome: string; owner: string | undefined }> = [];
     const visit = (node: ts.Node) => {
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["classifyStage", "maybeCompact"].includes(node.expression.text)) {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["classifyStage", "maybeCompact", "prepararContextoDoTurno"].includes(node.expression.text)) {
         let parent: ts.Node | undefined = node.parent;
         while (parent && !ts.isFunctionDeclaration(parent)) parent = parent.parent;
         encontrados.push({ nome: node.expression.text, owner: parent && ts.isFunctionDeclaration(parent) ? parent.name?.text : undefined });
@@ -386,8 +387,16 @@ describe("o call site — AST separa prévia sem job do turno operacional escolt
   }
   it("todos os auxiliares de classificação e compaction ficam dentro do núcleo", () => {
     const calls = auxiliaresForaDoNucleo(fonteInbound);
-    expect(new Set(calls.map(c => c.nome))).toEqual(new Set(["classifyStage", "maybeCompact"]));
+    // A compactação mora em F6 (`turno/preparo-do-contexto.ts`, ADR-0006 S5): o núcleo
+    // chama a fase, e a fase é o único dono de `maybeCompact`.
+    expect(new Set(calls.map(c => c.nome))).toEqual(new Set(["classifyStage", "prepararContextoDoTurno"]));
     expect(calls.filter(c => c.owner !== "executarTurnoDoAgente")).toEqual([]);
+    const preparo = readFileSync(join(RAIZ, "lib/agent-engine/agent/turno/preparo-do-contexto.ts"), "utf8");
+    expect(auxiliaresForaDoNucleo(preparo)).toEqual([{ nome: "maybeCompact", owner: "prepararContextoDoTurno" }]);
+    // S8: o classificador de estágio mora em F9 (`turno/classificadores-auxiliares.ts`) e só a fase o chama;
+    // a remontagem acima o devolve ao núcleo, e esta linha pega um atalho no módulo fora da fase.
+    const classificadores = readFileSync(join(RAIZ, "lib/agent-engine/agent/turno/classificadores-auxiliares.ts"), "utf8");
+    expect(auxiliaresForaDoNucleo(classificadores)).toEqual([{ nome: "classifyStage", owner: "classificarOTurno" }]);
   });
 
   it("controle negativo: retirar a escolta é acusado mesmo mantendo o número de chamadas", () => {

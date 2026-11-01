@@ -26,6 +26,7 @@ import { leituraDeMidiaLigada } from "@/lib/messaging/media/leitura-da-org";
 import { MENSAGEM_REDIGIDA } from "@/lib/lgpd/cascata";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const MEDIA_PERSIST_CONSUMER_KEY = "media_persist_v1";
 // Espelha MAX_ATTEMPTS de lib/event-log/drain.ts (não exportado de lá).
@@ -350,14 +351,14 @@ export async function persistMessageMedia(row: EventRow): Promise<HandlerResult>
   if (!isGroup) {
     // Dispara a derivação textual (Onda 3) — fire-and-forget, mesmo padrão do
     // resto do repo: falha de emit não reverte a persistência já concluída.
-    const { error: emitErr } = await admin.rpc("emit_event" as never, {
+    const { error: emitErr } = await rpc(admin, "emit_event", {
       p_event_type: "media.derive_requested",
       p_entity_kind: "message",
       p_entity_id: msg.id,
       p_payload: { message_id: msg.id },
       p_metadata: { source: "media_persist" },
       p_organization_id: msg.organization_id,
-    } as never);
+    });
     if (emitErr) {
       logger.warn("[media-persist] emit_event failed (non-blocking)", { message_id: msg.id, detail: emitErr.message });
       // O evento NÃO saiu: ninguém vai pedir a derivação, e deixar a coluna

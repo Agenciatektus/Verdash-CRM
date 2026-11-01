@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * FIAÇÃO — mesmo padrão de `gate-agenda-stall.test.ts`/`gate-vazamento-interno.test.ts`:
@@ -14,32 +15,42 @@ const FONTE_INBOUND = fs.readFileSync(
   path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
   "utf8",
 );
+// F13 (reagendamento por cap) mora em `turno/desfecho-do-envio.ts` desde a S3 do ADR-0006.
+const FONTE_EFEITOS = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/desfecho-do-envio.ts"),
+  "utf8",
+);
+// `open_human_case` mora em `turno/ferramentas/equipe.ts` desde a S6 do ADR-0006.
+const FONTE_EQUIPE = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/equipe.ts"),
+  "utf8",
+);
 const FONTE_INGEST = fs.readFileSync(path.join(process.cwd(), "lib/waha/ingest.ts"), "utf8");
 
 describe("fiação — casePromiseGate recebe o nome do gerente do tenant", () => {
   it("send_message passa humanPromiseExtraTargets a partir de agentConfig.handoffKeywords", () => {
-    const i = FONTE_INBOUND.indexOf("send_message: tool({");
-    const j = FONTE_INBOUND.indexOf("update_lead_state: tool({", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    const corpo = FONTE_INBOUND.slice(i, j);
+    const corpo = ENVIO_S7.slice(i, j);
     expect(corpo).toMatch(/humanPromiseExtraTargets:\s*agentConfig\?\.handoffKeywords/);
   });
 });
 
 describe("fiação — caso humano aberto move o lead pra etapa de handoff", () => {
   it("o fail-safe do case_promise (auto-abre-caso) chama moverParaHandoffBestEffort", () => {
-    const i = FONTE_INBOUND.indexOf("chain.status === 'vetoed' && chain.code === 'case_promise_without_case'");
+    const i = ENVIO_S7.indexOf("chain.status === 'vetoed' && chain.code === 'case_promise_without_case'");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 1800);
+    const janela = ENVIO_S7.slice(i, i + 1800);
     expect(janela).toMatch(/openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
   });
 
   it("a tool open_human_case (caso deliberado do modelo) também chama moverParaHandoffBestEffort", () => {
-    const i = FONTE_INBOUND.indexOf("rawTools.open_human_case = tool({");
+    const i = FONTE_EQUIPE.indexOf("export function criarOpenHumanCase(");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 1500);
-    expect(janela).toMatch(/openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
+    const janela = FONTE_EQUIPE.slice(i, i + 1500);
+    expect(janela).toMatch(/estado\.openedCaseThisTurn = true;\s*\n\s*moverParaHandoffBestEffort\(/);
   });
 
   it("moverParaHandoffBestEffort é best-effort — nunca derruba o turno (.catch, não throw)", () => {
@@ -52,9 +63,9 @@ describe("fiação — caso humano aberto move o lead pra etapa de handoff", () 
 
 describe("fiação — lead urgente represado pelo cap de warm-up gera alerta crítico", () => {
   it("o bloco de reagendamento por cap checa detectUrgencySignal e abre agent_inbox_items kind='handoff'", () => {
-    const i = FONTE_INBOUND.indexOf("pacingCapVeto !== null && outcomes.length === 0");
+    const i = FONTE_EFEITOS.indexOf("pacingCapVeto !== null && outcomes.length === 0");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 2000);
+    const janela = FONTE_EFEITOS.slice(i, i + 2000);
     // A fonte do sinal mudou de "a última inbound do histórico" para "todo inbound
     // ainda não respondido", porque o drain COALESCE rajada: um relato de risco
     // que chega na 2ª mensagem entra de carona no job da 1ª e, lido só pela

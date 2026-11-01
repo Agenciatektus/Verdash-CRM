@@ -46,6 +46,14 @@ type Detalhe = {
   } | null;
   evidence_messages: Array<{ id: string; body: string | null; sent_at: string }>;
 };
+/** Pendente/confirmado ou com recuperação viva: o detalhe ainda muda sem esta tela agir. */
+export function detalheAindaMuda(d: Detalhe | undefined): boolean {
+  if (!d) return false;
+  if (d.status === "pending" || d.status === "confirmed") return true;
+  const inscricao = d.recovery?.enrollment_status;
+  return !!inscricao && !["cancelled", "completed", "dead"].includes(inscricao);
+}
+
 const RESULTS: Record<string, string> = {
   started: "Recuperação iniciada",
   other_flow: "Não iniciada: outro acompanhamento já está ativo.",
@@ -73,7 +81,8 @@ export function DetalheDoCompromisso({
   const query = useQuery({
     queryKey: ["agenda", "detalhe", id],
     enabled: !!id,
-    refetchInterval: 5000,
+    // Só enquanto o compromisso ainda pode mudar por fora (confirmação, recuperação em curso).
+    refetchInterval: (q) => (detalheAindaMuda(q.state.data) ? 5000 : false),
     queryFn: async () =>
       (await apiClient.get<{ data: Detalhe }>(`/api/v1/agenda/agendamentos/${id}`)).data,
   });

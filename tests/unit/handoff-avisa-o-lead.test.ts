@@ -73,6 +73,8 @@ const AVISOS = ["avisarLeadDaEscalacao", "avisarLeadLendoOContato", "avisarLeadD
 const FONTES = [
   "lib/agent-engine/agent/inbound-turn.ts",
   "lib/agent-engine/agent/human-handoff.ts",
+  // F5 do turno (pedido de humano e suspeita de opt-out) mora aqui desde a S5 do ADR-0006.
+  "lib/agent-engine/agent/turno/desvios-deterministicos.ts",
   "lib/ai/handoff/orchestrator.ts",
   "app/api/v1/ai/cases/[id]/reply/route.ts",
   // A condução da cadência passa para humano no teto de turnos e com o agente

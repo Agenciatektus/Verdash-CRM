@@ -17,6 +17,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { createClient } from "@/lib/supabase/server";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,9 @@ export async function GET(): Promise<Response> {
   if (!authz.ok) return authz.response;
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_tarefas_atrasadas" as never, {
+  const { data, error } = await rpc(supabase, "fn_tarefas_atrasadas", {
     p_organizacao: authz.org.orgId,
-  } as never);
+  });
   if (error) {
     return fail("internal_error", traduzir("Erro ao contar as tarefas.", authz.user.idioma), 500, { requestId });
   }

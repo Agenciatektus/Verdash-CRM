@@ -15,6 +15,7 @@ import { marcarConversaComMensagem } from "@/lib/channels/marcar-conversa";
 import { logger } from "@/lib/logger";
 import { remetenteDeGrupoSchema, type RemetenteDeGrupo } from "@/lib/messaging/remetente-de-grupo";
 import { previaDaMensagem } from "@/lib/messaging/previa-da-mensagem";
+import { rpc } from "@/lib/supabase/rpc";
 
 export interface EntradaDeGrupo {
   organizationId: string;
@@ -233,14 +234,14 @@ export function criarIngestDeGrupoDb(admin: SupabaseClient): IngestDeGrupoDb {
       const id = (data as { id: string } | null)?.id;
       if (id && row.media_url) {
         const org = row.organization_id as string;
-        const { error: erroEvento } = await admin.rpc("emit_event" as never, {
+        const { error: erroEvento } = await rpc(admin, "emit_event", {
           p_event_type: "media.persist_requested",
           p_entity_kind: "message",
           p_entity_id: id,
           p_payload: { message_id: id, conversation_id: row.conversation_id },
           p_metadata: { source: "grupo_ingest" },
           p_organization_id: org,
-        } as never);
+        });
         if (erroEvento) {
           logger.warn("[grupos.ingest] persistência de mídia não pedida", {
             organization_id: org,

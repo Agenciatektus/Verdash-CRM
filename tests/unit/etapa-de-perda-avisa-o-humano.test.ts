@@ -234,10 +234,11 @@ describe("abrir o aviso na Central", () => {
     // fila, pool). O que se prende aqui é a fiação: a chamada existe no ramo de
     // espelho recusado, e o insert manual — o que perdia o `dedupe` — não voltou.
     const fonte = readFileSync(
-      join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
+      // O corpo da ferramenta mora em `turno/ferramentas/lead.ts` desde a S6 do ADR-0006.
+      join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/lead.ts"),
       "utf8",
     );
-    const i = fonte.indexOf("update_lead_state: tool({");
+    const i = fonte.indexOf("export function criarUpdateLeadState(");
     const j = fonte.indexOf("// F3-11:", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);

@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { sendInBubbles } from "@/lib/agent-engine/agent/split-message";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * A PERGUNTA QUE DECIDE ESTE RECURSO: o atraso humano SOMA ao anti-ban, ou SUBSTITUI?
@@ -116,8 +118,16 @@ describe("o atraso humano NÃO substitui o throttle anti-ban entre bolhas", () =
  * Desde a #654 a pausa é paga em `esperaForaDoLock` — fora da posse do lock do
  * número — e a guarda do flag migrou junto para lá.
  */
-const FONTE_INBOUND = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE_INBOUND = fonteDoTurnoMontado();
+// Desde a S6 do ADR-0006: o flag mora em `estado` (turno/estado-do-turno.ts) e o
+// `request_human_handoff` em `turno/ferramentas/equipe.ts`.
+const FONTE_ESTADO = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/estado-do-turno.ts"),
+  "utf8",
+);
+const FONTE_EQUIPE = fs.readFileSync(
+  path.join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/equipe.ts"),
   "utf8",
 );
 
@@ -128,7 +138,7 @@ describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha
     // e apagava no meio do caminho (o WhatsApp o segura ~25s).
     const modelo = FONTE_INBOUND.indexOf("    const turn = await runModelCall(");
     const auxiliares = FONTE_INBOUND.indexOf("await Promise.all([", FONTE_INBOUND.indexOf("    let jailbreakLevel: JailbreakLevel = 'none';"));
-    const inicio = FONTE_INBOUND.indexOf("  let mcpCleanup: (() => Promise<void>) | null = null;\n  try {");
+    const inicio = FONTE_INBOUND.indexOf("  let mcpCleanup = null as (() => Promise<void>) | null;\n  try {");
     expect(modelo).toBeGreaterThan(-1);
     expect(auxiliares).toBeGreaterThan(-1);
     expect(inicio).toBeGreaterThan(-1);
@@ -154,27 +164,38 @@ describe("fiação — o \"digitando…\" cobre o turno inteiro até a 1ª bolha
     // O aviso do piso (`seq === 0`) vai ao canal por `avisarLeadDaEscalacao`, que
     // NÃO passa pelos `send` acima. Sem parar aqui, a renovação de 10s reacendia
     // o "digitando…" depois do "vou te passar para a equipe".
-    const tool = FONTE_INBOUND.indexOf("    request_human_handoff: tool({");
+    const tool = FONTE_EQUIPE.indexOf("export function criarRequestHumanHandoff(");
     expect(tool).toBeGreaterThan(-1);
-    const aviso = FONTE_INBOUND.indexOf("avisarLeadDaEscalacao(", tool);
+    const aviso = FONTE_EQUIPE.indexOf("avisarLeadDaEscalacao(", tool);
     expect(aviso).toBeGreaterThan(tool);
-    expect(FONTE_INBOUND.slice(tool, aviso)).toMatch(/^\s*pararDigitando\(\);$/m);
+    expect(FONTE_EQUIPE.slice(tool, aviso)).toMatch(/^\s*pararDigitando\(\);$/m);
+    // A ferramenta é criada ANTES de `pararDigitando` ser reatribuído (S6 do ADR-0006):
+    // passar a função direto congelaria o no-op inicial. A seta lê o valor na hora.
+    expect(FONTE_INBOUND).toMatch(/criarRequestHumanHandoff\([^)]*pararDigitando: \(\) => pararDigitando\(\)/);
   });
 });
 
 describe("fiação — a espera humana é paga UMA vez por turno", () => {
   it("`esperaForaDoLock` abre com a guarda do flag e a arma antes de esperar", () => {
-    const i = FONTE_INBOUND.indexOf("esperaForaDoLock: async (): Promise<void> => {");
+    const i = ENVIO_S7.indexOf("esperaForaDoLock: async (): Promise<void> => {");
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 400);
+    const janela = ENVIO_S7.slice(i, i + 400);
     // Ordem importa: guardar DEPOIS de esperar não impediria a segunda espera.
-    expect(janela).toMatch(/if \(jaEsperouComoHumano\) return;\s*\n\s*jaEsperouComoHumano = true;/);
+    expect(janela).toMatch(/if \(estado\.jaEsperouComoHumano\) return;\s*\n\s*estado\.jaEsperouComoHumano = true;/);
   });
 
   it("o flag é do TURNO — declarado no closure do turno, nunca em módulo", () => {
     // Em escopo de módulo ele vazaria entre turnos e entre tenants: o 2º cliente
     // do processo deixaria de receber a pausa.
-    expect(FONTE_INBOUND).toMatch(/^ {2}let jaEsperouComoHumano = false;$/m);
+    // O estado nasce na fábrica, chamada no corpo do turno (cerca: estado-do-turno-nasce-uma-vez).
+    const inicioDaFabrica = FONTE_ESTADO.indexOf("export function criarEstadoDoTurno(");
+    expect(inicioDaFabrica).toBeGreaterThan(-1);
+    const fabrica = FONTE_ESTADO.slice(inicioDaFabrica);
+    expect(fabrica).toMatch(/^ {4}jaEsperouComoHumano: false,$/m);
+    expect(FONTE_INBOUND).toMatch(/^ {2}const estado = criarEstadoDoTurno\(\);$/m);
+    for (const fonte of [FONTE_INBOUND, FONTE_ESTADO]) {
+      expect(fonte).not.toMatch(/^(let|var|const) jaEsperouComoHumano\b/m);
+    }
   });
 
   it("o call site mantém o jitter anti-ban entre bolhas, sem a pausa humana dentro do lock", () => {
@@ -182,11 +203,11 @@ describe("fiação — a espera humana é paga UMA vez por turno", () => {
     // bolhas E fotos, e o MESMO jitter vale entre as duas — por isso a âncora é o
     // callback, não mais a chamada de `sendInBubbles`.
     // O do `send_message` — o `send_template`, antes dele, tem um callback homônimo.
-    const doSendMessage = FONTE_INBOUND.indexOf("send_message: tool({");
+    const doSendMessage = ENVIO_S7.indexOf("send_message: tool({");
     expect(doSendMessage).toBeGreaterThan(-1);
-    const i = FONTE_INBOUND.indexOf("send: (finalBody: string) =>", doSendMessage);
+    const i = ENVIO_S7.indexOf("send: (finalBody: string) =>", doSendMessage);
     expect(i).toBeGreaterThan(-1);
-    const janela = FONTE_INBOUND.slice(i, i + 2400);
+    const janela = ENVIO_S7.slice(i, i + 2400);
     // Os dois convivem: o jitter é throttle anti-ban entre mensagens físicas, o
     // atraso humano é a pausa do turno. Perder o primeiro é afrouxar o anti-ban.
     // Desde a 0499 o jitter LÊ os knobs da conexão (throttleMs + jitterMaxMs,

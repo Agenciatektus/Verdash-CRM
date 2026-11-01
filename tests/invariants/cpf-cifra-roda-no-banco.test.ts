@@ -95,4 +95,18 @@ describe("a cifra do CPF existe e roda (#2522)", () => {
     const erro = erroDe(() => comoUsuario(ESPECTADOR, `select public.decrypt_cpf('${CONTATO}');`));
     expect(erro, "o viewer decifrou o CPF").toContain("forbidden");
   });
+
+  it("decrypt_cpf_lote: o gerente lê o MESMO CPF em lote, com UMA linha de audit pelo bloco (9089)", () => {
+    const lote = `select cpf from public.decrypt_cpf_lote(array['${CONTATO}']::uuid[]);`;
+    expect(ultima(comoUsuario(GERENTE, lote))).toBe(CPF);
+    expect(ultima(sql(`select count(*) from public.api_audit_log
+      where action = 'contact.cpf_decrypted' and resource_id is null
+        and actor_user_id = '${GERENTE}' and metadata->'contact_ids' ? '${CONTATO}';`))).toBe("1");
+  });
+
+  it("decrypt_cpf_lote: membro de OUTRA organização e viewer não decifram", () => {
+    const lote = `select * from public.decrypt_cpf_lote(array['${CONTATO}']::uuid[]);`;
+    expect(erroDe(() => comoUsuario(ESTRANHO, lote))).toContain("forbidden");
+    expect(erroDe(() => comoUsuario(ESPECTADOR, lote))).toContain("forbidden");
+  });
 });

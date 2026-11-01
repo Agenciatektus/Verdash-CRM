@@ -29,6 +29,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { carregarRosterDeAtendimento } from "@/lib/escalacao/atendentes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
 
 export const dynamic = "force-dynamic";
 
@@ -99,16 +100,9 @@ export async function GET(_req: NextRequest): Promise<Response> {
   // Nome/email por atendente (mesmo padrão de /api/v1/metrics/attendants). Fica
   // NA ROTA, não na função compartilhada: e-mail é PII e a superfície do agente
   // não recebe e-mail nem telefone de atendente.
-  const names = new Map<string, { name: string | null; email: string | null }>();
-  await Promise.all(
-    roster.map(async ({ userId }) => {
-      const { data: userRes } = await admin.auth.admin.getUserById(userId);
-      const u = userRes?.user;
-      names.set(userId, {
-        name: (u?.user_metadata?.full_name as string | undefined) ?? null,
-        email: u?.email ?? null,
-      });
-    }),
+  const membros = await nomesDeMembros(activeOrg.orgId, roster.map((r) => r.userId));
+  const names = new Map(
+    [...membros].map(([id, m]) => [id, { name: m.full_name, email: m.email }] as const),
   );
 
   const rows = roster.map((m) => ({

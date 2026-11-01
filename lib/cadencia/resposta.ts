@@ -21,6 +21,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { triggerHandoff } from "@/lib/ai/handoff/orchestrator";
 import { logger } from "@/lib/logger";
+import { rpc } from "@/lib/supabase/rpc";
 
 /** O que `fn_cadencia_lead_respondeu` devolve (jsonb). */
 export interface RespostaDaCadencia {
@@ -137,11 +138,11 @@ function comoTexto(v: unknown): string | null {
 export function createSupabaseCadenciaRespostaDb(admin: SupabaseClient): CadenciaRespostaDb {
   return {
     async responderCadencia(orgId, enrollmentId, eventLogId) {
-      const { data, error } = await admin.rpc("fn_cadencia_lead_respondeu" as never, {
+      const { data, error } = await rpc(admin, "fn_cadencia_lead_respondeu", {
         p_org: orgId,
         p_enrollment: enrollmentId,
         p_event_id: eventLogId,
-      } as never);
+      });
       if (error) throw new Error(`fn_cadencia_lead_respondeu: ${error.message}`);
       return (data ?? { ja_encerrada: true }) as unknown as RespostaDaCadencia;
     },
@@ -210,10 +211,10 @@ export function createSupabaseCadenciaRespostaDb(admin: SupabaseClient): Cadenci
       // Roteamento para um atendente: idempotente (índice único do evento) e
       // no-op quando a conversa já tem dono. Em org `manual` a conversa fica na
       // fila, com o item da Central.
-      const { error: rotErr } = await admin.rpc("fn_request_channel_routing" as never, {
+      const { error: rotErr } = await rpc(admin, "fn_request_channel_routing", {
         p_org: entrega.organizationId,
         p_conversation: entrega.conversationId,
-      } as never);
+      });
       if (rotErr) throw new Error(`fn_request_channel_routing: ${rotErr.message}`);
 
       if (!resultado.triggered) {

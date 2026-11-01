@@ -15,6 +15,8 @@ import type { Logger } from "@/lib/agent-engine/obs/logger";
 import { PACING_DEFAULTS } from "@/lib/agent-engine/pacing/defaults";
 import { SPINNING_DEFAULTS } from "@/lib/agent-engine/spinning/defaults";
 
+import { ENVIO_S7, TEMPLATE_S7 } from "./_fonte-do-send-message";
+
 /**
  * O GATE de vazamento de vocabulário interno (`docs/doctrine/separacao-fala-e-operacao.md`).
  * Puro/síncrono (`evaluate` não faz I/O), como os irmãos da cadeia.
@@ -203,27 +205,26 @@ describe("a cadeia REAL barra o vazamento — e só quando armada", () => {
  * usa. É guarda de ligação, não prova de execução: o fail-safe rodando ponta-a-ponta
  * continua sem cobertura mecânica, e isso está dito, não escondido.
  */
-const FONTE_INBOUND = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
 const FONTE_FOLLOWUP = fs.readFileSync(
   path.join(process.cwd(), "lib/agent-engine/agent/followup-turn.ts"),
   "utf8",
 );
 
 /** Recorta o `execute` de uma tool para as asserções não casarem noutro lugar do arquivo. */
+// `send_message` e `send_template` saíram do turno na S7 do ADR-0006: lê-se a remontagem deles.
+const FONTE_FERRAMENTAS = `${ENVIO_S7}\n${TEMPLATE_S7}`;
+
 function corpoDoExecute(ancora: string, fim: string): string {
-  const i = FONTE_INBOUND.indexOf(ancora);
+  const i = FONTE_FERRAMENTAS.indexOf(ancora);
   expect(i, `âncora \`${ancora}\` sumiu do turno`).toBeGreaterThan(-1);
-  const j = FONTE_INBOUND.indexOf(fim, i);
+  const j = FONTE_FERRAMENTAS.indexOf(fim, i);
   expect(j, `âncora de fim \`${fim}\` sumiu`).toBeGreaterThan(i);
-  return FONTE_INBOUND.slice(i, j);
+  return FONTE_FERRAMENTAS.slice(i, j);
 }
 
 describe("fiação do gate — armado no agente, desarmado onde o veto seria silêncio", () => {
   it("send_message ARMA o gate", () => {
-    expect(corpoDoExecute("send_message: tool({", "update_lead_state: tool({"))
+    expect(corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState("))
       .toMatch(/enforceInternalVocabulary:\s*true/);
   });
 
@@ -236,17 +237,17 @@ describe("fiação do gate — armado no agente, desarmado onde o veto seria sil
   it("send_template NÃO arma — o texto é do humano e já aprovado pela Meta", () => {
     // Vetar aqui devolveria ao modelo a culpa por uma frase que não é dele, e a única
     // saída seria o silêncio: ele não pode reescrever um template aprovado.
-    expect(corpoDoExecute("send_template: tool({", "search_knowledge: tool({"))
+    expect(corpoDoExecute("send_template: tool({", "search_knowledge: criarSearchKnowledge("))
       .not.toMatch(/enforceInternalVocabulary/);
   });
 
   it("o fail-safe existe: conta vetos e, ao persistir, libera DESARMANDO só este gate", () => {
     // O cliente nunca fica sem resposta. E "liberar" é re-rodar a cadeia inteira com
     // este gate desarmado — nunca chamar o canal por fora (perderia stop/LGPD/pacing).
-    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: tool({");
+    const corpo = corpoDoExecute("send_message: tool({", "update_lead_state: criarUpdateLeadState(");
     expect(corpo).toMatch(/chain\.code === 'internal_vocabulary_leak'/);
-    expect(corpo).toMatch(/internalVocabularyVetoCount \+= 1/);
-    expect(corpo).toMatch(/internalVocabularyVetoCount < MAX_VETOS_DE_VOCABULARIO_INTERNO/);
+    expect(corpo).toMatch(/estado\.vetos\.internalVocabulary \+= 1/);
+    expect(corpo).toMatch(/estado\.vetos\.internalVocabulary < MAX_VETOS_DE_VOCABULARIO_INTERNO/);
     expect(corpo).toMatch(/runBeforeSend\(\{[\s\S]*?enforceInternalVocabulary: false/);
   });
 

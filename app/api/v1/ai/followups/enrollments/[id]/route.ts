@@ -105,7 +105,10 @@ function embedded<T>(v: T | T[] | null): T | null {
  * módulo. Sem service role configurado, os nomes simplesmente não vêm e a tela
  * cai em "uma pessoa da equipe": a falta do nome nunca derruba o dossiê.
  */
-async function resolveAutores(eventos: Array<{ payload: unknown }>): Promise<Record<string, string>> {
+async function resolveAutores(
+  orgId: string,
+  eventos: Array<{ payload: unknown }>,
+): Promise<Record<string, string>> {
   const ids = [
     ...new Set(
       eventos
@@ -115,23 +118,13 @@ async function resolveAutores(eventos: Array<{ payload: unknown }>): Promise<Rec
   ];
   if (ids.length === 0) return {};
 
-  const { isServiceRoleConfigured } = await import("@/lib/audit");
-  if (!isServiceRoleConfigured()) return {};
-  const { createAdminClient } = await import("@/lib/supabase/admin");
-  const admin = createAdminClient();
-
+  const { nomesDeMembros } = await import("@/lib/users/nomes-de-membros");
   const nomes: Record<string, string> = {};
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        const { data } = await admin.auth.admin.getUserById(id);
-        const nome = data?.user?.user_metadata?.full_name ?? data?.user?.email;
-        if (typeof nome === "string" && nome.trim() !== "") nomes[id] = nome;
-      } catch {
-        // Nome que não resolve não é erro do dossiê — a linha existe com ou sem ele.
-      }
-    }),
-  );
+  // Nome que não resolve não é erro do dossiê: o helper devolve mapa vazio, nunca lança por RPC.
+  for (const [id, m] of await nomesDeMembros(orgId, ids)) {
+    const nome = m.full_name ?? m.email;
+    if (nome && nome.trim() !== "") nomes[id] = nome;
+  }
   return nomes;
 }
 
@@ -248,7 +241,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     eventos: lidos.slice(0, TETO_DE_EVENTOS) as EventoDeEnrollment[],
     eventos_truncados: truncado,
     plano_de_tempo: leituraDoPlano(row.timing_plan),
-    autores: await resolveAutores(lidos),
+    autores: await resolveAutores(org.orgId, lidos),
   };
 
   return ok(dossie, { requestId });

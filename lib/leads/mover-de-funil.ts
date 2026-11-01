@@ -37,6 +37,7 @@ import {
   recusaTrocaDeFunil,
   type EtapaDoFunil,
 } from "@/lib/leads/clonar-para-funil";
+import { rpc } from "@/lib/supabase/rpc";
 
 /** As colunas do negócio que a troca lê antes de mover. */
 export interface NegocioParaMover {
@@ -157,13 +158,13 @@ export async function moverNegocioDeFunil(
   }
 
   const ator = ctx.actor.type === "user" ? ctx.actor.id : null;
-  const { data: movido, error } = await db.rpc("fn_mover_lead_de_funil" as never, {
+  const { data: movido, error } = await rpc(db, "fn_mover_lead_de_funil", {
     p_org: ctx.organization_id,
     p_lead: negocio.id,
     p_pipeline: destino.pipelineId,
     p_stage: etapa.etapa.id,
     p_ator: ator,
-  } as never);
+  });
   if (error) {
     return recusaDoBanco(error) ?? { ok: false, status: 500, code: "internal_error", texto: error.message };
   }

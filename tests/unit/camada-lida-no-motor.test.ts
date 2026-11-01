@@ -37,6 +37,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 const RAIZ = process.cwd();
 
@@ -60,7 +61,17 @@ const PONTOS_DE_CONSUMO: Array<{ arquivo: string; knob: string }> = [
   },
 ];
 
+/** Arquivos que formam o mesmo turno depois do fatiamento do ADR-0006. */
+const MODULOS_DO_TURNO: Record<string, string[]> = {
+  "lib/agent-engine/agent/inbound-turn.ts": [
+    "lib/agent-engine/agent/inbound-turn.ts",
+    "lib/agent-engine/agent/turno/portoes-de-entrada.ts",
+  ],
+};
+
 function fonte(arquivo: string): string {
+  // Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+  if (arquivo === "lib/agent-engine/agent/inbound-turn.ts") return fonteDoTurnoMontado();
   return readFileSync(path.join(RAIZ, arquivo), "utf8");
 }
 
@@ -103,10 +114,13 @@ describe("a escolha da organização é lida onde a camada é consumida", () => 
     // aqui as duas respostas seriam duas políticas de segurança diferentes dentro
     // do mesmo atendimento.
     for (const arquivo of new Set(PONTOS_DE_CONSUMO.map((p) => p.arquivo))) {
-      const ocorrencias = fonte(arquivo).split("lerCamadasDaOrg(").length - 1;
-      // 1 import + 1 chamada = 2. Mais que isso é uma segunda leitura no mesmo
-      // arquivo.
-      expect(ocorrencias, `${arquivo} lê as camadas mais de uma vez por turno`).toBeLessThanOrEqual(2);
+      // O turno do inbound é o orquestrador MAIS os módulos de fase (ADR-0006):
+      // a leitura mora nos portões de entrada desde a S1, e conta junto.
+      const texto = (MODULOS_DO_TURNO[arquivo] ?? [arquivo]).map(fonte).join("\n");
+      const ocorrencias = texto.split("lerCamadasDaOrg(").length - 1;
+      // O import não tem parêntese: cada ocorrência de `lerCamadasDaOrg(` é uma
+      // chamada. Duas já é uma segunda leitura no mesmo turno.
+      expect(ocorrencias, `${arquivo} lê as camadas mais de uma vez por turno`).toBe(1);
       expect(ocorrencias, `${arquivo} não lê as camadas`).toBeGreaterThan(0);
     }
   });

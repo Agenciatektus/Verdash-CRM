@@ -54,6 +54,7 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { rpc } from "@/lib/supabase/rpc";
 
 export const dynamic = "force-dynamic";
 
@@ -167,8 +168,9 @@ export async function PUT(req: NextRequest): Promise<Response> {
   // primeira guarda do corpo da função recusaria — com o código de quem não
   // tem permissão, sobre um admin que tem.
   const db = await createClient();
-  const { data, error } = await db.rpc(
-    "fn_definir_aviso_de_caso" as never,
+  const { data, error } = await rpc(
+    db,
+    "fn_definir_aviso_de_caso",
     {
       p_org: authz.org.orgId,
       p_channel: dados.channel_session_id,
@@ -176,7 +178,7 @@ export async function PUT(req: NextRequest): Promise<Response> {
       p_rotulo: dados.rotulo ?? null,
       p_ligado: dados.ligado,
       p_confirma_contato: dados.confirma_contato ?? false,
-    } as never,
+    },
   );
 
   if (error) {

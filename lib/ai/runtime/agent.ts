@@ -72,6 +72,7 @@ import {
   resolveSessionRef,
   type ChannelSessionRef,
 } from "@/lib/channels";
+import { rpc } from "@/lib/supabase/rpc";
 
 export interface RunAgentInput {
   runId: string;
@@ -328,14 +329,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     resourceId: run.id,
     metadata: { agent_id: run.agent_id, agent_version_id: run.agent_version_id, is_dry_run: run.is_dry_run },
   });
-  await admin.rpc("emit_event" as never, {
+  await rpc(admin, "emit_event", {
     p_event_type: "ai_agent.run_started",
     p_entity_kind: "ai_agent_run",
     p_entity_id: run.id,
     p_payload: { run_id: run.id, agent_id: run.agent_id, is_dry_run: run.is_dry_run },
     p_metadata: { source: "agent-runtime" },
     p_organization_id: run.organization_id,
-  } as never);
+  });
 
   let ephemeralTokenId: string | null = null;
 

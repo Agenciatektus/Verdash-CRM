@@ -146,6 +146,16 @@ const AUTHENTICATED_PERMITIDO: readonly Excecao[] = [
       "passa), então cross-org nunca lê CPF (#2522).",
   },
   {
+    fn: "decrypt_cpf_lote(uuid[])",
+    razao:
+      "GET app/api/v1/contacts/export/route.ts é o único call site, com o client de " +
+      "sessão, depois de requireRole(manager). Definer pelo mesmo motivo da decrypt_cpf " +
+      "(lê contacts.cpf_encrypted e a chave em private, ESCREVE o audit " +
+      "contact.cpf_decrypted antes do texto). Mesma guarda por organização do bloco: " +
+      "fora de fn_user_org_ids() levanta forbidden_org, abaixo de manager levanta " +
+      "forbidden_role; teto de 1000 ids por chamada (migration 9089).",
+  },
+  {
     fn: "fn_honorarios_parcela_pagar(uuid,uuid,uuid,uuid)",
     razao:
       "POST app/api/v1/honorarios/parcelas/[id]/pagar/route.ts usa createClient da " +

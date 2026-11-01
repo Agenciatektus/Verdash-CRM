@@ -59,6 +59,7 @@ import { resolverModeloDoPonto } from "@/lib/ai/gateway-binding";
 import { mensagemPedeResposta } from "@/lib/ai/elegibilidade/mensagem-respondivel";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rpc } from "@/lib/supabase/rpc";
 
 const RECENT_MESSAGES_LIMIT = 20;
 const RAG_TOP_K = 5;
@@ -1072,29 +1073,31 @@ async function retrieveContext(input: RetrieveInput): Promise<RagHit[]> {
 
   const { data, error } =
     fontes.length > 0
-      ? await admin.rpc(
-          "fn_buscar_trechos_das_fontes" as never,
+      ? await rpc(
+          admin,
+          "fn_buscar_trechos_das_fontes",
           {
             p_organization_id: input.organizationId,
-            p_source_ids: fontes as unknown as string,
+            p_source_ids: fontes,
             p_embedding: embedding as unknown as string,
             p_k: RAG_TOP_K,
             p_threshold: RAG_THRESHOLD,
             p_embedding_model: modelo,
-          } as never,
+          },
         )
       : modelo === MODELO_DE_EMBEDDING_DO_GOOGLE
         ? // Legado sem filtro de modelo e só com vetores OpenAI (ver search-knowledge.ts).
           { data: [], error: null }
-        : await admin.rpc(
-          "retrieve_top_k_chunks" as never,
+        : await rpc(
+          admin,
+          "retrieve_top_k_chunks",
           {
             p_organization_id: input.organizationId,
             p_kb_version_id: input.kbVersionId,
             p_embedding: embedding as unknown as string,
             p_k: RAG_TOP_K,
             p_threshold: RAG_THRESHOLD,
-          } as never,
+          },
         );
 
   if (error) {
@@ -1252,8 +1255,9 @@ async function persistAndDispatch(
   // EXCEPTION (S-06.03 wave 3): when handoff was triggered (G3 low confidence),
   // we persist the bot's draft for the human to reuse but MUST NOT dispatch.
   if (!options.skipDispatch) {
-    const { error: emitErr } = await admin.rpc(
-      "emit_event" as never,
+    const { error: emitErr } = await rpc(
+      admin,
+      "emit_event",
       {
         p_event_type: "message.send_requested",
         p_entity_kind: "message",
@@ -1265,7 +1269,7 @@ async function persistAndDispatch(
         },
         p_metadata: { source: "ai-response-worker" },
         p_organization_id: ctx.organization_id,
-      } as never,
+      },
     );
     if (emitErr) {
       logger.warn("[ai-response-worker] message.send_requested emit failed", {
@@ -1276,9 +1280,9 @@ async function persistAndDispatch(
   }
 
   // Domain event for downstream consumers (UI realtime, audit).
-  void admin
-    .rpc(
-      "emit_event" as never,
+  void rpc(
+      admin,
+      "emit_event",
       {
         p_event_type: "ai.responded",
         p_entity_kind: "message",
@@ -1292,7 +1296,7 @@ async function persistAndDispatch(
         },
         p_metadata: { source: "ai-response-worker" },
         p_organization_id: ctx.organization_id,
-      } as never,
+      },
     )
     .then(({ error: e }: { error: { message: string } | null }) => {
       if (e) {

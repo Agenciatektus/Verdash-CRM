@@ -10,6 +10,8 @@ import type pg from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FlowGraph } from '@/lib/followup/graph-schema';
+import { fonteDoTurnoMontado } from '../../../tests/unit/_fonte-da-montagem';
+import { ENVIO_S7, TEMPLATE_S7 } from '../../../tests/unit/_fonte-do-send-message';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair, prepararRoteiroDoTurno, type RoteiroDoTurno, type ValidarResposta } from './roteiro-no-turno';
 
 const GRAFO: FlowGraph = {
@@ -445,18 +447,24 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
   });
 
   it('fiado no turno: a guarda liga o descarte e o enviar do roteiro veta por ele', () => {
-    const src = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/inbound-turn.ts'), 'utf8');
-    const guarda = src.indexOf("code: 'resposta_obsoleta'");
+    // ADR-0006, S9: a pergunta do roteiro saiu para `turno/correcao-pos-modelo.ts`; a remontagem a devolve ao lugar.
+    const src = fonteDoTurnoMontado();
+    // A guarda e a marca do descarte saíram com o `send_message` para `turno/ferramentas/`
+    // na S7 do ADR-0006: lê-se a remontagem dele, na ordem original.
+    const envio = ENVIO_S7;
+    const guarda = envio.indexOf("code: 'resposta_obsoleta'");
     // Uso no `enviar` do roteiro — o import (com `} perguntaDoRoteiroPodeSair,`)
-    // vem antes da guarda e enganaria um `indexOf` simples no nome.
+    // vem antes e enganaria um `indexOf` simples no nome.
     const enviaRoteiro = src.indexOf('!perguntaDoRoteiroPodeSair(');
-    const marcaDescarte = src.indexOf('turnoDescartado = true');
+    const marcaDescarte = envio.indexOf('turnoDescartado = true');
     expect(marcaDescarte).toBeGreaterThan(0);
-    // Uma só atribuição, e DENTRO da guarda: depois da chamada da régua.
-    expect(src.split('turnoDescartado = true').length - 1).toBe(1);
-    expect(marcaDescarte).toBeGreaterThan(src.indexOf('await respostaFicouObsoleta('));
+    // Uma só atribuição em todo o turno e nas ferramentas de envio, e DENTRO da guarda.
+    expect(`${src}\n${envio}\n${TEMPLATE_S7}`.split('turnoDescartado = true').length - 1).toBe(1);
+    const regua = envio.indexOf('await respostaFicouObsoleta(');
+    expect(regua).toBeGreaterThan(-1);
+    expect(marcaDescarte).toBeGreaterThan(regua);
     expect(marcaDescarte).toBeLessThan(guarda); // liga ANTES de devolver resposta_obsoleta
-    expect(enviaRoteiro).toBeGreaterThan(guarda); // o enviar do roteiro lê o descarte
+    expect(enviaRoteiro).toBeGreaterThan(-1); // o enviar do roteiro lê o descarte
     const tornoDoEnviar = src.slice(enviaRoteiro, enviaRoteiro + 200);
     expect(tornoDoEnviar).toContain('turnoDescartado');
   });
@@ -464,15 +472,22 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
 
 describe('ordem no turno (achado 5 da prova do #1130)', () => {
   const src = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/inbound-turn.ts'), 'utf8');
-  const chamada = src.indexOf('await prepararRoteiroDoTurno(');
+  // F5 e F6 moram em turno/ desde a S5 do ADR-0006: no orquestrador ordena-se a CHAMADA ao
+  // preparo (F6, que abre o roteiro) contra as chamadas às fases que silenciam o turno.
+  const chamada = src.indexOf('await prepararContextoDoTurno(');
+  const desvios = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/desvios-deterministicos.ts'), 'utf8');
+  const preparo = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/preparo-do-contexto.ts'), 'utf8');
+  const chamadaDoRoteiro = preparo.indexOf('await prepararRoteiroDoTurno(');
 
   it('o roteiro entra DEPOIS da pausa, do pedido de humano e do opt-out ambíguo', () => {
     expect(chamada).toBeGreaterThan(0);
     for (const trava of [
-      'agentConfig.pausedAt',
-      'detectHumanHandoffRequest(texto)',
-      'detectAmbiguousOptOut(texto)',
-      'isLeadInHandoff(pool, tenantId, leadId)',
+      // A pausa mora em turno/roteamento.ts (ADR-0006, S4); idem: ordena-se a chamada.
+      'await resolverRoteamentoDoTurno(',
+      'await tratarDesviosDeterministicos(',
+      // O veto de handoff mora em turno/portoes-de-entrada.ts (ADR-0006, S1);
+      // o que se ordena aqui é a CHAMADA aos portões.
+      'await avaliarPortoesDeEntrada(',
     ]) {
       const posicao = src.indexOf(trava);
       expect(posicao, trava).toBeGreaterThan(0);
@@ -480,8 +495,36 @@ describe('ordem no turno (achado 5 da prova do #1130)', () => {
     }
   });
 
+  it('os desvios ainda carregam o pedido de humano e o opt-out ambíguo, antes de liberar o turno', () => {
+    for (const trava of ['detectHumanHandoffRequest(texto)', 'detectAmbiguousOptOut(texto)']) {
+      const posicao = desvios.indexOf(trava);
+      expect(posicao, trava).toBeGreaterThan(-1);
+      expect(posicao, trava).toBeLessThan(desvios.indexOf('seguir: true'));
+    }
+  });
+
+  it('os portões ainda carregam o veto de handoff', () => {
+    const portoes = readFileSync(
+      join(process.cwd(), 'lib/agent-engine/agent/turno/portoes-de-entrada.ts'),
+      'utf8',
+    );
+    const veto = portoes.indexOf('isLeadInHandoff(pool, tenantId, leadId)');
+    expect(veto).toBeGreaterThan(-1);
+    // O veto vem antes da saída que libera o turno.
+    expect(veto).toBeLessThan(portoes.indexOf('return { seguir: true'));
+  });
+
+  it('o roteamento ainda carrega a saída do agente pausado', () => {
+    const roteamento = readFileSync(join(process.cwd(), 'lib/agent-engine/agent/turno/roteamento.ts'), 'utf8');
+    const pausa = roteamento.indexOf('agentConfig.pausedAt');
+    expect(pausa).toBeGreaterThan(-1);
+    // A pausa vem antes da saída que libera o turno.
+    expect(pausa).toBeLessThan(roteamento.indexOf('return { seguir: true'));
+  });
+
   it('e nunca para contato bloqueado, nem fora do turno de inbound', () => {
-    const guarda = src.slice(src.lastIndexOf('const roteiro =', chamada), chamada);
+    expect(chamadaDoRoteiro).toBeGreaterThan(0);
+    const guarda = preparo.slice(preparo.lastIndexOf('const roteiro =', chamadaDoRoteiro), chamadaDoRoteiro);
     expect(guarda).toContain("liveJob().kind === 'inbound_turn'");
     expect(guarda).toContain('!optedOutThisTurn');
     expect(guarda).toContain('!preview');

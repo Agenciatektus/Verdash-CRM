@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { buildOpeningMessage, inboundsNaoRespondidos } from "@/lib/agent-engine/agent/inbound-turn";
 import { detectAmbiguousOptOut, detectHumanHandoffRequest } from "@/lib/agent-engine/agent/human-handoff";
 import type { LeadContext } from "@/lib/agent-engine/edge/crm/get-lead-context";
+import { ENVIO_S7 } from "./_fonte-do-send-message";
 
 /**
  * A RAJADA — o dano colateral do pin, e a separação que o desfaz.
@@ -102,23 +103,35 @@ const FONTE = readFileSync(
   "utf8",
 );
 
+// F5 (pedido de humano e opt-out) mora em `turno/desvios-deterministicos.ts` desde a S5 do ADR-0006.
+const FONTE_DESVIOS = readFileSync(
+  join(process.cwd(), "lib/agent-engine/agent/turno/desvios-deterministicos.ts"),
+  "utf8",
+);
+
+// F13 (urgência no ramo do cap) mora em `turno/desfecho-do-envio.ts` desde a S3 do ADR-0006.
+const FONTE_EFEITOS = readFileSync(
+  join(process.cwd(), "lib/agent-engine/agent/turno/desfecho-do-envio.ts"),
+  "utf8",
+);
 describe("fiação — as duas perguntas leem de fontes diferentes", () => {
   it("handoff, opt-out e urgência leem os inbounds pendentes, POR MENSAGEM", () => {
     // Presença antes de qualquer coisa: uma asserção que some junto com o código
     // que ela vigia não vigia nada.
-    expect(FONTE).toMatch(/const inboundsPendentes = inboundsNaoRespondidos\(/);
-    expect(FONTE).toMatch(/inboundsPendentes\.some\([\s\S]{0,200}?detectHumanHandoffRequest\(/);
-    expect(FONTE).toMatch(/inboundsPendentes\.some\(\(texto\) => detectAmbiguousOptOut\(texto\)\)/);
-    expect(FONTE).toMatch(/inboundsPendentes\.some\(\(texto\) => detectUrgencySignal\(texto\)\)/);
+    expect(FONTE_DESVIOS).toMatch(/const inboundsPendentes = inboundsNaoRespondidos\(/);
+    expect(FONTE_DESVIOS).toMatch(/inboundsPendentes\.some\([\s\S]{0,200}?detectHumanHandoffRequest\(/);
+    expect(FONTE_DESVIOS).toMatch(/inboundsPendentes\.some\(\(texto\) => detectAmbiguousOptOut\(texto\)\)/);
+    expect(FONTE_EFEITOS, "urgência lida em F13 (turno/desfecho-do-envio.ts, S3)").toMatch(/inboundsPendentes\.some\(\(texto\) => detectUrgencySignal\(texto\)\)/);
     // E nenhum deles voltou a olhar só a última linha do histórico.
     expect(FONTE).not.toMatch(/detectAmbiguousOptOut\(latestInboundSignal\(/);
+    expect(FONTE_DESVIOS).not.toMatch(/detectAmbiguousOptOut\(latestInboundSignal\(/);
   });
 
   it("o veto do falso-vazio segue na mensagem PINADA — é sobre o que o turno responde", () => {
-    const i = FONTE.indexOf("send_message: tool({");
-    const j = FONTE.indexOf("update_lead_state: tool({", i);
+    const i = ENVIO_S7.indexOf("send_message: tool({");
+    const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
     expect(i).toBeGreaterThan(-1);
     expect(j).toBeGreaterThan(i);
-    expect(FONTE.slice(i, j)).toMatch(/claimsCurrentInboundIsEmpty\(body, mensagemDoJob\)/);
+    expect(ENVIO_S7.slice(i, j)).toMatch(/claimsCurrentInboundIsEmpty\(body, mensagemDoJob\)/);
   });
 });

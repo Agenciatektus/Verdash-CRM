@@ -48,6 +48,7 @@ import type {
   InboundMessageEvent,
   OutboundEchoEvent,
 } from "./webhook";
+import { rpc } from "@/lib/supabase/rpc";
 
 type Admin = SupabaseClient;
 
@@ -232,8 +233,9 @@ export async function ingestMetaInbound(
     ? canonicalPhoneBR(existente.phone_number)
     : canonicalPhoneBR(`+${e.from.replace(/\D/g, "")}`);
 
-  const { data: contactId, error: erroContato } = await admin.rpc(
-    "fn_upsert_wa_contact" as never,
+  const { data: contactId, error: erroContato } = await rpc(
+    admin,
+    "fn_upsert_wa_contact",
     {
       p_org: orgId,
       p_kind: "phone",
@@ -241,7 +243,7 @@ export async function ingestMetaInbound(
       p_lid: null,
       p_chat_id: e.from,
       p_notify: e.profileName,
-    } as never,
+    },
   );
   if (erroContato || !contactId) {
     return { status: "failed", reason: `contato: ${erroContato?.message ?? "sem id"}` };
@@ -253,9 +255,10 @@ export async function ingestMetaInbound(
   const atribuicao = extrairAtribuicaoMeta(e.referral);
   if (atribuicao) await estamparAtribuicaoDoContato(admin, orgId, contactId as string, atribuicao);
 
-  const { data: conversationId, error: erroConversa } = await admin.rpc(
-    "fn_upsert_wa_conversation" as never,
-    { p_org: orgId, p_contact: contactId as string, p_session: sessao.id } as never,
+  const { data: conversationId, error: erroConversa } = await rpc(
+    admin,
+    "fn_upsert_wa_conversation",
+    { p_org: orgId, p_contact: contactId as string, p_session: sessao.id },
   );
   if (erroConversa || !conversationId) {
     return { status: "failed", reason: `conversa: ${erroConversa?.message ?? "sem id"}` };
@@ -327,14 +330,14 @@ export async function ingestMetaInbound(
 
   const messageId = (inserida as { id: string } | null)?.id ?? "";
   if (e.media && messageId) {
-    const { error: erroPersistencia } = await admin.rpc("emit_event" as never, {
+    const { error: erroPersistencia } = await rpc(admin, "emit_event", {
       p_event_type: "media.persist_requested",
       p_entity_kind: "message",
       p_entity_id: messageId,
       p_payload: { message_id: messageId, conversation_id: conversationId as string },
       p_metadata: { source: "meta_webhook" },
       p_organization_id: orgId,
-    } as never);
+    });
     if (erroPersistencia) {
       console.error(
         "[meta.ingest] emit media.persist_requested failed",
@@ -420,8 +423,9 @@ export async function ingestMetaEcho(
     ? canonicalPhoneBR(existente.phone_number)
     : canonicalPhoneBR(telefone);
 
-  const { data: contactId, error: erroContato } = await admin.rpc(
-    "fn_upsert_wa_contact" as never,
+  const { data: contactId, error: erroContato } = await rpc(
+    admin,
+    "fn_upsert_wa_contact",
     {
       p_org: orgId,
       p_kind: "phone",
@@ -429,15 +433,16 @@ export async function ingestMetaEcho(
       p_lid: null,
       p_chat_id: e.to,
       p_notify: null,
-    } as never,
+    },
   );
   if (erroContato || !contactId) {
     return { status: "failed", reason: `contato: ${erroContato?.message ?? "sem id"}` };
   }
 
-  const { data: conversationId, error: erroConversa } = await admin.rpc(
-    "fn_upsert_wa_conversation" as never,
-    { p_org: orgId, p_contact: contactId as string, p_session: sessao.id } as never,
+  const { data: conversationId, error: erroConversa } = await rpc(
+    admin,
+    "fn_upsert_wa_conversation",
+    { p_org: orgId, p_contact: contactId as string, p_session: sessao.id },
   );
   if (erroConversa || !conversationId) {
     return { status: "failed", reason: `conversa: ${erroConversa?.message ?? "sem id"}` };
@@ -491,14 +496,14 @@ export async function ingestMetaEcho(
 
   const messageId = (inserida as { id: string } | null)?.id ?? "";
   if (e.media && messageId) {
-    const { error: erroPersistencia } = await admin.rpc("emit_event" as never, {
+    const { error: erroPersistencia } = await rpc(admin, "emit_event", {
       p_event_type: "media.persist_requested",
       p_entity_kind: "message",
       p_entity_id: messageId,
       p_payload: { message_id: messageId, conversation_id: conversationId as string },
       p_metadata: { source: "meta_webhook_echo" },
       p_organization_id: orgId,
-    } as never);
+    });
     if (erroPersistencia) {
       logger.warn("[meta.ingest] eco: emit media.persist_requested falhou", {
         organization_id: orgId,
@@ -596,8 +601,9 @@ export async function ingestMetaAppContactSync(
     ? canonicalPhoneBR(existente.phone_number)
     : canonicalPhoneBR(telefone);
 
-  const { data: contactId, error: erroContato } = await admin.rpc(
-    "fn_upsert_wa_contact" as never,
+  const { data: contactId, error: erroContato } = await rpc(
+    admin,
+    "fn_upsert_wa_contact",
     {
       p_org: orgId,
       p_kind: "phone",
@@ -606,7 +612,7 @@ export async function ingestMetaAppContactSync(
       // Mesma grafia do `from`/`to` das mensagens: a identidade wa, não o `+`.
       p_chat_id: e.phone,
       p_notify: nome,
-    } as never,
+    },
   );
   if (erroContato || !contactId) {
     return { status: "failed", reason: `contato: ${erroContato?.message ?? "sem id"}` };

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { gerarAbordagemDeFormulario } from "@/lib/agent-engine/agent/abordagem-de-formulario";
 import { formatarParaWhatsApp } from "@/lib/agent-engine/agent/formato-whatsapp";
+import { ENVIO_S7 } from "../../../tests/unit/_fonte-do-send-message";
 
 vi.mock("@/lib/agent-engine/agent/agent-config", () => ({
   loadPublishedAgentConfigById: async () => ({
@@ -86,7 +87,7 @@ describe("o send_message formata ANTES da cadeia de envio", () => {
   // O teste puro acima fica verde se a chamada sumir do turno; este vigia a ligação.
   // A posição importa: os gates (corpo vazio, guardrails, bolhas) têm de medir o que sai.
   const fonte = readFileSync(join(__dirname, "inbound-turn.ts"), "utf8");
-  const execute = fonte.slice(fonte.indexOf("send_message: tool({"));
+  const execute = ENVIO_S7.slice(ENVIO_S7.indexOf("send_message: tool({"));
 
   it("formata o corpo do modelo antes do corpo vazio e do runBeforeSend", () => {
     const formata = execute.indexOf("formatarParaWhatsApp(");

@@ -67,20 +67,15 @@ function fazerAdmin(porTabela: Record<string, unknown[]>) {
   };
   return {
     from,
-    auth: {
-      admin: {
-        getUserById: (id: string) =>
-          Promise.resolve({
-            data: {
-              user: {
-                id,
-                email: `${id.slice(0, 4)}@example.com`,
-                user_metadata: { full_name: `Nome ${id.slice(0, 4)}` },
-              },
-            },
-          }),
-      },
-    },
+    rpc: (_fn: string, args: { p_user_ids: string[] }) =>
+      Promise.resolve({
+        data: args.p_user_ids.map((id) => ({
+          user_id: id,
+          email: `${id.slice(0, 4)}@example.com`,
+          full_name: `Nome ${id.slice(0, 4)}`,
+        })),
+        error: null,
+      }),
   };
 }
 

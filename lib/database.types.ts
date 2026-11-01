@@ -10398,6 +10398,40 @@ export type Database = {
       }
     }
     Functions: {
+      // Escritas à mão a partir do baseline.sql (#465), como as RPCs usadas por
+      // lib/supabase/rpc.ts. Ao regerar com `supabase gen types`, preserve-as e
+      // mantenha `| null` em fn_upsert_wa_contact (p_lid, p_notify, p_phone) e
+      // retrieve_top_k_chunks (p_kb_version_id): o código já passa null ali.
+      fn_cadencia_encerrar_conducao: { Args: { p_org: string; p_conducao: string; p_motivo: string }; Returns: boolean }
+      fn_cadencia_lead_respondeu: { Args: { p_org: string; p_enrollment: string; p_event_id: string }; Returns: Json }
+      fn_cadencia_publicar_versao: { Args: { p_org: string; p_pointer: string; p_graph: Json; p_created_by: string; p_conducao: Json }; Returns: string }
+      fn_contagens_da_caixa: {
+        Args: {
+          p_organizacao: string
+          p_comandos_da_fila: string[]
+          p_terminais: string[]
+          p_canal?: string | null
+          p_entrada?: string | null
+          p_so_nao_lidas?: boolean
+          p_marcadores?: string[] | null
+          p_modo?: string
+          p_sem_passo?: boolean
+          p_canal_tipo?: string | null
+          p_grupos?: boolean | null
+          p_funil?: string | null
+          p_etapas?: string[] | null
+          p_responsavel?: string | null
+          p_desde?: string | null
+        }
+        Returns: Json
+      }
+      fn_contar_mensagem_ignorada: { Args: { p_org: string }; Returns: undefined }
+      fn_definir_aviso_de_caso: { Args: { p_org: string; p_channel: string; p_telefone: string; p_rotulo: string | null; p_ligado: boolean; p_confirma_contato?: boolean }; Returns: Json }
+      fn_enfileirar_midia_vencida: { Args: { p_limite?: number }; Returns: Json }
+      fn_leads_abertos_por_funil: { Args: { p_organizacao: string }; Returns: { pipeline_id: string; abertos: number }[] }
+      fn_mover_lead_de_funil: { Args: { p_org: string; p_lead: string; p_pipeline: string; p_stage: string; p_ator?: string | null }; Returns: Database["public"]["Tables"]["crm_leads"]["Row"] }
+      fn_registrar_jid_do_aviso: { Args: { p_org: string; p_jid: string }; Returns: undefined }
+      fn_tarefas_atrasadas: { Args: { p_organizacao: string }; Returns: number }
       fn_authorize_ai_form_capture: {
         Args: { p_organization_id: string; p_source_id: string; p_lead_id: string; p_contact_id: string; p_request_id: string; p_ttl_ms: number }
         Returns: boolean
@@ -10552,6 +10586,7 @@ export type Database = {
       fn_meet_delivery_current: { Args: { p_org:string; p_job:string; p_worker:string; p_acquired_at:string }; Returns:boolean }
       fn_meet_delivery_settle: { Args: { p_org:string; p_job:string; p_worker:string; p_acquired_at:string; p_state:string; p_retry_at?:string|null }; Returns:boolean }
       fn_meet_action: { Args: { p_org:string; p_id:string; p_revision:string; p_request:string|null; p_action:string; p_conversation?:string|null }; Returns:boolean }
+      fn_nomes_de_membros: { Args: { p_org: string; p_user_ids: string[] }; Returns: { user_id: string; full_name: string | null; email: string | null; last_sign_in_at: string | null }[] }
       fn_google_resolve: { Args: { p_org: string; p_id: string; p_revision: string; p_local_revision: string; p_etag: string | null; p_choice: string }; Returns: undefined }
       fn_google_counts_for_conflicts: { Args: { p_org: string; p_connection: string; p_calendar: string }; Returns: boolean }
       fn_google_coverage: { Args: { p_org: string; p_owner: string; p_start: string; p_end: string }; Returns: boolean }
@@ -11158,10 +11193,10 @@ export type Database = {
         Args: {
           p_chat_id: string
           p_kind: string
-          p_lid: string
-          p_notify: string
+          p_lid: string | null
+          p_notify: string | null
           p_org: string
-          p_phone: string
+          p_phone: string | null
         }
         Returns: string
       }
@@ -11187,7 +11222,7 @@ export type Database = {
         Args: {
           p_embedding: string
           p_k?: number
-          p_kb_version_id: string
+          p_kb_version_id: string | null
           p_organization_id: string
           p_threshold?: number
         }

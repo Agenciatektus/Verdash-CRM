@@ -8,6 +8,7 @@ import { ensureConversation, sessaoProntaParaEnvio } from "@/lib/automation/star
 import { encontrarContatoPorTelefone } from "@/lib/channels/contato-por-telefone";
 import { phoneLookupVariants, canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { parseDialablePhone } from "@/lib/messaging/contact-card";
+import { rpc } from "@/lib/supabase/rpc";
 
 type Admin = SupabaseClient;
 
@@ -60,8 +61,9 @@ async function resolveContactId(
   if (existente) return existente.id;
 
   const waid = canonico.replace(/\D/g, "");
-  const { data: contactId, error: upsertErr } = await admin.rpc(
-    "fn_upsert_wa_contact" as never,
+  const { data: contactId, error: upsertErr } = await rpc(
+    admin,
+    "fn_upsert_wa_contact",
     {
       p_org: orgId,
       p_kind: "phone",
@@ -69,7 +71,7 @@ async function resolveContactId(
       p_lid: null,
       p_chat_id: waid,
       p_notify: input.name?.trim() || null,
-    } as never,
+    },
   );
   if (upsertErr || !contactId) {
     throw new Error(upsertErr?.message ?? "contact_upsert_failed");

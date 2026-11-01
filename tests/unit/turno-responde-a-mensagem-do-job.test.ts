@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { loadInboundBodyForJob } from "@/lib/agent-engine/agent/inbound-turn";
 import type { Queryable } from "@/lib/agent-engine/queue/queue";
+import { fonteDoTurnoMontado } from "./_fonte-da-montagem";
 
 /**
  * A CORRIDA DO INBOUND — e por que este arquivo não é o `mensagem-atual-prioritaria`.
@@ -72,10 +73,8 @@ describe("a linha canônica é lida pelo id do job", () => {
   });
 });
 
-const FONTE = fs.readFileSync(
-  path.join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"),
-  "utf8",
-);
+// Desde a S8 do ADR-0006 a montagem da chamada (F9) mora em `turno/`; a remontagem a devolve ao lugar.
+const FONTE = fonteDoTurnoMontado();
 
 describe("fiação — o id sai do payload e chega ao sinal do turno", () => {
   it("o handler de inbound_turn repassa payload.inbound_message_id", () => {
@@ -89,7 +88,12 @@ describe("fiação — o id sai do payload e chega ao sinal do turno", () => {
     // perguntas do turno se separaram — o que o turno RESPONDE (pinado no job) e
     // o que o cliente DISSE e ainda não foi respondido (a rajada inteira). Ver
     // `rajada-nao-cala-o-pedido-de-humano.test.ts`.
-    expect(FONTE).toMatch(
+    // Mora em F5 (`turno/desvios-deterministicos.ts`) desde a S5 do ADR-0006.
+    const desvios = fs.readFileSync(
+      path.join(process.cwd(), "lib/agent-engine/agent/turno/desvios-deterministicos.ts"),
+      "utf8",
+    );
+    expect(desvios).toMatch(
       /const mensagemDoJob =\s*currentInboundText \?\? latestInboundSignal\(/,
     );
   });
