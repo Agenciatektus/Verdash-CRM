@@ -375,6 +375,18 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
     },
   },
   {
+    id: "organizador",
+    rotulo: "Organizar o funil pela conversa",
+    oQueFaz:
+      "Lê a conversa de cada negócio aberto e, quando uma mensagem da sua equipe sustenta, leva o card para a etapa certa do funil. Só avança, nunca marca como ganho e nunca fala com o cliente.",
+    papel: "entender",
+    exige: {},
+    emissor: "lib/organizador/varredura.ts",
+    sintomaDeFalha:
+      "Os cards ficam parados na primeira etapa mesmo com a conversa andando, e o funil deixa de refletir a venda.",
+    registraEm: "llm_calls",
+  },
+  {
     id: "followup_classify",
     rotulo: "Ler a resposta ao follow-up",
     // As saídas são as que a empresa criou no passo "Classificar (IA)", não uma
