@@ -33,6 +33,7 @@ import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { assertOrgOperante } from "@/lib/organizacao/operante";
+import { assumirPorRespostaHumana } from "@/lib/atendimento/assumir-por-resposta-humana";
 import {
   CHANNEL_SESSION_REF_COLUMNS,
   DEFAULT_CHANNEL_PROVIDER,
@@ -457,7 +458,7 @@ export async function sendMessageHandler(
   // envio com 42703. Sem a coluna, nada está arquivado — e a consulta sem ela é a
   // consulta certa (ver lib/channels/archived).
   const convSelect = (comArchived: boolean) =>
-    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, bot_silenced_until, provider_conversation_id, last_inbound_at, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked, instagram_igsid, is_personal), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status, metadata${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
+    `id, organization_id, contact_id, channel_session_id, is_group, group_chat_id, bot_silenced_until, status, assignee_kind, assigned_to_user_id, provider_conversation_id, last_inbound_at, contacts:contact_id(phone_number, wa_identity, wa_lid, is_blocked, instagram_igsid, is_personal), channel_sessions:channel_session_id(${CHANNEL_SESSION_REF_COLUMNS}, status, metadata${comArchived ? `, ${ARCHIVED_AT}` : ""})`;
   //
   // O filtro por `organization_id` NÃO é redundância com a RLS — é a única
   // proteção que existe na metade dos chamadores. Este handler é a porta de
@@ -512,6 +513,9 @@ export async function sendMessageHandler(
     is_group: boolean;
     group_chat_id: string | null;
     bot_silenced_until: string | null;
+    status: string | null;
+    assignee_kind: string | null;
+    assigned_to_user_id: string | null;
     /** Thread do provider, quando ele endereça por thread própria (migration 0132). */
     provider_conversation_id: string | null;
     /**
@@ -659,12 +663,14 @@ export async function sendMessageHandler(
   // nome do atendente com iniciais em maiúsculo; a IA, o nome configurável.
   const origemDoEmissor = origemDaMensagem(ctx.actor);
   let assinatura: string | null = null;
+  let settingsDaOrg: unknown = null; // reaproveitado pelo auto-claim da resposta humana
   if (origemDoEmissor === "user" || origemDoEmissor === "ai") {
     const { data: orgAssinatura } = await supabase
       .from("organizations")
       .select("settings")
       .eq("id", ctx.organization_id)
       .maybeSingle();
+    settingsDaOrg = orgAssinatura?.settings ?? null;
     const configAss = configAssinatura(orgAssinatura?.settings);
     const coberta =
       (origemDoEmissor === "user" && configAss.humanos) ||
@@ -1408,6 +1414,19 @@ export async function sendMessageHandler(
   }
 
   await supabase.from("conversations").update(conversationUpdate).eq("id", c.id);
+
+  // Resposta humana pelo CRM = a pessoa passa a ser a responsável (só em org com prazo de devolução).
+  // Envio que falhou não conta como atendimento.
+  if (ctx.actor.type === "user" && message.status !== "failed") {
+    await assumirPorRespostaHumana(supabase, {
+      organizationId: c.organization_id,
+      conversationId: c.id,
+      contactId: c.contact_id,
+      userId: ctx.actor.id,
+      settings: settingsDaOrg,
+      conversa: { status: c.status, assignee_kind: c.assignee_kind, assigned_to_user_id: c.assigned_to_user_id, is_group: c.is_group },
+    });
+  }
 
   // Envio pelo CRM não passa por `fn_mark_conversation_message` — carimba o
   // contato aqui para /app/contacts refletir a resposta (migration 0162).
