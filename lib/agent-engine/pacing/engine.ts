@@ -46,6 +46,8 @@ export interface PacingInput {
    * Esta decisão é para a RESPOSTA do agente (o cliente escreveu e espera
    * resposta) ou para o DISPARO (envio em massa / retomada de conversa parada)?
    *
+   * `true` TAMBÉM dispensa o teto de aquecimento e o teto diário: só disparo e prospecção são
+   * limitados por eles (o throttle segue valendo). Não passe `true` em envio que ninguém pediu.
    * ⚠️ `true` (resposta) lê `resposta*`; `false`/omitido (disparo) lê
    * `window*`. Default `false` porque TODO chamador existente é disparo ou
    * não-POSTO — o `pacingGate` precisa declarar a resposta explicitamente para
@@ -146,7 +148,6 @@ export function decidePacing(input: PacingInput): PacingDecision {
             `agende para ${formatInTz(nextAllowedAt, knobs.timezone)} (próxima abertura + jitter)`,
       };
     }
-
   }
 
   let waitMs = 0;
