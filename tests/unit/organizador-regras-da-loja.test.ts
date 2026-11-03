@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EtapaDoFunil, MensagemDaConversa } from "@/lib/organizador/decidir";
-import { atalhoDaLoja, ehAutomatica, temSinalDeFechamento, ehTrocaOuDevolucao, lerRegras, pedeTroca, perdidoPorSilencio, semAutomaticas } from "@/lib/organizador/regras-da-loja";
+import { atalhoDaLoja, ehAutomatica, temSinalDeFechamento, ehTrocaOuDevolucao, avaliaSilencio, lerRegras, pedeTroca, perdidoPorSilencio, semAutomaticas } from "@/lib/organizador/regras-da-loja";
 
 const etapa = (id: string, name: string, position: number, extra: Partial<EtapaDoFunil> = {}): EtapaDoFunil => ({
   id, name, position, is_won: false, is_lost: false, is_archived: false, ...extra,
@@ -116,5 +116,29 @@ describe("silêncio não perde venda em andamento", () => {
     const h = [msg("inbound", "Tem as peças G1?", "2026-10-20T10:00:00Z"), msg("outbound", "Temos sim, G1 sai por 299, aceitamos pix e cartão, entrega por motoboy", "2026-10-20T10:10:00Z")];
     expect(temSinalDeFechamento(h)).toBe(false);
     expect(perdidoPorSilencio(REGRAS, h, agora)).toBe(true);
+  });
+});
+
+describe("sinal de fechamento só com afirmação (P1 do Cassio na #494)", () => {
+  const agora = new Date("2026-11-10T12:00:00Z");
+  const perde = (...m: MensagemDaConversa[]) => perdidoPorSilencio(REGRAS, [msg("inbound", "Tem a camisa G?", "2026-10-20T10:00:00Z"), ...m], agora);
+  it.each([
+    ["domingo fechado", msg("outbound", "Sábado das 9h às 13h, domingo fechado", "2026-10-20T10:10:00Z")],
+    ["combinado?", msg("outbound", "Qualquer dúvida me chama, combinado?", "2026-10-20T10:10:00Z")],
+    ["fechou com a gente?", msg("outbound", "E aí, fechou com a gente?", "2026-10-20T10:10:00Z")],
+  ])("fala da loja comum não bloqueia a perda: %s", (_n, m) => {
+    expect(perde(m)).toBe(true);
+  });
+  it.each([
+    "qual o endereço da loja?",
+    "quanto fica o frete pro cep 01001-000?",
+    "quero 20% de desconto",
+    "vocês ficam em qual rua?",
+  ])("pergunta de pré-venda do cliente não bloqueia a perda: %s", (txt) => {
+    expect(perde(msg("inbound", txt, "2026-10-20T10:05:00Z"), msg("outbound", "Posso ajudar com mais alguma coisa", "2026-10-20T10:10:00Z"))).toBe(true);
+  });
+  it("afirmação de fechamento do cliente bloqueia e o motivo aparece", () => {
+    const h = [msg("inbound", "pode separar, vou buscar amanhã", "2026-10-20T10:00:00Z"), msg("outbound", "Separado", "2026-10-20T10:10:00Z")];
+    expect(avaliaSilencio(REGRAS, h, agora)).toBe("sinal_de_fechamento");
   });
 });

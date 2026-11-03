@@ -14,7 +14,7 @@ import {
   type MensagemDaConversa,
 } from "./decidir";
 import { moverNegocioDeFunil } from "@/lib/leads/mover-de-funil";
-import { atalhoDaLoja, pedeTroca, perdidoPorSilencio, semAutomaticas, type RegrasDaLoja } from "./regras-da-loja";
+import { atalhoDaLoja, avaliaSilencio, pedeTroca, semAutomaticas, type RegrasDaLoja } from "./regras-da-loja";
 
 /**
  * Uma passada do Organizador sobre UM negócio: lê a conversa, pergunta ao modelo
@@ -117,7 +117,8 @@ export async function organizaLead(
   // Decisões que o código toma sem o modelo (regras da loja). O modelo errou nelas na amostra da Fiorotto.
   let decisao: Decisao | undefined;
   let justificativaFinal = "";
-  if (perdidoPorSilencio(regras, historicoBruto, new Date())) {
+  const silencio = avaliaSilencio(regras, historicoBruto, new Date());
+  if (silencio === "perder") {
     const perda = etapas.find((e) => e.is_lost && !e.is_archived);
     const motivo = regras.motivo_perda ?? "";
     if (perda && motivos.includes(motivo)) {
@@ -128,8 +129,9 @@ export async function organizaLead(
       return { leadId, decisao: { mover: false, porque: "silencio_sem_etapa_ou_motivo_de_perda" }, aplicado: false };
     }
   } else if (input.soSilencio) {
-    await grava({ mover: false, porque: "silencio_nao_vencido" });
-    return { leadId, decisao: { mover: false, porque: "silencio_nao_vencido" }, aplicado: false };
+    const porque = silencio === "nao_vencido" ? "silencio_nao_vencido" : `silencio_bloqueado_${silencio}`;
+    await grava({ mover: false, porque });
+    return { leadId, decisao: { mover: false, porque }, aplicado: false };
   } else if (regras.funil_posvenda && pedeTroca(historico)) {
     // A venda aconteceu e agora é troca: o MESMO card vai para o funil de pós-venda (decisão de 19/10).
     const { rows: destino } = await pool.query<{ id: string }>(
