@@ -31,6 +31,8 @@ export interface EtapaDoFunil {
   win_probability?: number | null;
   /** Negócio que entra aqui abre um aviso na Central (migration 0440). */
   avisar_na_central?: boolean;
+  /** Frases do gatilho por frase (9092). */
+  gatilho_frases?: string[];
   /** Negócio que entra aqui envia o evento de conversão (9054). */
   envia_conversao?: boolean;
   evento_de_conversao?: "Purchase" | "QualifiedLead" | null;

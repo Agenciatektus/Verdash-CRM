@@ -40,7 +40,7 @@ const MENSAGENS_LIDAS = 40;
 export async function organizaLead(
   pool: pg.Pool,
   cfg: { llm: LlmEdgeConfig; crm: CrmEdgeConfig },
-  input: { organizationId: string; leadId: string; dryRun: boolean; ultimaMsgEm: string | null },
+  input: { organizationId: string; leadId: string; dryRun: boolean; ultimaMsgEm: string | null; instrucoes?: string | null },
   log: Logger,
 ): Promise<ResultadoDaPassada> {
   const { organizationId, leadId, dryRun, ultimaMsgEm } = input;
@@ -92,7 +92,7 @@ export async function organizaLead(
     [lead.pipeline_id, organizationId],
   );
   const motivos = vocabularioDeMotivos(lead.settings);
-  const { system, user } = montaPrompt({ etapas, atualId: lead.stage_id, historico, motivos });
+  const { system, user } = montaPrompt({ etapas, atualId: lead.stage_id, historico, motivos, instrucoes: input.instrucoes });
 
   let chamada: Awaited<ReturnType<typeof runModelCall>>;
   try {
@@ -232,7 +232,7 @@ export async function tickDoOrganizador(
               await organizaLead(
                 pool,
                 cfg,
-                { organizationId: org.id, leadId: l.id, dryRun: org.organizador.dry_run === true, ultimaMsgEm: l.ultima },
+                { organizationId: org.id, leadId: l.id, dryRun: org.organizador.dry_run === true, ultimaMsgEm: l.ultima, instrucoes: typeof org.organizador.instrucoes === "string" ? org.organizador.instrucoes : null },
                 log,
               );
             } catch (err) {

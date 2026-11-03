@@ -44,6 +44,8 @@ export interface PatchDeEtapa {
   win_probability?: number | null;
   /** Negócio que entra nesta etapa abre um aviso na Central (migration 0440). */
   avisar_na_central?: boolean;
+  /** Frases do gatilho por frase (9092); `[]` limpa. */
+  gatilho_frases?: string[];
   /** Envia conversão (Meta/Google) ao entrar nesta etapa, e qual evento (9054). */
   envia_conversao?: boolean;
   evento_de_conversao?: "Purchase" | "QualifiedLead";
