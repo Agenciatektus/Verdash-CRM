@@ -45,7 +45,7 @@ describe("assumirPorRespostaHumana", () => {
   it("org com prazo e conversa sem responsável: atribui, sem leitura extra, e o negócio sem dono é adotado (sem substituir)", async () => {
     const { client, rpc, from } = fake();
     expect(await assumirPorRespostaHumana(client, args())).toBe(true);
-    expect(rpc.mock.calls[0]?.[1]).toMatchObject({ p_to_user_id: USER, p_reason: "resposta_humana_crm", p_enforce_expected: true });
+    expect((rpc.mock.calls[0] as unknown[] | undefined)?.[1]).toMatchObject({ p_to_user_id: USER, p_reason: "resposta_humana_crm", p_enforce_expected: true });
     expect(from).not.toHaveBeenCalled();
     expect(adotar).toHaveBeenCalledWith("ADMIN", ORG, "k1", USER);
   });
