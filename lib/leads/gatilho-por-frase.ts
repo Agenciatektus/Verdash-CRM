@@ -40,6 +40,11 @@ export function dividirFrases(bruto: string): string[] {
   return frases;
 }
 
+/** Só letras e números, palavras separadas por um espaço: a forma em que o casamento é por PALAVRA inteira. */
+function palavras(texto: string): string {
+  return normaliza(texto).replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
 export interface EtapaComFrases {
   id: string;
   position: number;
@@ -56,14 +61,16 @@ export function etapaQueCasa(
   texto: string,
   etapas: readonly EtapaComFrases[],
 ): { etapa: EtapaComFrases; frase: string } | null {
-  const alvo = normaliza(texto);
-  if (alvo === "") return null;
+  // " sim " não está em " assim ": frase curta não casa no meio de outra palavra.
+  const alvo = ` ${palavras(texto)} `;
+  if (alvo.trim() === "") return null;
   let melhor: { etapa: EtapaComFrases; frase: string } | null = null;
   for (const etapa of etapas) {
     if (etapa.is_archived || etapa.is_lost) continue;
     for (const frase of etapa.gatilho_frases ?? []) {
-      const chave = normaliza(frase);
-      if (chave.length < MIN_CARACTERES_DA_FRASE || !alvo.includes(chave)) continue;
+      if (typeof frase !== "string") continue;
+      const chave = palavras(frase);
+      if (chave.length < MIN_CARACTERES_DA_FRASE || !alvo.includes(` ${chave} `)) continue;
       if (!melhor || etapa.position > melhor.etapa.position) melhor = { etapa, frase };
       break;
     }

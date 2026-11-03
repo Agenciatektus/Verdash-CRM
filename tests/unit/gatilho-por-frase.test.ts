@@ -44,6 +44,13 @@ describe("gatilho por frase: casamento", () => {
     expect(etapaQueCasa("bom dia", [E(3, ["pedido confirmado"])])).toBeNull();
     expect(etapaQueCasa("pedido confirmado", [E(3, ["pedido confirmado"])])).not.toBeNull();
   });
+  it("casa por PALAVRA inteira: 'sim' não casa em 'assim', mas casa em 'sim, pode' e em 'Sim!'", () => {
+    const sim = [E(3, ["sim"])];
+    expect(etapaQueCasa("assim fica bom", sim)).toBeNull();
+    expect(etapaQueCasa("Sim!", sim)).not.toBeNull();
+    expect(etapaQueCasa("claro, sim, pode ser", sim)).not.toBeNull();
+    expect(etapaQueCasa("Pago ✅ obrigado", [E(4, ["Pago ✅"])])).not.toBeNull();
+  });
   it("dividirFrases tira vazias e repetidas (sem acento nem caixa) e guarda a grafia original", () => {
     expect(dividirFrases("Pedido confirmado\n\n  pedido CONFIRMADO \nPago ✅")).toEqual(["Pedido confirmado", "Pago ✅"]);
   });
@@ -57,7 +64,7 @@ const MENSAGEM = "m1";
 function fakeAdmin(t: {
   etapas: Array<EtapaComFrases & { pipeline_id: string }>;
   atuais?: Array<{ id: string; position: number }>;
-  mensagem?: { direction: string; body: string | null } | null;
+  mensagem?: { direction: string; body: string | null; contact_id?: string | null; sent_via?: string; type?: string; metadata?: Record<string, unknown> } | null;
   negocios?: Array<{ id: string; stage_id: string; pipeline_id: string }>;
 }) {
   return {
@@ -71,7 +78,10 @@ function fakeAdmin(t: {
           comNeq = true;
           return q;
         },
-        maybeSingle: async () => ({ data: tabela === "messages" ? (t.mensagem ?? null) : null, error: null }),
+        maybeSingle: async () => ({
+          data: tabela === "messages" && t.mensagem ? { contact_id: CONTATO, sent_via: "external_device", type: "text", metadata: {}, ...t.mensagem } : null,
+          error: null,
+        }),
         then: (ok: (v: unknown) => unknown) =>
           ok({
             data:
@@ -84,6 +94,7 @@ function fakeAdmin(t: {
   };
 }
 
+/** Forma do trigger `fn_emit_message_event` (eco do celular): traz message_id e contact_id no payload. */
 const evento = (extra: Partial<EventRow["payload"]> = {}): EventRow => ({
   id: "ev1",
   organization_id: ORG,
@@ -154,6 +165,57 @@ describe("gatilho por frase: handler", () => {
     expect(await gatilhoPorFraseHandler.handle(evento())).toMatchObject({ status: "skipped" });
     vi.mocked(moveLeadHandler).mockRejectedValueOnce(new ApiError(500, "internal_error", undefined, "r"));
     expect((await gatilhoPorFraseHandler.handle(evento())).status).toBe("error");
+  });
+
+  it("TESTE DA LIGAÇÃO: o evento do Inbox (emit_event de messages/_handler: só status e conversation_id, mensagem em entity_id) move o card", async () => {
+    monta({ etapas: ETAPAS, atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado", sent_via: "crm" }, negocios: [NEGOCIO] });
+    const doInbox = { ...evento(), payload: { status: "queued", conversation_id: "cv1" } };
+    expect((await gatilhoPorFraseHandler.handle(doInbox)).status).toBe("ok");
+    expect(moveLeadHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it("só a equipe aciona: IA, automação, campanha e sistema não movem (controle: user/crm/external_device movem)", async () => {
+    for (const via of ["ai", "automation", "system"]) {
+      monta({ etapas: ETAPAS, atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado", sent_via: via }, negocios: [NEGOCIO] });
+      expect(await gatilhoPorFraseHandler.handle(evento())).toMatchObject({ status: "skipped", detail: "nao_e_da_equipe" });
+    }
+    expect(moveLeadHandler).not.toHaveBeenCalled();
+    for (const via of ["user", "crm", "external_device"]) {
+      monta({ etapas: ETAPAS, atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado", sent_via: via }, negocios: [NEGOCIO] });
+      expect((await gatilhoPorFraseHandler.handle(evento())).status).toBe("ok");
+    }
+  });
+
+  it("o contato vem da LINHA da mensagem: contact_id forjado no payload é ignorado", async () => {
+    const lidos: string[] = [];
+    const admin = fakeAdmin({ etapas: ETAPAS, atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado", contact_id: "contato-real" }, negocios: [NEGOCIO] });
+    const from = admin.from.bind(admin);
+    vi.mocked(createAdminClient).mockReturnValue({
+      from(tabela: string) {
+        const q = from(tabela) as Record<string, (...a: unknown[]) => unknown>;
+        const eq = q.eq as (c: string, v: unknown) => unknown;
+        q.eq = (c: string, v: unknown) => {
+          if (tabela === "crm_leads" && c === "contact_id") lidos.push(String(v));
+          return eq(c, v);
+        };
+        return q;
+      },
+    } as never);
+    await gatilhoPorFraseHandler.handle(evento({ contact_id: "contato-da-vitima" }));
+    expect(lidos).toEqual(["contato-real"]);
+  });
+
+  it("histórico importado e mensagem sem contato não movem", async () => {
+    monta({ etapas: ETAPAS, atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado", metadata: { historico_importado: "true" } }, negocios: [NEGOCIO] });
+    expect(await gatilhoPorFraseHandler.handle(evento())).toMatchObject({ detail: "historico_importado" });
+    monta({ etapas: ETAPAS, mensagem: { direction: "outbound", body: "pedido confirmado", contact_id: null }, negocios: [NEGOCIO] });
+    expect(await gatilhoPorFraseHandler.handle(evento())).toMatchObject({ detail: "mensagem_sem_contato" });
+    expect(moveLeadHandler).not.toHaveBeenCalled();
+  });
+
+  it("elemento que não é texto na coluna não derruba o handler", async () => {
+    monta({ etapas: [{ ...E(3, []), pipeline_id: "p1", gatilho_frases: [null, "pedido confirmado"] as unknown as string[] }], atuais: [{ id: "e1", position: 1000 }], mensagem: { direction: "outbound", body: "pedido confirmado" }, negocios: [NEGOCIO] });
+    expect((await gatilhoPorFraseHandler.handle(evento())).status).toBe("ok");
   });
 
   it("escuta só message.sent e pula org parada", () => {

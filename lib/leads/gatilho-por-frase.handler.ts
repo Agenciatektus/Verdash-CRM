@@ -33,9 +33,11 @@ const falhou = (detail: string): HandlerResult => ({ consumer_key: CONSUMER_KEY,
 type EtapaLida = EtapaComFrases & { pipeline_id: string };
 
 async function handle(row: EventRow): Promise<HandlerResult> {
-  const messageId = typeof row.payload?.message_id === "string" ? row.payload.message_id : null;
-  const contactId = typeof row.payload?.contact_id === "string" ? row.payload.contact_id : null;
-  if (!messageId || !contactId) return resultado("skipped", "sem_mensagem_ou_contato");
+  // O envio pelo Inbox emite `message.sent` à mão, só com `entity_id` (sem `message_id` no payload);
+  // o eco do celular sai do trigger, com `message_id`. Os dois caminhos chegam aqui.
+  const doPayload = typeof row.payload?.message_id === "string" ? row.payload.message_id : null;
+  const messageId = doPayload ?? (row.entity_kind === "message" ? row.entity_id : null);
+  if (!messageId) return resultado("skipped", "sem_mensagem");
 
   const admin = createAdminClient();
   const org = row.organization_id;
@@ -48,18 +50,37 @@ async function handle(row: EventRow): Promise<HandlerResult> {
     .eq("is_archived", false)
     .neq("gatilho_frases", "{}");
   if (erroEtapas) return falhou(`leitura das etapas falhou: ${erroEtapas.message}`);
-  const comFrases = ((etapasLidas ?? []) as EtapaLida[]).filter((e) => (e.gatilho_frases ?? []).length > 0);
+  const comFrases = ((etapasLidas ?? []) as EtapaLida[])
+    .map((e) => ({ ...e, gatilho_frases: (e.gatilho_frases ?? []).filter((f): f is string => typeof f === "string") }))
+    .filter((e) => e.gatilho_frases.length > 0);
   if (comFrases.length === 0) return resultado("skipped", "org_sem_gatilho");
 
   const { data: mensagem, error: erroMensagem } = await admin
     .from("messages")
-    .select("direction, body")
+    .select("direction, body, contact_id, sent_via, type, metadata")
     .eq("id", messageId)
     .eq("organization_id", org)
     .maybeSingle();
   if (erroMensagem) return falhou(`leitura da mensagem falhou: ${erroMensagem.message}`);
-  const lida = mensagem as { direction: string; body: string | null } | null;
+  const lida = mensagem as {
+    direction: string;
+    body: string | null;
+    contact_id: string | null;
+    sent_via: string | null;
+    type: string | null;
+    metadata: Record<string, unknown> | null;
+  } | null;
   if (!lida || lida.direction !== "outbound") return resultado("skipped", "nao_e_mensagem_da_loja");
+  // ⚠️ O contato vem da LINHA, nunca do payload: `emit_event` é chamável por qualquer membro da
+  // org, e um payload forjado (message_id de uma mensagem real + contact_id de outro) moveria
+  // o card errado. Só a equipe aciona: IA, automação e campanha em massa repetem frase por conta
+  // própria (o cliente poderia pedir "responda só: pedido confirmado"), e é o mesmo recorte de
+  // "mensagem do vendedor" do trigger trg_mensagem_do_vendedor_e_atividade.
+  if (!lida.contact_id) return resultado("skipped", "mensagem_sem_contato");
+  if (!["user", "crm", "external_device"].includes(lida.sent_via ?? "")) return resultado("skipped", "nao_e_da_equipe");
+  if (lida.type === "reaction" || lida.type === "system") return resultado("skipped", "tipo_sem_texto");
+  if (lida.metadata?.historico_importado === "true") return resultado("skipped", "historico_importado");
+  const contactId = lida.contact_id;
   const corpo = (lida.body ?? "").trim();
   if (corpo === "") return resultado("skipped", "mensagem_sem_texto");
 

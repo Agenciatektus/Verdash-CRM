@@ -67203,7 +67203,11 @@ alter table public.crm_stages
 
 alter table public.crm_stages drop constraint if exists crm_stages_gatilho_frases_max5;
 alter table public.crm_stages
-  add constraint crm_stages_gatilho_frases_max5 check (cardinality(gatilho_frases) <= 5);
+  add constraint crm_stages_gatilho_frases_max5 check (
+    cardinality(gatilho_frases) <= 5
+    and array_position(gatilho_frases, null::text) is null
+    and octet_length(array_to_string(gatilho_frases, '')) <= 600
+  );
 
 comment on column public.crm_stages.gatilho_frases is
   'Ate 5 frases (9092). Mensagem ENVIADA pela loja que contem uma delas (sem acento nem caixa) leva o negocio aberto do contato a esta etapa; so avanca. Fala do cliente nunca aciona.';
