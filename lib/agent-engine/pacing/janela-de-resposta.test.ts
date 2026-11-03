@@ -133,11 +133,19 @@ describe('janela de resposta separada da janela de disparo (0495)', () => {
     }
   });
 
-  it('cap diário continua valendo na RESPOSTA — 24h não é sem limite', () => {
-    // A janela é cortesia; o anti-ban (cap, warm-up, throttle) não abre junto.
+  it('resposta dispensa o cap diário; janela 24h passa', () => {
+    // Cap e aquecimento protegem o número de DISPARO; quem escreveu primeiro é respondido.
     const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     const d = decidePacing({
       now: AS_3H, knobs: k, state: { ...estado, sentToday: 999 }, crmDailyLimit: null, resposta: true,
+    });
+    expect(d.allow).toBe(true);
+  });
+
+  it('o mesmo estado como DISPARO continua vetado pelo cap', () => {
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
+    const d = decidePacing({
+      now: AS_10H, knobs: k, state: { ...estado, sentToday: 999 }, crmDailyLimit: null, resposta: false,
     });
     expect(d.allow).toBe(false);
     if (!d.allow) expect(d.code).not.toBe('outside_window');
