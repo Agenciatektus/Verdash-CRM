@@ -33,6 +33,7 @@ import type { Actor, HandlerCtx } from "@/lib/api/handlers/types";
 import { audit } from "@/lib/audit";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { assertOrgOperante } from "@/lib/organizacao/operante";
+import { assumirPorRespostaHumana } from "@/lib/atendimento/assumir-por-resposta-humana";
 import {
   CHANNEL_SESSION_REF_COLUMNS,
   DEFAULT_CHANNEL_PROVIDER,
@@ -1408,6 +1409,16 @@ export async function sendMessageHandler(
   }
 
   await supabase.from("conversations").update(conversationUpdate).eq("id", c.id);
+
+  // Resposta humana pelo CRM = a pessoa passa a ser a responsável (só em org com prazo de devolução).
+  if (ctx.actor.type === "user") {
+    await assumirPorRespostaHumana(supabase, {
+      organizationId: c.organization_id,
+      conversationId: c.id,
+      contactId: c.contact_id,
+      userId: ctx.actor.id,
+    });
+  }
 
   // Envio pelo CRM não passa por `fn_mark_conversation_message` — carimba o
   // contato aqui para /app/contacts refletir a resposta (migration 0162).
