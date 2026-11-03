@@ -67196,6 +67196,18 @@ alter table public.organizador_passadas enable row level security;
 revoke all on table public.organizador_passadas from public, anon, authenticated;
 grant select, insert, update on table public.organizador_passadas to service_role;
 
+-- ---- Etapa: gatilho por frase (migration 9092) ----
+-- Mesmo bloco da migration 9092. Nao cria funcao nem tabela: so coluna e CHECK.
+alter table public.crm_stages
+  add column if not exists gatilho_frases text[] not null default '{}';
+
+alter table public.crm_stages drop constraint if exists crm_stages_gatilho_frases_max5;
+alter table public.crm_stages
+  add constraint crm_stages_gatilho_frases_max5 check (cardinality(gatilho_frases) <= 5);
+
+comment on column public.crm_stages.gatilho_frases is
+  'Ate 5 frases (9092). Mensagem ENVIADA pela loja que contem uma delas (sem acento nem caixa) leva o negocio aberto do contato a esta etapa; so avanca. Fala do cliente nunca aciona.';
+
 -- ---- a linha não troca de organização em NENHUMA tabela de public (migration 9031) ----
 --
 -- A 9030 pôs trg_organizacao_nao_muda nas 52 tabelas cuja for all só exigia

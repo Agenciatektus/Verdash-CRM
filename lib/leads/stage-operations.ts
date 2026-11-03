@@ -56,7 +56,7 @@ export interface DepsDeEtapa {
 
 /** As colunas que a tela e as regras usam. `position` entra: a reordenação calcula em cima dela. */
 const COLUNAS =
-  "id, name, slug, position, is_won, is_lost, is_archived, win_probability, agent_stage_hint, avisar_na_central, envia_conversao, evento_de_conversao, expected_duration_hours, last_change_actor_kind, last_change_at";
+  "id, name, slug, position, is_won, is_lost, is_archived, win_probability, agent_stage_hint, avisar_na_central, gatilho_frases, envia_conversao, evento_de_conversao, expected_duration_hours, last_change_actor_kind, last_change_at";
 
 /** A etapa como sai para quem lê — inclui a autoria da última mudança de configuração. */
 export interface EtapaVisivel {
@@ -76,6 +76,8 @@ export interface EtapaVisivel {
   win_probability: number | null;
   /** Negócio que entra nesta etapa abre um aviso na Central (migration 0440). */
   avisar_na_central: boolean;
+  /** Frases que, numa mensagem enviada pela loja, levam o negócio para esta etapa (9092). */
+  gatilho_frases: string[];
   /** Negócio que entra aqui envia o evento de conversão `evento_de_conversao` (9054). */
   envia_conversao: boolean;
   evento_de_conversao: EventoDeConversaoDaEtapa | null;
@@ -94,6 +96,7 @@ export interface EtapaVisivel {
 
 type EtapaLida = EtapaEditavel & {
   avisar_na_central?: boolean | null;
+  gatilho_frases?: string[] | null;
   envia_conversao?: boolean | null;
   evento_de_conversao?: string | null;
   last_change_actor_kind: string | null;
@@ -150,6 +153,7 @@ export function corpo(etapas: EtapaLida[]): { etapas: EtapaVisivel[] } {
         is_lost: e.is_lost,
         win_probability: e.win_probability ?? null,
         avisar_na_central: e.avisar_na_central === true,
+        gatilho_frases: e.gatilho_frases ?? [],
         envia_conversao: e.envia_conversao === true,
         evento_de_conversao: (e.evento_de_conversao ?? null) as EventoDeConversaoDaEtapa | null,
         expected_duration_hours: e.expected_duration_hours ?? null,
@@ -340,6 +344,8 @@ export interface PedidoDeEdicao {
   depois_de?: string | null;
   /** Liga ou desliga o aviso na Central para quem entra nesta etapa (0440). */
   avisar_na_central?: boolean;
+  /** Até 5 frases do gatilho por frase (9092); `[]` limpa. */
+  gatilho_frases?: string[];
   /** Liga ou desliga o envio de conversão ao entrar nesta etapa, e qual evento (9054). */
   envia_conversao?: boolean;
   evento_de_conversao?: EventoDeConversaoDaEtapa;
@@ -430,6 +436,7 @@ export async function atualizarEtapa(
     position?: number;
     win_probability?: number | null;
     avisar_na_central?: boolean;
+    gatilho_frases?: string[];
     envia_conversao?: boolean;
     evento_de_conversao?: EventoDeConversaoDaEtapa;
     expected_duration_hours?: number | null;
@@ -438,6 +445,7 @@ export async function atualizarEtapa(
   // `undefined` não viaja; `null` limpa a calibração de propósito.
   if (pedido.win_probability !== undefined) patchDoAlvo.win_probability = pedido.win_probability;
   if (pedido.avisar_na_central !== undefined) patchDoAlvo.avisar_na_central = pedido.avisar_na_central;
+  if (pedido.gatilho_frases !== undefined) patchDoAlvo.gatilho_frases = pedido.gatilho_frases;
   if (pedido.envia_conversao !== undefined) patchDoAlvo.envia_conversao = pedido.envia_conversao;
   if (pedido.evento_de_conversao !== undefined)
     patchDoAlvo.evento_de_conversao = pedido.evento_de_conversao;
