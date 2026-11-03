@@ -53,3 +53,25 @@ describe('cortesia não é anti-ban', () => {
     expect(d.allow).toBe(false); // nenhum chamador existente muda de resultado
   });
 });
+
+describe('aquecimento e teto diário são do disparo, não da resposta (Salão, 03/11)', () => {
+  it('resposta a quem escreveu primeiro passa mesmo com o teto estourado', () => {
+    const d = decidePacing({ ...input({ now: COMERCIAL, sentToday: 999 }), resposta: true });
+    expect(d.allow).toBe(true);
+  });
+
+  it('disparo com o mesmo estado continua vetado', () => {
+    const d = decidePacing({ ...input({ now: COMERCIAL, sentToday: 999 }), resposta: false });
+    expect(d.allow).toBe(false);
+  });
+
+  it('prospecção nunca é resposta: teto continua valendo', () => {
+    const d = decidePacing({ ...input({ now: COMERCIAL, sentToday: 999 }), resposta: true, prospeccao: true });
+    expect(d.allow).toBe(false);
+  });
+
+  it('resposta fora da janela de resposta continua vetada (cortesia)', () => {
+    const d = decidePacing({ ...input({ now: MADRUGADA, sentToday: 0 }), resposta: true });
+    expect(d.allow).toBe(false);
+  });
+});
