@@ -24,6 +24,11 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { arquivarEtapa, atualizarEtapa } from "@/lib/leads/stage-operations";
 import { EVENTOS_DE_CONVERSAO_DA_ETAPA } from "@/lib/conversoes/entrada-na-etapa";
+import {
+  MAX_CARACTERES_DA_FRASE,
+  MAX_FRASES_POR_ETAPA,
+  MIN_CARACTERES_DA_FRASE,
+} from "@/lib/leads/gatilho-por-frase";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -54,6 +59,11 @@ const bodySchema = z
     win_probability: z.number().int().min(0).max(100).nullable().optional(),
     /** Negócio que entra nesta etapa abre um aviso na Central (migration 0440). */
     avisar_na_central: z.boolean().optional(),
+    /** Frases do gatilho por frase (9092): até 5, de 3 a 120 caracteres; `[]` limpa. */
+    gatilho_frases: z
+      .array(z.string().trim().min(MIN_CARACTERES_DA_FRASE).max(MAX_CARACTERES_DA_FRASE))
+      .max(MAX_FRASES_POR_ETAPA)
+      .optional(),
     /** Envia conversão (Meta/Google) ao entrar na etapa, e qual evento (9054). */
     envia_conversao: z.boolean().optional(),
     evento_de_conversao: z.enum(EVENTOS_DE_CONVERSAO_DA_ETAPA).optional(),

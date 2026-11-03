@@ -35,6 +35,7 @@ import { SeloDeAutoria } from "@/components/operacao/SeloDeAutoria";
 import { useT } from "@/hooks/i18n/useT";
 
 import { ConversaoDaEtapa } from "./_conversao-da-etapa";
+import { FrasesDaEtapa } from "./_frases-da-etapa";
 import { mensagemDeErro } from "./_mapping";
 
 /**
@@ -698,6 +699,16 @@ export function StagesSection({
               </label>
 
               <ConversaoDaEtapa etapa={etapa} ocupado={ocupado} aplicar={aplicar} />
+
+              {/* Ganho e perda ficam de fora: perda exige motivo, e a frase não o carrega. */}
+              {!etapa.is_lost && (
+                <FrasesDaEtapa
+                  key={`frases-${etapa.id}-${(etapa.gatilho_frases ?? []).join("|")}`}
+                  etapa={etapa}
+                  ocupado={ocupado}
+                  aplicar={aplicar}
+                />
+              )}
 
               {passo && (
                 <p className="text-xs text-text-muted" data-testid={`passo-de-${etapa.id}`}>
