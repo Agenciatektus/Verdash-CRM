@@ -43,9 +43,17 @@ export interface PacingInput {
    */
   banRisk?: boolean;
   /**
+   * Envio do AGENTE (resposta, follow-up, aviso): fora dos tetos de aquecimento e diário. Só campanha e
+   * prospecção são limitadas por volume (decisão do Peterson, 03/11). Janela horária e throttle seguem.
+   * Omitir = teto armado (chamador novo nasce protegido).
+   */
+  semTeto?: boolean;
+  /**
    * Esta decisão é para a RESPOSTA do agente (o cliente escreveu e espera
    * resposta) ou para o DISPARO (envio em massa / retomada de conversa parada)?
    *
+   * `true` TAMBÉM dispensa o teto de aquecimento e o teto diário: só disparo e prospecção são
+   * limitados por eles (o throttle segue valendo). Não passe `true` em envio que ninguém pediu.
    * ⚠️ `true` (resposta) lê `resposta*`; `false`/omitido (disparo) lê
    * `window*`. Default `false` porque TODO chamador existente é disparo ou
    * não-POSTO — o `pacingGate` precisa declarar a resposta explicitamente para
@@ -119,27 +127,33 @@ export function decidePacing(input: PacingInput): PacingDecision {
   // SEMPRE — desarmar as duas juntas acordaria cliente às 3h (invariante 3).
   if (!banRisk) return { allow: true, waitMs: 0 };
 
-  // Clamp em >= 0: number_activated_at no futuro (typo do admin / clock skew
-  // daemon↔DB) cai no degrau MAIS conservador — warm-up falha FECHADO, nunca
-  // vira "número formado" por idade negativa.
-  const ageDays = state.numberActivatedAt
-    ? Math.max(0, Math.floor((now.getTime() - state.numberActivatedAt.getTime()) / DAY_MS))
-    : 0;
-  const wCap = warmupCapFor(ageDays, knobs.warmupDailyCaps);
-  const effectiveCap = Math.min(wCap ?? Infinity, crmDailyLimit ?? Infinity);
-  if (state.sentToday >= effectiveCap) {
-    const nextAllowedAt = addMs(nextDayOpen(now, knobs, diasProspeccao), jitterOf(rng, knobs));
-    const isWarmup = wCap !== null && wCap < (crmDailyLimit ?? Infinity);
-    return {
-      allow: false,
-      code: isWarmup ? 'warmup_cap' : 'daily_cap',
-      nextAllowedAt,
-      reason: isWarmup
-        ? `cap de warm-up atingido (${wCap}/dia para número com ${ageDays} dia(s) de idade); ` +
-          `agende para ${formatInTz(nextAllowedAt, knobs.timezone)} (próxima abertura + jitter)`
-        : `cap diário do número atingido (${effectiveCap}/dia, limite do CRM); ` +
-          `agende para ${formatInTz(nextAllowedAt, knobs.timezone)} (próxima abertura + jitter)`,
-    };
+  // Aquecimento e teto diário protegem o número de DISPARO (campanha, retomada, prospecção).
+  // Resposta a quem escreveu primeiro fica fora: um cliente esperou 22 min com o teto de
+  // aquecimento atingido (Salão, 03/11) e a IA cala cliente que está pedindo horário. Janela horária
+  // (cortesia) e throttle seguem valendo para a resposta.
+  if (!input.semTeto && (!resposta || prospeccao)) {
+    // Clamp em >= 0: number_activated_at no futuro (typo do admin / clock skew
+    // daemon↔DB) cai no degrau MAIS conservador — warm-up falha FECHADO, nunca
+    // vira "número formado" por idade negativa.
+    const ageDays = state.numberActivatedAt
+      ? Math.max(0, Math.floor((now.getTime() - state.numberActivatedAt.getTime()) / DAY_MS))
+      : 0;
+    const wCap = warmupCapFor(ageDays, knobs.warmupDailyCaps);
+    const effectiveCap = Math.min(wCap ?? Infinity, crmDailyLimit ?? Infinity);
+    if (state.sentToday >= effectiveCap) {
+      const nextAllowedAt = addMs(nextDayOpen(now, knobs, diasProspeccao), jitterOf(rng, knobs));
+      const isWarmup = wCap !== null && wCap < (crmDailyLimit ?? Infinity);
+      return {
+        allow: false,
+        code: isWarmup ? 'warmup_cap' : 'daily_cap',
+        nextAllowedAt,
+        reason: isWarmup
+          ? `cap de warm-up atingido (${wCap}/dia para número com ${ageDays} dia(s) de idade); ` +
+            `agende para ${formatInTz(nextAllowedAt, knobs.timezone)} (próxima abertura + jitter)`
+          : `cap diário do número atingido (${effectiveCap}/dia, limite do CRM); ` +
+            `agende para ${formatInTz(nextAllowedAt, knobs.timezone)} (próxima abertura + jitter)`,
+      };
+    }
   }
 
   let waitMs = 0;
