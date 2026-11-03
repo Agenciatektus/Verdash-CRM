@@ -24834,10 +24834,9 @@ as $$
     'tenant.reactivated',
     'tenant.suspended',
     'user.profile_updated',
-    -- mensagem ('message.failed' saiu aqui na 0417: ele ganhou consumidor)
+    -- mensagem ('message.failed' saiu na 0417 e 'message.sent' na 9093: ganharam consumidor)
     'message.outbound',
     'message.sending',
-    'message.sent',
     -- LGPD
     'lgpd.export_delivered',
     'lgpd.export_generated',
