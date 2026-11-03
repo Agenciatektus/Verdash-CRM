@@ -558,7 +558,7 @@ async function upsertConversation(
 
   // A thread do provider, que é o motivo deste módulo existir.
   //
-  // Gravada SEMPRE, sem condição. A primeira versão tinha um
+  // Gravada sem condição frágil. A primeira versão tinha um
   // `.neq("provider_conversation_id", ...)` para "só escrever se mudou" — e
   // isso QUEBROU exatamente o que este módulo existe para fazer:
   //
@@ -571,12 +571,17 @@ async function upsertConversation(
   //
   // O teste com dublê não pegou porque o fake tratava `.neq()` como no-op:
   // afirmava que o `update` foi CHAMADO com o payload certo, que era verdade, e
-  // não que ele tivesse casado alguma linha. Escrever sempre é uma escrita a
-  // mais por mensagem e zero condições sutis para errar.
+  // não que ele tivesse casado alguma linha.
+  //
+  // Agora o filtro é `isdistinct` (IS DISTINCT FROM, PostgREST >= 12), que casa
+  // NULL: grava na conversa nova e na thread trocada, e não regrava a mesma
+  // thread a cada mensagem (cada UPDATE vira evento do Realtime por pessoa
+  // conectada). O dublê do teste aplica o operador de verdade.
   await admin
     .from("conversations")
     .update({ provider_conversation_id: input.providerConversationId })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .filter("provider_conversation_id", "isdistinct", input.providerConversationId);
 
   return conversationId;
 }

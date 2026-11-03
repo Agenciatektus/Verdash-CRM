@@ -31,6 +31,8 @@ const ops: { tabela: string; op: string; payload?: unknown }[] = [];
  * FICOU. Um teste só vale o que o dublê se recusa a fingir.
  */
 let linhaConversa: Record<string, unknown> = { provider_conversation_id: null };
+/** Quantas vezes o update de conversations CASOU uma linha (cada uma vira evento do Realtime). */
+let gravacoesNaConversa = 0;
 let rpcResposta: Record<string, unknown> = {
   fn_upsert_wa_contact: "contact-1",
   fn_upsert_wa_conversation: "conv-1",
@@ -67,6 +69,7 @@ function chain(tabela: string, op: string, payload?: unknown): Record<string, un
           return (ok: (v: unknown) => unknown) => {
             if (tabela === "conversations" && op === "update" && casa && payload) {
               Object.assign(linhaConversa, payload as Record<string, unknown>);
+              gravacoesNaConversa++;
             }
             // Devolve as linhas AFETADAS, não `null` fixo: quem chama lê o
             // tamanho para saber se a gravação valeu, e um dublê que sempre diz
@@ -85,7 +88,15 @@ function chain(tabela: string, op: string, payload?: unknown): Record<string, un
               else if (prop === "eq" ? atual !== valor : atual === valor) casa = false;
             }
           }
-          if (["update", "eq", "neq", "not", "is"].includes(String(prop))) {
+          if (prop === "filter") {
+            // `isdistinct` é IS DISTINCT FROM: casa NULL (ao contrário do `neq`).
+            // Operador não emulado quebra o teste em vez de virar no-op.
+            const [coluna, operador, valor] = args as [string, string, unknown];
+            if (operador !== "isdistinct") throw new Error(`filter não emulado: ${operador}`);
+            const atual = tabela === "conversations" ? (linhaConversa[coluna] ?? null) : undefined;
+            if (atual === valor) casa = false;
+          }
+          if (["update", "eq", "neq", "not", "is", "filter"].includes(String(prop))) {
             ops.push({ tabela, op: `${op}.${String(prop)}`, payload: args[0] });
           }
           return proxy;
@@ -144,6 +155,7 @@ const ENTRADA = { organizationId: "org-1", channelSessionId: "sess-1" };
 beforeEach(() => {
   ops.length = 0;
   linhaConversa = { provider_conversation_id: null };
+  gravacoesNaConversa = 0;
   conversaExistente = null;
   insertErro = null;
   rpcResposta = { fn_upsert_wa_contact: "contact-1", fn_upsert_wa_conversation: "conv-1" };
@@ -195,6 +207,18 @@ describe("o que a ingestão GRAVA", () => {
     linhaConversa = { provider_conversation_id: "thread-antiga" };
     await ingestZernioInbound(admin, { ...ENTRADA, payload: evento() });
     expect(linhaConversa.provider_conversation_id).toBe("6a76a2dc4b8fe115e5f6c300");
+  });
+
+  it("a MESMA thread não regrava a conversa (cada UPDATE vira evento do Realtime)", async () => {
+    linhaConversa = { provider_conversation_id: "6a76a2dc4b8fe115e5f6c300" };
+    await ingestZernioInbound(admin, { ...ENTRADA, payload: evento() });
+    expect(gravacoesNaConversa).toBe(0);
+    expect(linhaConversa.provider_conversation_id).toBe("6a76a2dc4b8fe115e5f6c300");
+  });
+
+  it("conversa nova (coluna NULL) grava exatamente uma vez", async () => {
+    await ingestZernioInbound(admin, { ...ENTRADA, payload: evento() });
+    expect(gravacoesNaConversa).toBe(1);
   });
 
   it("a mensagem entra como inbound com o wamid como external_id", async () => {

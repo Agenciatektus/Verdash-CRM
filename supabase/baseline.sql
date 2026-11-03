@@ -5034,16 +5034,24 @@ begin
   return v_id;
 end; $$;
 
+-- 9094: lê antes de inserir; o `do update set updated_at` regravava a conversa a cada mensagem.
 create or replace function public.fn_upsert_wa_conversation(
   p_org uuid, p_contact uuid, p_session uuid
 ) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid;
 begin
+  select id into v_id from public.conversations
+   where organization_id = p_org and contact_id = p_contact and channel_session_id = p_session and is_group = false;
+  if v_id is not null then return v_id; end if;
   insert into public.conversations (organization_id, contact_id, channel_session_id, channel, status, is_group, unread_count_for_assignee, metadata)
   values (p_org, p_contact, p_session, 'whatsapp', 'open', false, 0, '{}'::jsonb)
   on conflict (organization_id, contact_id, channel_session_id) where is_group = false
-  do update set updated_at = now()
+  do nothing
   returning id into v_id;
+  if v_id is null then
+    select id into v_id from public.conversations
+     where organization_id = p_org and contact_id = p_contact and channel_session_id = p_session and is_group = false;
+  end if;
   return v_id;
 end; $$;
 
@@ -37937,6 +37945,7 @@ grant execute on function public.fn_encerrar_roteiros_vencidos(int) to service_r
 --
 -- Desligado (o padrão, e o de toda empresa que já existe), a função faz o mesmo
 -- que antes: a conversa reaberta volta para a fila, sem dono.
+-- 9094: o ramo da conversa não reaberta só atualiza quando algo muda.
 create or replace function public.fn_service_inbound(p_message uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -38002,7 +38011,8 @@ begin
      active_ai_agent_id=null,
      current_demanda_id=d.id
     where id=c.id and organization_id=c.organization_id returning * into c;
- else
+ elsif c.current_demanda_id is distinct from d.id or c.service_started_at is null then
+   -- 9094: com a mesma demanda e o início já gravado, nada muda; `c` (lido com lock acima) segue valendo.
    update public.conversations set
      service_revision=service_revision+case when current_demanda_id is not null and current_demanda_id<>d.id then 1 else 0 end,
      service_started_at=case when current_demanda_id is not null and current_demanda_id<>d.id then m.sent_at else coalesce(service_started_at,m.sent_at) end,
