@@ -68,6 +68,7 @@ function adminQueFalhaNoCarimbo(): SupabaseClient {
       insert: () => chain,
       update: () => chain,
       eq: () => chain,
+      filter: () => chain,
       is: () => chain,
       not: () => chain,
       order: () => chain,
