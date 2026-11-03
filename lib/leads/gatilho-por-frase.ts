@@ -7,7 +7,7 @@
  * Regras herdadas da Verdash, que já passou por isso em produção:
  * - só vale mensagem ENVIADA pela loja (evento `message.sent`); fala do cliente
  *   nunca é gatilho, e essa trava é de quem emite o evento, não do texto;
- * - casa por trecho, sem acento nem caixa;
+ * - casa por palavra inteira, sem acento nem caixa ("sim" não casa em "assim");
  * - mais de uma etapa casando: a de maior posição vence;
  * - só avança: frase de etapa antiga repetida no meio da conversa não recua o card.
  */
