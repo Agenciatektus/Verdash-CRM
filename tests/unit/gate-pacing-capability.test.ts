@@ -68,7 +68,7 @@ describe('gate de pacing respeita a capability do canal', () => {
     expect(v.skipped).toBeUndefined();
   });
 
-  it('sem risco de ban, o cap anti-ban desarma (o gate passa onde o WAHA vetaria)', () => {
+  it('o agente passa livre do teto (semTeto): waha passa sem skipped, meta_cloud segue not_applicable', () => {
     const estourado = {
       knobs: PACING_DEFAULTS,
       state: { lastSentAt: null, sentToday: 999, numberActivatedAt: null },
@@ -76,7 +76,9 @@ describe('gate de pacing respeita a capability do canal', () => {
       rng: () => 0,
     };
     const waha = pacingGate.evaluate(baseCtx({ provider: 'waha', pacing: estourado }));
-    expect(waha.pass).toBe(false);
+    expect(waha.pass).toBe(true);
+    if (!waha.pass) throw new Error('inalcançável');
+    expect(waha.skipped).toBeUndefined();
 
     const meta = pacingGate.evaluate(baseCtx({ provider: 'meta_cloud', pacing: estourado }));
     expect(meta.pass).toBe(true);
@@ -151,10 +153,9 @@ describe('o skipped do gate chega em before_send_traces', () => {
    * `pass` e isto fica vermelho.
    */
   async function rodaComProviderNoBanco(provider: string) {
-    // O cap ESTOURADO é o que torna a origem do provider observável: em 'waha' o
-    // anti-ban veta; em 'meta_cloud' ele desarma e o envio passa. Dentro da janela
-    // comercial, para que a cortesia (que vale nos dois canais) não decida o
-    // desfecho e mascare a diferença.
+    // O agente passa livre do teto, então a origem do provider se observa no TRACE:
+    // 'waha' avalia (pass), 'meta_cloud' registra skipped/not_applicable. Dentro da
+    // janela comercial, para que a cortesia não decida o desfecho.
     const client = {
       query: vi.fn(async (sql: string) => {
         const q = String(sql);
@@ -196,7 +197,7 @@ describe('o skipped do gate chega em before_send_traces', () => {
     expect(meta.trace).toEqual([{ gate: 'pacing', verdict: 'skipped', code: 'not_applicable' }]);
 
     const waha = await rodaComProviderNoBanco('waha');
-    expect(waha.status).toBe('vetoed');
-    expect(waha.trace[0]?.verdict).toBe('veto');
+    expect(waha.status).toBe('sent');
+    expect(waha.trace).toEqual([{ gate: 'pacing', verdict: 'pass' }]);
   });
 });
