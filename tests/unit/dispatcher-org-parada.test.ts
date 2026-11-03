@@ -42,6 +42,7 @@ import { followupGatilhoPresencaHandler } from "@/lib/followup/gatilho-presenca.
 import { followupGatilhoRetornoHandler } from "@/lib/followup/gatilho-retorno.handler";
 import { followupReactivityHandler } from "@/lib/followup/reactivity.handler";
 import { avisoDeEtapaHandler } from "@/lib/leads/aviso-de-etapa.handler";
+import { gatilhoPorFraseHandler } from "@/lib/leads/gatilho-por-frase.handler";
 import { avisoAoDonoDaCarteira } from "@/lib/carteira/aviso-ao-dono";
 import { comandaDoGanhoHandler } from "@/lib/financeiro/comanda-do-ganho.handler";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
@@ -95,6 +96,8 @@ const PULA: EventHandler[] = [
   // nome da empresa — org parada não age por ela.
   cadenciaSaidasHandler,
   campanhaEntradaPorEtapaHandler,
+  // Move o card (e dispara campanha, aviso e conversão): org parada não age por ele.
+  gatilhoPorFraseHandler,
 ];
 
 const PREFIXO_DE_TESTE = "teste-org-parada";

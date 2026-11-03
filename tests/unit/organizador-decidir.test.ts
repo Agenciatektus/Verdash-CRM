@@ -105,3 +105,18 @@ describe("organizador: a evidência tem de ser da loja (trava no código)", () =
     expect(decide({ etapa_id: e3.id, justificativa: j, mensagem_da_loja: "m2" }, etapas, e1.id, motivos, H)).toMatchObject({ mover: true });
   });
 });
+
+describe("organizador: instruções da organização (settings.organizador.instrucoes)", () => {
+  const base = { etapas, atualId: e1.id, historico: H, motivos };
+  it("entram no system prompt, limitadas, e a regra de preço da loja não é escolha vai no padrão", () => {
+    const { system } = montaPrompt({ ...base, instrucoes: "  Nesta loja, tamanho G3 é atacado.  " });
+    expect(system).toContain("Orientações desta loja");
+    expect(system).toContain("Nesta loja, tamanho G3 é atacado.");
+    expect(system).toContain("informar preço, tamanho ou disponibilidade é atendimento");
+    expect(montaPrompt({ ...base, instrucoes: "x".repeat(5000) }).system.length).toBeLessThan(system.length + 1600);
+  });
+  it("sem instrução (ou em branco) o prompt não ganha o bloco", () => {
+    expect(montaPrompt(base).system).not.toContain("Orientações desta loja");
+    expect(montaPrompt({ ...base, instrucoes: "   " }).system).not.toContain("Orientações desta loja");
+  });
+});

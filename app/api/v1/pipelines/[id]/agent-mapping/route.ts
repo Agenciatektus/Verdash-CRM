@@ -93,6 +93,7 @@ type EtapaComAutoria = EtapaDoMapa & {
   /** Chance de fechamento calibrada pelo gestor, 0–100; `null` = sem calibração. */
   win_probability?: number | null;
   avisar_na_central?: boolean | null;
+  gatilho_frases?: string[] | null;
   envia_conversao?: boolean | null;
   evento_de_conversao?: string | null;
   /**
@@ -124,7 +125,7 @@ async function lerFunil(
     // consulta só para ela seria um round-trip por render numa tela de
     // configuração — e um caminho a mais para a lista e a autoria divergirem.
     .select(
-      "id, name, is_won, is_lost, win_probability, agent_stage_hint, avisar_na_central, envia_conversao, evento_de_conversao, expected_duration_hours, last_change_actor_kind, last_change_at",
+      "id, name, is_won, is_lost, win_probability, agent_stage_hint, avisar_na_central, gatilho_frases, envia_conversao, evento_de_conversao, expected_duration_hours, last_change_actor_kind, last_change_at",
     )
     .eq("organization_id", orgId)
     .eq("pipeline_id", pipelineId)
@@ -161,6 +162,7 @@ function corpo(etapas: EtapaComAutoria[]) {
       // cair — a tela de etapas lê DAQUI e mostrava a chance vazia ao recarregar.
       win_probability: e.win_probability ?? null,
       avisar_na_central: e.avisar_na_central === true,
+      gatilho_frases: e.gatilho_frases ?? [],
       envia_conversao: e.envia_conversao === true,
       evento_de_conversao: e.evento_de_conversao ?? null,
       // A janela de esfriando viaja na MESMA leitura: a tela de etapas é quem

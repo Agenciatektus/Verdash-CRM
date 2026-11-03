@@ -4622,6 +4622,21 @@ export const DICIONARIO: Traducoes = {
   "A conversa de configuração mostra um erro e preserva o que foi escrito; nenhum agente é criado.": {
     es: "La conversación de configuración muestra un error y conserva lo escrito; no se crea ningún agente.",
   },
+  "Cada etapa aceita até 5 frases.": {
+    es: "Cada etapa acepta hasta 5 frases.",
+  },
+  "Cada frase precisa ter de 3 a 120 caracteres.": {
+    es: "Cada frase debe tener entre 3 y 120 caracteres.",
+  },
+  "Frases que levam o negócio para esta etapa (uma por linha, até 5)": {
+    es: "Frases que llevan el negocio a esta etapa (una por línea, hasta 5)",
+  },
+  "pedido confirmado": {
+    es: "pedido confirmado",
+  },
+  "Vale só para a mensagem que a sua equipe envia. Não diferencia maiúscula nem acento, e o negócio só avança de etapa.": {
+    es: "Vale solo para el mensaje que envía tu equipo. No distingue mayúsculas ni acentos, y el negocio solo avanza de etapa.",
+  },
   "Organizar o funil pela conversa": {
     es: "Organizar el embudo según la conversación",
   },
