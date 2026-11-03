@@ -481,6 +481,18 @@ class AtualizacaoPg<T> implements PromiseLike<RespostaFalsa<unknown>> {
     return naoImplementado(`not(${operador})`);
   }
 
+  /**
+   * `.filter(coluna, "isdistinct", valor)`: IS DISTINCT FROM, casa NULL (o `neq` não).
+   * Nasceu pela 9094: o ingest só regrava o endereço da conversa quando ele muda.
+   */
+  filter(coluna: string, operador: string, valor: unknown): this {
+    if (operador === "isdistinct") {
+      this.filtros.push(["is distinct from", coluna, valor]);
+      return this;
+    }
+    return naoImplementado(`filter(${operador})`);
+  }
+
   select(colunas = "*"): this {
     this.colunasDeVolta = colunas;
     return this;
