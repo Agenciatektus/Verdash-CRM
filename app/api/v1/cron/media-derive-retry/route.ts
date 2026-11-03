@@ -21,8 +21,11 @@ import { audit } from "@/lib/audit";
 import { autorizaCron } from "@/lib/auth/cron-auth";
 import { logger } from "@/lib/logger";
 import { leituraDeMidiaDasSettings } from "@/lib/messaging/media/leitura-da-org";
+import { MENSAGEM_REDIGIDA } from "@/lib/lgpd/cascata";
 import {
+  descartavelParaSempre,
   JANELA_MS,
+  MAX_REPROCESSOS,
   reprocessosFeitos,
   selecionarParaReprocesso,
   type MensagemFalha,
@@ -74,25 +77,43 @@ export async function reprocessarMidiasFalhas(
       .map((o) => o.id),
   );
 
+  // Motivo permanente / mídia expirada: grava o teto (mesma guarda LGPD) para sair da consulta.
+  for (const m of candidatas) {
+    if (!elegiveis.has(m.organization_id) || !descartavelParaSempre(m)) continue;
+    const { error: erroTeto } = await admin
+      .from("messages")
+      .update({ metadata: { ...(m.metadata ?? {}), derive_retries: MAX_REPROCESSOS } })
+      .eq("id", m.id)
+      .eq("organization_id", m.organization_id)
+      .eq("media_derived_status", "failed")
+      .filter("body", "isdistinct", MENSAGEM_REDIGIDA);
+    if (erroTeto) logger.warn("[media-derive-retry] teto não gravado", { message_id: m.id, erro: erroTeto.message, requestId });
+  }
+
   const lote = selecionarParaReprocesso(candidatas, agora.getTime(), elegiveis);
   let reemitidas = 0;
   let falhas = 0;
   for (const m of lote) {
     // Conta ANTES de emitir e só se ainda estiver `failed`: tentativa sem registro
     // viraria laço infinito; a guarda evita contar sobre mensagem que já virou ready.
-    const { data: gravada, error: erroUpdate } = await admin
+    const feitos = reprocessosFeitos(m.metadata);
+    let upd = admin
       .from("messages")
       .update({
         metadata: {
           ...(m.metadata ?? {}),
-          derive_retries: reprocessosFeitos(m.metadata) + 1,
+          derive_retries: feitos + 1,
           derive_last_retry_at: agora.toISOString(),
         },
       })
       .eq("id", m.id)
       .eq("organization_id", m.organization_id)
       .eq("media_derived_status", "failed")
-      .select("id");
+      // Guarda otimista: outra rodada que contou primeiro faz esta casar 0 linhas (não emite).
+      // Redigida pela cascata LGPD também casa 0: não regrava o metadata que ela zerou.
+      .filter("body", "isdistinct", MENSAGEM_REDIGIDA);
+    upd = feitos > 0 ? upd.eq("metadata->>derive_retries", String(feitos)) : upd.is("metadata->>derive_retries", null);
+    const { data: gravada, error: erroUpdate } = await upd.select("id");
     if (erroUpdate) {
       falhas++;
       logger.error("[media-derive-retry] contagem não gravada", { message_id: m.id, erro: erroUpdate.message, requestId });

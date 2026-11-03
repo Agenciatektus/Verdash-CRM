@@ -12,7 +12,8 @@ import {
 } from "@/lib/messaging/media/trava-da-transcricao";
 
 export const MAX_REPROCESSOS = 3;
-export const INTERVALO_MINIMO_MS = 10 * 60_000;
+// Acima do backoff do dreno (2+4+8+16 = 30 min): antes disso o evento original ainda pode estar em retry.
+export const INTERVALO_MINIMO_MS = 35 * 60_000;
 export const JANELA_MS = 48 * 3_600_000;
 export const LOTE_MAXIMO = 100;
 
@@ -36,11 +37,17 @@ export function reprocessosFeitos(metadata: Record<string, unknown> | null): num
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+/** Nunca vai dar certo: o cron grava o teto para a consulta parar de reler a linha. */
+export function descartavelParaSempre(m: MensagemFalha): boolean {
+  const meta = m.metadata ?? {};
+  if (meta.media_status === "expired") return true;
+  const motivo = typeof meta.media_derived_motivo === "string" ? meta.media_derived_motivo : "";
+  return MOTIVOS_PERMANENTES.some((p) => motivo.includes(p));
+}
+
 export function elegivelParaReprocesso(m: MensagemFalha, agoraMs: number): boolean {
   const meta = m.metadata ?? {};
-  if (meta.media_status === "expired") return false;
-  const motivo = typeof meta.media_derived_motivo === "string" ? meta.media_derived_motivo : "";
-  if (MOTIVOS_PERMANENTES.some((p) => motivo.includes(p))) return false;
+  if (descartavelParaSempre(m)) return false;
   if (reprocessosFeitos(meta) >= MAX_REPROCESSOS) return false;
   const criada = Date.parse(m.created_at);
   if (!Number.isFinite(criada) || agoraMs - criada > JANELA_MS) return false;
