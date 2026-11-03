@@ -810,6 +810,7 @@ export const pacingGate: Gate = {
       state: ctx.pacing.state,
       crmDailyLimit: ctx.pacing.crmDailyLimit,
       banRisk,
+      semTeto: true, // todo envio do agente: só campanha e prospecção têm teto de volume
       resposta: ctx.pacing.resposta,
       rng: ctx.pacing.rng,
     });
