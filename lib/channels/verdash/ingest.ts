@@ -173,14 +173,15 @@ export async function ingestVerdashInbound(
 
   // O ENDEREÇO DE RESPOSTA, guardado como o servidor o entregou.
   //
-  // Escrito SEMPRE, sem condição de "só se mudou": em SQL `NULL <> 'valor'` é
-  // NULL, não TRUE, então um `neq` nunca alcançaria a conversa recém-criada —
-  // que é justamente a que precisa do campo. O canal irmão perdeu tempo com
-  // exatamente esse detalhe.
+  // Só quando muda: cada UPDATE em conversations vira evento do Realtime para
+  // cada pessoa conectada. O filtro é `isdistinct` (IS DISTINCT FROM), não
+  // `neq`: em SQL `NULL <> 'valor'` é NULL, e um `neq` nunca alcançaria a
+  // conversa recém-criada, que é justamente a que precisa do campo.
   await admin
     .from("conversations")
     .update({ provider_conversation_id: msg.chat })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .filter("provider_conversation_id", "isdistinct", msg.chat);
 
   const inserted = await insertMessage(admin, {
     organizationId: input.organizationId,
