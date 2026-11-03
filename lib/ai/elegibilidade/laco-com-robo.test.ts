@@ -20,13 +20,33 @@ const msg = (
 const varias = (n: number, d: "inbound" | "outbound", prefixo = "msg") =>
   Array.from({ length: n }, (_, i) => msg(d, `${prefixo} ${"x".repeat(i)}`, i + 1));
 
+// Alterna saída e entrada: `gapS` = segundos entre a saída e a resposta, 120 s entre as rodadas.
+const rodadas = (n: number, gapS: number): MensagemDaConversa[] =>
+  Array.from({ length: n }, (_, i) => {
+    const t0 = agora.getTime() - (n - i) * 120_000;
+    return [
+      { direcao: "outbound" as const, texto: `bolha a ${i}`, enviadoEm: new Date(t0), enviadaPelaIa: true },
+      { direcao: "outbound" as const, texto: `bolha b ${i}`, enviadoEm: new Date(t0 + 2_000), enviadaPelaIa: true },
+      { direcao: "inbound" as const, texto: `oi ${"x".repeat(i)}`, enviadoEm: new Date(t0 + 2_000 + gapS * 1000), enviadaPelaIa: false },
+    ];
+  }).flat();
+
 describe("volume", () => {
-  it("16 da IA + 12 do cliente dispara", () => {
-    const r = detectarLacoComRobo([...varias(16, "outbound"), ...varias(12, "inbound", "oi")], agora);
-    expect(r).toEqual({ laco: true, motivo: "volume" });
+  it("URA que responde em segundos (16 bolhas da IA + 12 entradas) dispara", () => {
+    expect(detectarLacoComRobo(rodadas(12, 3), agora)).toEqual({ laco: true, motivo: "volume" });
   });
-  it("15 da IA não dispara", () => {
-    expect(detectarLacoComRobo([...varias(15, "outbound"), ...varias(12, "inbound", "oi")], agora).laco).toBe(false);
+  it("cliente de verdade, mesmo volume, respondendo em minutos NÃO dispara", () => {
+    expect(detectarLacoComRobo(rodadas(12, 60), agora)).toEqual({ laco: false, motivo: null });
+  });
+  it("borda: 15 s conta como máquina, 16 s não", () => {
+    expect(detectarLacoComRobo(rodadas(12, 15), agora).laco).toBe(true);
+    expect(detectarLacoComRobo(rodadas(12, 16), agora).laco).toBe(false);
+  });
+  it("robô lento (60 s) escapa da regra rápida, mas o teto de volume pega", () => {
+    expect(detectarLacoComRobo(rodadas(20, 60), agora)).toEqual({ laco: true, motivo: "volume" });
+  });
+  it("só 8 entradas (abaixo de 12) não dispara, mesmo rápidas", () => {
+    expect(detectarLacoComRobo(rodadas(8, 3), agora).laco).toBe(false);
   });
   it("só IA, sem cliente, não dispara", () => {
     expect(detectarLacoComRobo(varias(30, "outbound"), agora).laco).toBe(false);
