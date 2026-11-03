@@ -6,36 +6,41 @@
  * que só roda com esse prazo. Sem ele, nada muda (o silêncio de `manual_reply_silence_minutes`
  * continua sendo o único freio, como antes).
  *
- * Reusa `fn_conversation_assign` (conversa) e `resolveOwnerPatch` (negócio); não há caminho paralelo.
+ * Reusa `fn_conversation_assign` (conversa) e `adotarLeadsDoContato` (negócio, service role: RLS de visibility_mode='own' casaria 0 linhas, como no claim); não há caminho paralelo.
  * Resposta pelo celular (`external_device`) não passa por aqui: não identifica a pessoa.
  * Nunca lança: falhar em assumir não pode derrubar o envio.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { lerPrazoDeDevolucaoMinutos } from "@/lib/escalacao/devolucao-automatica";
-import { resolveOwnerPatch } from "@/lib/leads/owner-patch";
+import { isServiceRoleConfigured } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+import { adotarLeadsDoContato } from "@/lib/routing/worker";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const MOTIVO_RESPOSTA_HUMANA = "resposta_humana_crm";
 
+const STATUS_ABERTOS = new Set(["open", "pending", "ai_handling"]);
+
+/** Zero leituras: settings e a foto da conversa vêm do handler, que já os leu. */
 export async function assumirPorRespostaHumana(
   client: SupabaseClient,
-  args: { organizationId: string; conversationId: string; contactId: string | null; userId: string },
+  args: {
+    organizationId: string;
+    conversationId: string;
+    contactId: string | null;
+    userId: string;
+    settings: unknown;
+    conversa: { status: string | null; assignee_kind: string | null; assigned_to_user_id: string | null; is_group: boolean };
+  },
 ): Promise<boolean> {
-  const { organizationId, conversationId, contactId, userId } = args;
+  const { organizationId, conversationId, contactId, userId, settings, conversa: c } = args;
   try {
-    const { data: org } = await client.from("organizations").select("settings").eq("id", organizationId).maybeSingle();
-    if (lerPrazoDeDevolucaoMinutos((org as { settings?: unknown } | null)?.settings) === null) return false;
-
-    const { data: conv } = await client
-      .from("conversations")
-      .select("assignee_kind, assigned_to_user_id, is_group")
-      .eq("id", conversationId)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-    const c = conv as { assignee_kind: string | null; assigned_to_user_id: string | null; is_group: boolean } | null;
-    // Grupo é sempre de humano e a devolução o ignora; quem já tem humano não troca de dono.
-    if (!c || c.is_group || c.assignee_kind === "user" || c.assigned_to_user_id !== null) return false;
+    if (lerPrazoDeDevolucaoMinutos(settings) === null) return false;
+    // Grupo é sempre de humano e a devolução o ignora; quem já tem humano não troca de dono;
+    // conversa encerrada não é reaberta por resposta.
+    if (c.is_group || c.assignee_kind === "user" || c.assigned_to_user_id !== null) return false;
+    if (!STATUS_ABERTOS.has(c.status ?? "")) return false;
 
     const { data: linhas, error } = await client.rpc("fn_conversation_assign", {
       p_organization_id: organizationId,
@@ -50,19 +55,9 @@ export async function assumirPorRespostaHumana(
     }
     if (!Array.isArray(linhas) || linhas.length === 0) return false;
 
-    const dono = resolveOwnerPatch({ owner_user_id: userId });
-    if (contactId && dono.ok && dono.patch) {
-      const { error: erroLead } = await client
-        .from("crm_leads")
-        .update({ ...dono.patch, assigned_at: new Date().toISOString() })
-        .eq("organization_id", organizationId)
-        .eq("contact_id", contactId)
-        .eq("status", "open")
-        .is("owner_user_id", null)
-        .is("owner_agent_id", null);
-      if (erroLead) {
-        logger.warn("atendimento.assumir_por_resposta: negócio não herdou o dono", { organizationId, conversationId, erro: erroLead.message });
-      }
+    // Sem `substituir`: só o negócio aberto SEM dono herda.
+    if (contactId && isServiceRoleConfigured()) {
+      await adotarLeadsDoContato(createAdminClient(), organizationId, contactId, userId);
     }
     return true;
   } catch (erro) {
