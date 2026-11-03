@@ -30,8 +30,6 @@ import type { Logger } from '@/lib/agent-engine/obs/logger';
 
 /** 22h57 em São Paulo (UTC-3) — fora da janela de disparo 7h-22h. */
 const NOITE = new Date('2026-10-04T01:57:58Z');
-/** 12h em São Paulo — dentro das duas janelas. */
-const DIA = new Date('2026-10-04T15:00:00Z');
 
 const ORG = 'org-do-teste';
 const SESSAO = 'sessao-do-teste';
@@ -142,17 +140,11 @@ describe('#2555 a prévia avalia a janela de RESPOSTA, não a de disparo', () =>
 });
 
 describe('o sandbox segue rebaixando o veto de pacing a aviso (#2555 não mexe no rebaixamento)', () => {
-  it('cap estourado: candidato + aviso no Testar; o rascunho assistido continua vetado', async () => {
-    // De DIA as duas janelas estão abertas, então o veredito abaixo é o CAP e
-    // não o horário: o teste mede o rebaixamento, não a janela.
-    const ctx = await contextoDaPrevia(DIA);
-    const estourado: GateContext = {
-      ...ctx,
-      pacing: {
-        ...ctx.pacing,
-        state: { lastSentAt: null, sentToday: 999, numberActivatedAt: null },
-      },
-    };
+  it('fora da janela: candidato + aviso no Testar; o rascunho assistido continua vetado', async () => {
+    // O cap não veta mais o agente; o veto que sobra é a janela (cortesia). Sem a
+    // flag de resposta, NOITE cai na janela de disparo e gera `outside_window`.
+    const base = await contextoDaPrevia(NOITE);
+    const estourado: GateContext = { ...base, pacing: { ...base.pacing, resposta: undefined } };
 
     const pSandbox = previa('sandbox');
     const sandbox = applyPreviewPolicy(
@@ -164,7 +156,7 @@ describe('o sandbox segue rebaixando o veto de pacing a aviso (#2555 não mexe n
     await chamar(sandbox, 'send_message', { body: RESPOSTA });
 
     expect(pSandbox.result.candidates.map((c) => c.body)).toEqual([RESPOSTA]);
-    expect(pSandbox.result.warnings.map((w) => w.code)).toEqual(['warmup_cap']);
+    expect(pSandbox.result.warnings.map((w) => w.code)).toEqual(['outside_window']);
     expect(pSandbox.result.warnings[0]!.message).toMatch(/não sairia agora/);
     const pacing = pSandbox.result.candidates[0]!.trace.find((t) => t.gate === 'pacing');
     expect(pacing).toEqual({ gate: 'pacing', verdict: 'skipped', code: 'sandbox_send_embargo' });
@@ -179,7 +171,7 @@ describe('o sandbox segue rebaixando o veto de pacing a aviso (#2555 não mexe n
     await chamar(assistido, 'send_message', { body: RESPOSTA });
 
     expect(pAssistido.result.candidates).toEqual([]);
-    expect(pAssistido.result.impediments.map((i) => i.code)).toEqual(['warmup_cap']);
+    expect(pAssistido.result.impediments.map((i) => i.code)).toEqual(['outside_window']);
     expect(pAssistido.result.warnings).toEqual([]);
   });
 });
