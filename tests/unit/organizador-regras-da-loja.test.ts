@@ -78,3 +78,25 @@ describe("perda por silêncio", () => {
     expect(perdidoPorSilencio({}, h, agora)).toBe(false);
   });
 });
+
+describe("P1 do Cassio: troca e silêncio sem falso positivo", () => {
+  it("garantia/troca perguntadas ANTES de comprar, com disparo da loja, não são pós-venda", () => {
+    const a = [msg("outbound", "Chegou a coleção nova!"), msg("inbound", "qual a garantia?")];
+    const b = [msg("outbound", "fazemos entrega na cidade"), msg("inbound", "se não servir dá pra trocar?")];
+    expect(pedeTroca(a)).toBe(false);
+    expect(pedeTroca(b)).toBe(false);
+    expect(pedeTroca([msg("inbound", "comprei um em outra loja e veio com defeito, vocês consertam?")])).toBe(false);
+  });
+  it("troca depois de a LOJA confirmar a venda é pós-venda", () => {
+    const h = [msg("outbound", "Pix recebido, seu pedido sai amanhã"), msg("inbound", "quero trocar o tamanho")];
+    expect(pedeTroca(h)).toBe(true);
+  });
+  it("venda confirmada pela loja e cliente calado não vira perdido", () => {
+    const h = [msg("inbound", "fechado", "2026-10-01T10:00:00Z"), msg("outbound", "Pix recebido, seu pedido sai amanhã", "2026-10-02T10:00:00Z")];
+    expect(perdidoPorSilencio(REGRAS, h, new Date("2026-11-10T12:00:00Z"))).toBe(false);
+  });
+  it("fala humana com 'em breve' não é robô", () => {
+    expect(ehAutomatica("passo aí em breve uma hora dessas")).toBe(false);
+    expect(ehAutomatica("Em breve um de nossos atendentes falará com você")).toBe(true);
+  });
+});

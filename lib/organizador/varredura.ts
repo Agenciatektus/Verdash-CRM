@@ -59,11 +59,18 @@ export async function organizaLead(
   // Grava SEMPRE o mesmo `ultimaMsgEm` que o seletor viu: qualquer ramo (ilegível, erro do modelo, sem
   // conversa) deixa o lead quieto até chegar mensagem nova, em vez de repetir a chamada paga a cada tick.
   const grava = async (decisao: Record<string, unknown>) => {
+    // A passada de silêncio NÃO consome a passada do modelo: não mexe em `ultima_msg_em` (lead novo entra
+    // com NULL, que o seletor do modelo aceita) e só junta a marca ao que já havia.
     await pool.query(
-      `insert into organizador_passadas (lead_id, organization_id, ultima_msg_em, passou_em, decisao)
-       values ($1, $2, $3, now(), $4::jsonb)
-       on conflict (lead_id) do update
-         set ultima_msg_em = excluded.ultima_msg_em, passou_em = now(), decisao = excluded.decisao`,
+      input.soSilencio
+        ? `insert into organizador_passadas (lead_id, organization_id, ultima_msg_em, passou_em, decisao)
+           values ($1, $2, null, now(), $4::jsonb)
+           on conflict (lead_id) do update
+             set passou_em = now(), decisao = organizador_passadas.decisao || excluded.decisao`
+        : `insert into organizador_passadas (lead_id, organization_id, ultima_msg_em, passou_em, decisao)
+           values ($1, $2, $3, now(), $4::jsonb)
+           on conflict (lead_id) do update
+             set ultima_msg_em = excluded.ultima_msg_em, passou_em = now(), decisao = excluded.decisao`,
       [leadId, organizationId, ultimaMsgEm, JSON.stringify({ ...decisao, dry_run: dryRun, ...(input.soSilencio ? { silencio_ultima: ultimaMsgEm } : {}) })],
     );
   };
@@ -150,7 +157,16 @@ export async function organizaLead(
     await grava({ mover: true, para_funil: regras.funil_posvenda, justificativa: "Conversa de troca, devolução ou garantia de uma venda já feita.", aplicado: aplicadoTroca, recusa_do_funil: recusaTroca, porque_do_atalho: porque });
     return { leadId, decisao: { mover: false, porque }, aplicado: aplicadoTroca, justificativa: "troca/devolução: funil de pós-venda" };
   } else {
-    const atalho = atalhoDaLoja(regras, etapas, lead.stage_id, historico);
+    let atalho = atalhoDaLoja(regras, etapas, lead.stage_id, historico);
+    if (atalho.mover) {
+      // As 40 mensagens lidas podem esconder uma resposta antiga (ou de outra conversa do contato): na dúvida o modelo decide.
+      const { rows: jaFalou } = await pool.query(
+        `select 1 from messages m join conversations c on c.id = m.conversation_id
+          where c.organization_id = $1 and c.contact_id = $2 and m.direction = 'inbound' limit 1`,
+        [organizationId, lead.contact_id],
+      );
+      if (jaFalou.length > 0) atalho = { mover: false };
+    }
     if (atalho.mover) {
       justificativaFinal = atalho.justificativa;
       decisao = { mover: true, etapa: atalho.etapa, justificativa: atalho.justificativa };
@@ -280,7 +296,7 @@ export async function leadsEmSilencio(
         and u.ultima is not null
         and u.ultima > now() - make_interval(days => $3)
         and u.ultima < now() - make_interval(days => $4)
-        and (p.lead_id is null or (p.ultima_msg_em is not null and p.ultima_msg_em <= u.ultima
+        and (p.lead_id is null or ((p.ultima_msg_em is null or p.ultima_msg_em <= u.ultima)
              and p.decisao->>'silencio_ultima' is distinct from u.ultima::text
              and not (p.decisao ? 'reservado_para_amostra')))
       order by u.ultima asc limit $5`,
@@ -336,7 +352,8 @@ export async function tickDoOrganizador(
             ? await leadsEmSilencio(pool, {
                 organizationId: org.id,
                 pipelineIds,
-                janelaDias: Number.isFinite(janela) && janela > 0 ? Math.min(janela, 60) : 7,
+                // Larga de propósito: o silêncio vale para quem calou há mais que o prazo, não só dentro da janela do modelo.
+                janelaDias: 90,
                 dias: regras.dias_para_perda,
                 limite: limitePorOrg,
               })
