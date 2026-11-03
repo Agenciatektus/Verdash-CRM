@@ -97,7 +97,7 @@ import { runVoiceCallsBridgeLoop } from "@/lib/wacalls/events-bridge";
 import { estadoDoWatchdog, runSessionWatchdogLoop } from "@/lib/agent-engine/edge/crm/session-reconciler";
 import { runHealthLoop } from "@/lib/agent-engine/health/circuit";
 import { runFlywheelLoop } from "@/lib/agent-engine/flywheel/live";
-import { runOrganizadorLoop } from "@/lib/organizador/varredura";
+import { runOrganizadorLoop } from "@/lib/organizador/tick";
 import { llmEdgeConfigFromEnv } from "@/lib/agent-engine/edge/llm/run-model-call";
 import { loadEnv, type Env } from "@/lib/agent-engine/env";
 import { urlDoSupabaseNoServidor } from "@/lib/supabase/url-do-servidor";
