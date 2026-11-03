@@ -13,7 +13,7 @@ begin
   return new;
 end; $$;
 
-revoke all on function public.fn_seed_org_midia_tektus() from public;
+revoke execute on function public.fn_seed_org_midia_tektus() from public, anon, authenticated;
 
 drop trigger if exists trg_seed_org_midia_tektus on public.organizations;
 create trigger trg_seed_org_midia_tektus
