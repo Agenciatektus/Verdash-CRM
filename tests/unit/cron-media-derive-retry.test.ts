@@ -147,11 +147,11 @@ describe("cron media-derive-retry", () => {
     const corpo = (await res.json()) as { data: { reemitidas: number } };
     expect(corpo.data.reemitidas).toBe(1);
     expect(gravados).toHaveLength(1);
-    expect(gravados[0].id).toBe("ok");
-    expect(gravados[0].filtros).toContainEqual(["filter", "body", "isdistinct", "[mensagem anonimizada]"]);
-    expect(gravados[0].filtros).toContainEqual(["eq", "metadata->>derive_retries", "1"]);
-    expect(gravados[0].metadata.derive_retries).toBe(2);
-    expect(gravados[0].metadata.derive_last_retry_at).toBe(AGORA.toISOString());
+    expect(gravados[0]!.id).toBe("ok");
+    expect(gravados[0]!.filtros).toContainEqual(["filter", "body", "isdistinct", "[mensagem anonimizada]"]);
+    expect(gravados[0]!.filtros).toContainEqual(["eq", "metadata->>derive_retries", "1"]);
+    expect(gravados[0]!.metadata.derive_retries).toBe(2);
+    expect(gravados[0]!.metadata.derive_last_retry_at).toBe(AGORA.toISOString());
     expect(emitidos).toHaveLength(1);
     expect(emitidos[0]).toMatchObject({
       p_event_type: "media.derive_requested",
@@ -172,7 +172,7 @@ describe("cron media-derive-retry", () => {
   it("sem reprocesso anterior a guarda otimista é derive_retries IS NULL", async () => {
     mensagens = [msg("novo")];
     await chamar();
-    expect(gravados[0].filtros).toContainEqual(["is", "metadata->>derive_retries", null]);
+    expect(gravados[0]!.filtros).toContainEqual(["is", "metadata->>derive_retries", null]);
   });
 
   it("mensagem redigida pela LGPD (0 linhas): não emite", async () => {
@@ -188,7 +188,7 @@ describe("cron media-derive-retry", () => {
     await chamar();
     expect(emitidos).toHaveLength(0);
     expect(gravados).toHaveLength(1);
-    expect(gravados[0].metadata.derive_retries).toBe(3);
-    expect(gravados[0].filtros).toContainEqual(["filter", "body", "isdistinct", "[mensagem anonimizada]"]);
+    expect(gravados[0]!.metadata.derive_retries).toBe(3);
+    expect(gravados[0]!.filtros).toContainEqual(["filter", "body", "isdistinct", "[mensagem anonimizada]"]);
   });
 });
