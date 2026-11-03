@@ -41,6 +41,8 @@ function semear(): void {
     insert into public.organizations (id, slug, legal_name, display_name) values
       ('${ORG_A}', 'inv-bind-a', 'Invariante A LTDA', 'Invariante A'),
       ('${ORG_B}', 'inv-bind-b', 'Invariante B LTDA', 'Invariante B');
+    -- a 9095 semeia visao_de_imagem em toda org nova; a fixture parte de zero
+    delete from public.ai_purpose_bindings where organization_id in ('${ORG_A}','${ORG_B}');
     insert into auth.users (id, email) values
       ('${USER_A}', 'bind-a@invariant.test'),
       ('${USER_B}', 'bind-b@invariant.test');
@@ -221,6 +223,7 @@ describe("ai_purpose_bindings — o apêndice do baseline se auto-cura", () => {
       delete from public.organizations where id = '${ORG_A}';
       insert into public.organizations (id, slug, legal_name, display_name)
         values ('${ORG_A}', 'inv-bind-a', 'Invariante A LTDA', 'Invariante A');
+      delete from public.ai_purpose_bindings where organization_id = '${ORG_A}';
       alter table public.ai_purpose_bindings drop constraint if exists ai_purpose_bindings_org_purpose_unique;
       insert into public.ai_purpose_bindings (organization_id, purpose, provider, model_id, updated_at) values
         ('${ORG_A}', 'flush', 'anthropic', 'MODELO-ANTIGO', now() - interval '2 day'),
