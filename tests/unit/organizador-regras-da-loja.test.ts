@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EtapaDoFunil, MensagemDaConversa } from "@/lib/organizador/decidir";
-import { atalhoDaLoja, ehAutomatica, ehTrocaOuDevolucao, lerRegras, pedeTroca, perdidoPorSilencio, semAutomaticas } from "@/lib/organizador/regras-da-loja";
+import { atalhoDaLoja, ehAutomatica, temSinalDeFechamento, ehTrocaOuDevolucao, lerRegras, pedeTroca, perdidoPorSilencio, semAutomaticas } from "@/lib/organizador/regras-da-loja";
 
 const etapa = (id: string, name: string, position: number, extra: Partial<EtapaDoFunil> = {}): EtapaDoFunil => ({
   id, name, position, is_won: false, is_lost: false, is_archived: false, ...extra,
@@ -98,5 +98,23 @@ describe("P1 do Cassio: troca e silêncio sem falso positivo", () => {
   it("fala humana com 'em breve' não é robô", () => {
     expect(ehAutomatica("passo aí em breve uma hora dessas")).toBe(false);
     expect(ehAutomatica("Em breve um de nossos atendentes falará com você")).toBe(true);
+  });
+});
+
+describe("silêncio não perde venda em andamento", () => {
+  const agora = new Date("2026-11-10T12:00:00Z");
+  it("cliente pediu item e deu endereço: não é perdido", () => {
+    const h = [
+      msg("inbound", "Vou querer 2 dessa", "2026-10-26T10:00:00Z"),
+      msg("inbound", "Rua Bolívia número 424 Bairro jardim dos Moraes", "2026-10-26T10:05:00Z"),
+      msg("outbound", "Fechou irmão", "2026-10-26T10:10:00Z"),
+    ];
+    expect(temSinalDeFechamento(h)).toBe(true);
+    expect(perdidoPorSilencio(REGRAS, h, agora)).toBe(false);
+  });
+  it("preço com pix e cartão na fala da LOJA não bloqueia a perda", () => {
+    const h = [msg("inbound", "Tem as peças G1?", "2026-10-20T10:00:00Z"), msg("outbound", "Temos sim, G1 sai por 299, aceitamos pix e cartão, entrega por motoboy", "2026-10-20T10:10:00Z")];
+    expect(temSinalDeFechamento(h)).toBe(false);
+    expect(perdidoPorSilencio(REGRAS, h, agora)).toBe(true);
   });
 });

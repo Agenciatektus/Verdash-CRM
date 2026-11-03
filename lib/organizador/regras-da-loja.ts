@@ -77,6 +77,19 @@ export function lojaConfirmouCompra(historico: MensagemDaConversa[]): boolean {
   return historico.some((m) => m.direction === "outbound" && COMPRA_DA_LOJA.test(norm(m.body ?? "")));
 }
 
+// Venda em andamento: o cliente fechou item, deu endereço ou falou de pagamento, ou a loja disse "fechou".
+// Num negócio assim o silêncio é pausa da venda, não desistência: o prazo de perda não se aplica e o modelo decide.
+// Pix, cartão e motoboy aparecem em qualquer resposta de preço da loja, então só valem na fala do CLIENTE.
+const FECHAMENTO_DO_CLIENTE = /(vou querer|vou levar|quero (esse|essa|2|dois|duas)|comprovante|paguei|mando o pix|\bcep\b|endereco|\brua\b|avenida|bairro|vou passar ai)/;
+const FECHAMENTO_DA_LOJA = /(fechou|fechado|combinado)/;
+
+export function temSinalDeFechamento(historico: MensagemDaConversa[]): boolean {
+  return historico.some((m) => {
+    const t = norm(m.body ?? "");
+    return m.direction === "inbound" ? FECHAMENTO_DO_CLIENTE.test(t) : FECHAMENTO_DA_LOJA.test(t);
+  });
+}
+
 /** O cliente fala de troca/devolução/garantia de uma venda que a loja confirmou: o negócio é pós-venda. */
 export function pedeTroca(historico: MensagemDaConversa[]): boolean {
   return clienteRespondeu(historico) && ehTrocaOuDevolucao(historico);
@@ -123,7 +136,7 @@ export function perdidoPorSilencio(
   if (!regras.dias_para_perda) return false;
   const h = semAutomaticas(historico);
   // Venda confirmada pela loja e ainda sem "ganho" marcado por humano não é lead perdido: o ganho é decisão humana.
-  if (lojaConfirmouCompra(h)) return false;
+  if (lojaConfirmouCompra(h) || temSinalDeFechamento(h)) return false;
   if (!clienteRespondeu(h)) return false; // nunca respondeu = campanha, não perda
   const ultima = h[h.length - 1];
   if (!ultima || ultima.direction !== "outbound") return false;
