@@ -388,6 +388,8 @@ export const AUDIT_ACTIONS = [
   // Rodada do cron que devolve ao agente o handoff parado além do prazo da
   // organização — só quando devolveu (ou falhou) alguma.
   "conversation.handoff_auto_return_run",
+  // Rodada do cron que reemite a derivação de mídia que falhou — só quando reemitiu (ou falhou) alguma.
+  "media.derive_auto_retry_run",
   "conversation.note_added",
   "conversation.note_deleted",
   // Rascunho sugerido por integração (issue #1611): quem criou o texto que a
