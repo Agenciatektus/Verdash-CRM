@@ -192,9 +192,9 @@ describe("gatilho por frase: handler", () => {
     const from = admin.from.bind(admin);
     vi.mocked(createAdminClient).mockReturnValue({
       from(tabela: string) {
-        const q = from(tabela) as Record<string, (...a: unknown[]) => unknown>;
+        const q = from(tabela) as Record<string, unknown>;
         const eq = q.eq as (c: string, v: unknown) => unknown;
-        q.eq = (c: string, v: unknown) => {
+        q.eq = (c: string, v: unknown): unknown => {
           if (tabela === "crm_leads" && c === "contact_id") lidos.push(String(v));
           return eq(c, v);
         };
