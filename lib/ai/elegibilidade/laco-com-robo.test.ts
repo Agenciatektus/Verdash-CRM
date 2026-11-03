@@ -38,6 +38,13 @@ describe("volume", () => {
   it("cliente de verdade, mesmo volume, respondendo em minutos NÃO dispara", () => {
     expect(detectarLacoComRobo(rodadas(12, 60), agora)).toEqual({ laco: false, motivo: null });
   });
+  it("borda: 15 s conta como máquina, 16 s não", () => {
+    expect(detectarLacoComRobo(rodadas(12, 15), agora).laco).toBe(true);
+    expect(detectarLacoComRobo(rodadas(12, 16), agora).laco).toBe(false);
+  });
+  it("robô lento (60 s) escapa da regra rápida, mas o teto de volume pega", () => {
+    expect(detectarLacoComRobo(rodadas(20, 60), agora)).toEqual({ laco: true, motivo: "volume" });
+  });
   it("só 8 entradas (abaixo de 12) não dispara, mesmo rápidas", () => {
     expect(detectarLacoComRobo(rodadas(8, 3), agora).laco).toBe(false);
   });

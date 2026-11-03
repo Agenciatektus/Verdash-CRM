@@ -16,6 +16,9 @@ export const LIMITE_REPETICAO = 3;
 export const TAMANHO_MINIMO_REPETIDO = 20;
 /** Resposta de máquina: chega até este tempo depois da última saída. Gente digita e leva mais (Regina, 03/11: 12 de 12 ficaram acima). */
 export const RESPOSTA_DE_MAQUINA_MS = 15_000;
+/** Teto de volume que vale sem olhar o tempo de resposta (robô lento, envio na fila): humano não chega aqui em 1 h. */
+export const TETO_VOLUME_IA = 40;
+export const TETO_VOLUME_CLIENTE = 20;
 /** Quantas entradas de máquina a janela precisa ter para o volume contar como laço. */
 export const LIMITE_ENTRADAS_DE_MAQUINA = 6;
 
@@ -48,7 +51,10 @@ function entradasDeMaquina(naJanela: MensagemDaConversa[]): number {
   let n = 0;
   for (const m of ordem) {
     if (m.direcao === "outbound") ultimaSaida = m.enviadoEm.getTime();
-    else if (ultimaSaida !== null && m.enviadoEm.getTime() - ultimaSaida <= RESPOSTA_DE_MAQUINA_MS) n++;
+    else if (ultimaSaida !== null && m.enviadoEm.getTime() - ultimaSaida <= RESPOSTA_DE_MAQUINA_MS) {
+      n++;
+      ultimaSaida = null; // uma entrada de máquina por saída: humano em rajada não soma
+    }
   }
   return n;
 }
@@ -64,6 +70,7 @@ export function detectarLacoComRobo(
   const cliente = naJanela.filter((m) => m.direcao === "inbound").length;
   // Volume sozinho pega cliente de verdade conversando (a IA fala em 2 bolhas por turno).
   // Só é laço se as entradas voltam em segundos, como URA/autoresposta.
+  if (ia >= TETO_VOLUME_IA && cliente >= TETO_VOLUME_CLIENTE) return { laco: true, motivo: "volume" };
   if (ia >= LIMITE_VOLUME_IA && cliente >= LIMITE_VOLUME_CLIENTE && entradasDeMaquina(naJanela) >= LIMITE_ENTRADAS_DE_MAQUINA) {
     return { laco: true, motivo: "volume" };
   }
