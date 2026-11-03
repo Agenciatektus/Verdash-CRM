@@ -75,3 +75,20 @@ describe('aquecimento e teto diário são do disparo, não da resposta (Salão, 
     expect(d.allow).toBe(false);
   });
 });
+
+describe('só campanha e prospecção têm teto de volume (semTeto = envio do agente)', () => {
+  it('follow-up do agente (disparo, semTeto) passa com o teto estourado', () => {
+    const d = decidePacing({ ...input({ now: COMERCIAL, sentToday: 999 }), resposta: false, semTeto: true });
+    expect(d.allow).toBe(true);
+  });
+
+  it('semTeto continua respeitando a janela (cortesia)', () => {
+    const d = decidePacing({ ...input({ now: MADRUGADA, sentToday: 0 }), resposta: false, semTeto: true });
+    expect(d.allow).toBe(false);
+  });
+
+  it('chamador que não declara semTeto (campanha) continua protegido', () => {
+    const d = decidePacing({ ...input({ now: COMERCIAL, sentToday: 999 }), resposta: false });
+    expect(d.allow).toBe(false);
+  });
+});

@@ -43,6 +43,12 @@ export interface PacingInput {
    */
   banRisk?: boolean;
   /**
+   * Envio do AGENTE (resposta, follow-up, aviso): fora dos tetos de aquecimento e diário. Só campanha e
+   * prospecção são limitadas por volume (decisão do Peterson, 03/11). Janela horária e throttle seguem.
+   * Omitir = teto armado (chamador novo nasce protegido).
+   */
+  semTeto?: boolean;
+  /**
    * Esta decisão é para a RESPOSTA do agente (o cliente escreveu e espera
    * resposta) ou para o DISPARO (envio em massa / retomada de conversa parada)?
    *
@@ -125,7 +131,7 @@ export function decidePacing(input: PacingInput): PacingDecision {
   // Resposta a quem escreveu primeiro fica fora: um cliente esperou 22 min com o teto de
   // aquecimento atingido (Salão, 03/11) e a IA cala cliente que está pedindo horário. Janela horária
   // (cortesia) e throttle seguem valendo para a resposta.
-  if (!resposta || prospeccao) {
+  if (!input.semTeto && (!resposta || prospeccao)) {
     // Clamp em >= 0: number_activated_at no futuro (typo do admin / clock skew
     // daemon↔DB) cai no degrau MAIS conservador — warm-up falha FECHADO, nunca
     // vira "número formado" por idade negativa.
