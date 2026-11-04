@@ -142,7 +142,7 @@ async function turno(
   expect(claimed?.id).toBe(job.id);
   const handler = m.createInboundTurnHandler({
     crmCfg: { supabase: {} as never },
-    llmCfg: { anthropicApiKey: "fake" } as never,
+    llmCfg: { anthropicApiKey: "fake", openrouterApiKey: "fake" } as never,
     knobs: {
       historyLimit: 10,
       maxContextTokens: 1000,
