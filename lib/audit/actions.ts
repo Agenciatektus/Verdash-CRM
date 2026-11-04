@@ -704,6 +704,8 @@ export const AUDIT_ACTIONS = [
   "plataformas.meta.token_renovado",
   // Alerta diario de vencimento do acesso a Meta; so rodada com aviso enviado.
   "plataformas.meta.vencimento_avisado",
+  // Alerta de gasto/saldo da chave de IA da plataforma; so rodada com envio.
+  "ia.plataforma.alerta_enviado",
   // A rodada da VOLTA. Também só audita quando fez algo, e a contagem carrega
   // `nossos_ignorados` de propósito: é o número que prova o anti-eco
   // funcionando — sem ele, esses eventos teriam virado compromisso fantasma.

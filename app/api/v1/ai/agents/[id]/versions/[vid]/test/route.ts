@@ -39,6 +39,7 @@ import { requestTurnDeps } from "@/lib/agent-engine/agent/request-deps";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { logger } from "@/lib/logger";
+import { confirmarUnicoEmVoo, travaDoPreview } from "@/lib/ai/budget/trava-do-preview";
 import { LlmConteudoBloqueadoError } from "@/lib/agent-engine/edge/llm/conteudo-bloqueado";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,37 @@ async function atualizarRun(
       error: error.message,
     });
   }
+}
+
+/**
+ * Soma o gasto do preview em `llm_calls`. shortcut: a janela [início, agora) por
+ * agente também apanha um turno real do mesmo agente no intervalo; upgrade =
+ * gravar o run id em llm_calls. Leitura que falha devolve {} (run fica em zero).
+ */
+async function usoDoPreview(
+  admin: ReturnType<typeof createAdminClient>,
+  organizationId: string,
+  agentId: string,
+  desde: Date,
+): Promise<Record<string, number>> {
+  const { data, error } = await admin
+    .from("llm_calls")
+    .select("input_tokens, output_tokens, cost_cents")
+    .eq("organization_id", organizationId)
+    .eq("agent_id", agentId)
+    .gte("created_at", desde.toISOString())
+    .lte("created_at", new Date().toISOString());
+  if (error || !data) {
+    logger.error("[ai.test] não foi possível somar o uso do preview", { organization_id: organizationId, error: error?.message });
+    return {};
+  }
+  const cents = data.reduce((a, r) => a + Number(r.cost_cents ?? 0), 0);
+  return {
+    steps_count: data.length,
+    tokens_in: data.reduce((a, r) => a + (r.input_tokens ?? 0), 0),
+    tokens_out: data.reduce((a, r) => a + (r.output_tokens ?? 0), 0),
+    cost_cents: Math.round(cents * 10000) / 10000, // numeric(10,4)
+  };
 }
 
 export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
@@ -140,6 +172,9 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   if (!version) return fail("not_found", t("Version não encontrada."), 404, { requestId });
 
+  const trava = await travaDoPreview(admin, organizationId, new Date());
+  if (!trava.ok) return fail(trava.codigo, t(trava.mensagem), trava.status, { requestId });
+
   const startedAt = new Date();
 
   const { data: runRow, error: runErr } = await admin
@@ -162,6 +197,10 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   if (runErr || !runRow) {
     return fail("internal_error", "Erro ao iniciar test run.", 500, { requestId });
+  }
+
+  if (!(await confirmarUnicoEmVoo(admin, organizationId, runRow.id, new Date()))) {
+    return fail("preview_em_andamento", t("Já existe um teste de agente rodando. Aguarde terminar para iniciar outro."), 429, { requestId });
   }
 
   let resultPayload: Record<string, unknown>;
@@ -202,12 +241,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       status: "completed",
       completed_at: new Date().toISOString(),
       latency_ms: Date.now() - startedAt.getTime(),
-      // `steps_count`, `tokens_in`, `tokens_out` e `cost_cents` seguem em zero
-      // de propósito: o turno de prévia não devolve essas contagens à rota, e
-      // gravar `candidates.length` no lugar de passos seria um número errado com
-      // cara de certo. Quem tem o dado é `llm_calls` (`purpose='agent_preview'`),
-      // e ligar as duas é trabalho à parte — não se conserta um zero honesto com
-      // um palpite.
+      ...(await usoDoPreview(admin, organizationId, id, startedAt)),
       tool_calls: JSON.parse(JSON.stringify(result.proposals)),
     });
   } catch (err) {
@@ -228,6 +262,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
       status: "failed",
       completed_at: new Date().toISOString(),
       latency_ms: Date.now() - startedAt.getTime(),
+      ...(await usoDoPreview(admin, organizationId, id, startedAt)),
       error_code: "preview_failed",
       // Guardado na linha para quem for diagnosticar depois; a resposta ao
       // operador segue genérica, porque o texto do erro é técnico.
@@ -235,7 +270,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     });
     return fail(
       "preview_failed",
-      err instanceof LlmConteudoBloqueadoError ? err.message : t("Não foi possível executar o teste. Confira modelo, credencial e materiais do agente."),
+      err instanceof LlmConteudoBloqueadoError ? err.message : (err as { name?: string }).name === "llm_budget_exceeded" ? t("O teste foi recusado pelo limite de gasto de IA (do mês da empresa ou do dia da plataforma). O atendimento aos clientes não é afetado.") : t("Não foi possível executar o teste. Confira modelo, credencial e materiais do agente."),
       422,
       { requestId },
     );

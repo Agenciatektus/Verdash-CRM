@@ -326,6 +326,8 @@ const schema = z.object({
   // when AI_GATEWAY_API_KEY is absent, so production boot must not be fatal.
   AI_GATEWAY_API_KEY: z.string().optional().default(""),
   AI_GATEWAY_BASE_URL: z.string().optional().default(""),
+  // Teto de previews (Testar agente) por organização por hora. String crua; lib/ai/budget/trava-do-preview.ts normaliza.
+  AI_PREVIEW_MAX_POR_HORA: z.string().optional().default(""),
   // OpenRouter: alternativa ao gateway da Vercel, compatível com a API da
   // OpenAI. Opcional — sem ela nada muda; com ela o chat passa a ser roteado
   // por lá. Ver resolveLanguageModel() em lib/ai/gateway.ts.

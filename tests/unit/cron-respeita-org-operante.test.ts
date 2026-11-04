@@ -65,6 +65,7 @@ const SEM_FILTRO: Record<string, string> = {
   "handoff-devolucao": "devolve a conversa à IA; a IA só fala por evento, barrado pelo gate e pelo dispatcher",
   "lead-date-field-due": "só emite lead.date_field_due; o consumidor (automationRulesHandler) é 'pula'",
   "lead-time-triggers": "só emite lead.silent_for/stage_stale; o consumidor (automationRulesHandler) é 'pula'",
+  "ia-plataforma-alerta": "mede o gasto e o saldo da chave de IA da instalação, não de uma organização; só avisa o dono",
   "lgpd-sla-watcher": "LGPD nunca é bloqueada (spec §1.3)",
   "media-retention": "retenção de mídia: apagar é obrigação, não custo",
   "meta-renovar-token": "só renova o token da Meta antes de vencer; sem custo nem saída ao cliente",
