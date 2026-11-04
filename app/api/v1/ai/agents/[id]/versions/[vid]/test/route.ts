@@ -270,7 +270,7 @@ export async function POST(req: NextRequest, ctx: Ctx): Promise<Response> {
     });
     return fail(
       "preview_failed",
-      err instanceof LlmConteudoBloqueadoError ? err.message : t("Não foi possível executar o teste. Confira modelo, credencial e materiais do agente."),
+      err instanceof LlmConteudoBloqueadoError ? err.message : (err as { name?: string }).name === "llm_budget_exceeded" ? t("O teste foi recusado pelo limite de gasto de IA (do mês da empresa ou do dia da plataforma). O atendimento aos clientes não é afetado.") : t("Não foi possível executar o teste. Confira modelo, credencial e materiais do agente."),
       422,
       { requestId },
     );

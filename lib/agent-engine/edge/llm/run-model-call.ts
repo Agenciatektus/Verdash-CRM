@@ -60,6 +60,10 @@ import { costCents, provedorSemCustoPorToken } from './pricing';
 import { custoDoModeloForaDoMotor } from './pricing-do-catalogo';
 import { chaveDeOrcamentoDaInstalacao } from '../../../instalacao/comportamento';
 import { cobrancaLigadaComMemo } from '../../../instalacao/modulos';
+import { naoEssencialPodeSair } from '../../../ai/plataforma/gasto-da-plataforma';
+
+export const MOTIVO_CORTE_DA_PLATAFORMA =
+  'gasto do dia da chave de IA da plataforma passou do corte — testes e tarefas não essenciais pausados até amanhã; o atendimento aos clientes continua';
 import { createDefaultRegistry, type ProviderRegistry } from './providers';
 import { buildStablePrefix } from './stable-prefix';
 import {
@@ -399,6 +403,13 @@ export async function aplicarOrcamento(d: EntradaDoGate): Promise<void> {
   // também o teto do plano — é o bolso dele que os dois protegem.
   if (d.chave === 'off') {
     return;
+  }
+
+  // (1b) Corte diário da chave da PLATAFORMA: só NAO_ESSENCIAIS (preview, flywheel). Turno de cliente
+  // nunca cai aqui; quem o protege é o teto mensal da org, logo abaixo.
+  if (!(await naoEssencialPodeSair(d.db, d.purpose, d.origemDaChave === 'chave_da_instalacao'))) {
+    d.log?.warn('llm: chave da plataforma passou do corte do dia — tarefa não essencial recusada', comum);
+    throw new LlmBudgetExceededError(MOTIVO_CORTE_DA_PLATAFORMA);
   }
 
   // (2) O TETO DO PLANO, antes do orçamento da org: o `modo 'off'` dela não

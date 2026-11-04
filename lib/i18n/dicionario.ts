@@ -11597,6 +11597,7 @@ export const DICIONARIO: Traducoes = {
   "Não foi possível verificar os testes em andamento. Tente de novo em instantes.": { es: "No fue posible verificar las pruebas en curso. Inténtalo de nuevo en unos instantes." },
   "Já existe um teste de agente rodando. Aguarde terminar para iniciar outro.": { es: "Ya hay una prueba de agente en ejecución. Espera a que termine para iniciar otra." },
   "Não foi possível verificar o limite de testes. Tente de novo em instantes.": { es: "No fue posible verificar el límite de pruebas. Inténtalo de nuevo en unos instantes." },
+  "O teste foi recusado pelo limite de gasto de IA (do mês da empresa ou do dia da plataforma). O atendimento aos clientes não é afetado.": { es: "La prueba fue rechazada por el límite de gasto de IA (del mes de la empresa o del día de la plataforma). La atención a los clientes no se ve afectada." },
   "Limite de testes de agente por hora atingido. Tente de novo mais tarde.": { es: "Se alcanzó el límite de pruebas de agente por hora. Inténtalo de nuevo más tarde." },
   "Você já está na versão mais recente.": { es: "Ya estás en la versión más reciente." },
   "Você não está atribuído a essa conversa.": { es: "No estás asignado a esta conversación." },
