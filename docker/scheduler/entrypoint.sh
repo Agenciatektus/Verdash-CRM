@@ -80,6 +80,8 @@ CRONS="
 # Avisa os admins do vencimento ou da recusa do acesso a Meta, depois da renovacao
 # das 06:17 (que e quem marca a recusa). Uma vez por dia; o dedup e por marco.
 37 6 * * *|60|api/v1/cron/meta-alerta-vencimento
+# Gasto do dia e saldo da chave de IA da plataforma: avisa no WhatsApp ANTES do corte. Dedupe por nivel/dia.
+*/15 * * * *|60|api/v1/cron/ia-plataforma-alerta
 # Reafirma ao canal pareado que o CRM é o dono do envio de conversões. O aviso
 # vence em 48 h do outro lado; uma vez por dia sobra folga para uma falha.
 47 5 * * *|60|api/v1/cron/conversoes-avisa-canal

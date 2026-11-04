@@ -42,6 +42,11 @@ vi.mock("@/lib/agent-engine/agent/sandbox", () => ({
 }));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({ requestTurnDeps: vi.fn() }));
 vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: vi.fn() }));
+// A trava do preview tem teste próprio (tests/unit/trava-do-preview.test.ts); aqui ela só libera.
+vi.mock("@/lib/ai/budget/trava-do-preview", () => ({
+  travaDoPreview: vi.fn(async () => ({ ok: true })),
+  confirmarUnicoEmVoo: vi.fn(async () => true),
+}));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -82,6 +87,14 @@ function stubAdmin(atualizacoes: Record<string, unknown>[], selects: string[] = 
             };
           },
         };
+      }
+      if (table === "llm_calls") {
+        const chain = {
+          eq: () => chain,
+          gte: () => chain,
+          lte: async () => ({ data: [], error: null }),
+        };
+        return { select: () => chain };
       }
       // ai_agent_runs
       return {
