@@ -64,6 +64,27 @@ execFileSync(
   },
 );
 
+// A 9096 faz toda org nascer em openrouter/haiku; os invariantes montam o dublê do motor para
+// 'anthropic' (o padrão de sempre). Depois do gatilho do produto (ordem alfabética), devolve ao
+// padrão antigo SÓ o que o produto semeou; settings.llm escrito pelo teste fica como está.
+execFileSync(
+  "docker",
+  ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"],
+  {
+    input: `create function public.zz_teste_llm_padrao_anthropic() returns trigger language plpgsql as $$
+begin
+  if new.settings->'llm'->>'provider' = 'openrouter' and new.settings->'llm'->>'default_model' = 'anthropic/claude-haiku-5.5' then
+    new.settings := jsonb_set(new.settings, '{llm}', (new.settings->'llm') || '{"provider":"anthropic","default_model":"claude-sonnet-4-6"}'::jsonb);
+  end if;
+  return new;
+end; $$;
+create trigger zz_teste_llm_padrao_anthropic before insert on public.organizations
+  for each row execute function public.zz_teste_llm_padrao_anthropic();
+`,
+    encoding: "utf8",
+  },
+);
+
 // Marcador lido por tests/invariants/harness-isola-por-arquivo.test.ts. Sem ele
 // aquele invariante não teria como distinguir "recebi um banco limpo porque o
 // reset rodou" de "recebi um banco limpo porque calhei de ser o primeiro
