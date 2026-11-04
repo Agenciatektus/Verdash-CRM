@@ -124,6 +124,8 @@ function limpar(): void {
 function semearComoAntesDa0159(): void {
   limpar();
   sql(`
+    -- A foto é de ANTES da 9096: o gatilho que semeia o teto ainda não existia.
+    alter table public.organizations disable trigger trg_seed_org_teto_de_ia;
     insert into public.organizations (id, slug, legal_name, display_name, settings) values
       ('${ORG_HERDADA}',  'inv-orc-herdada',  'Herdada LTDA',  'Herdada',  '{}'::jsonb),
       ('${ORG_RESGATE}',  'inv-orc-resgate',  'Resgate LTDA',  'Resgate',  '{"llm":{"monthly_budget_cents":700}}'::jsonb),
@@ -131,6 +133,7 @@ function semearComoAntesDa0159(): void {
       ('${ORG_STRING}',   'inv-orc-string',   'String LTDA',   'String',   '{"llm":{"monthly_budget_cents":"700"}}'::jsonb),
       ('${ORG_SEM_LINHA}','inv-orc-semlinha', 'SemLinha LTDA', 'SemLinha', '{"llm":{"monthly_budget_cents":900}}'::jsonb),
       ('${ORG_GATE}',     'inv-orc-gate',     'Gate LTDA',     'Gate',     '{}'::jsonb);
+    alter table public.organizations enable trigger trg_seed_org_teto_de_ia;
 
     -- ⚠️ A LINHA VEM ANTES DO BLOCO. É o caso (b) do desenho, e é o que separa o
     -- caminho \`install.sh\` (tabela vazia, tudo verde por vacuidade) do
