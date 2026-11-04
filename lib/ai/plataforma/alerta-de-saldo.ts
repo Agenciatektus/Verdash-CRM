@@ -125,9 +125,19 @@ export async function rodadaDoAlertaDaPlataforma(deps: {
         [dia, n.id],
       );
       if (claim.rowCount === 0) continue;
-      const desfecho = await deps.enviar(deps.orgDoAviso, `[Alerta de IA da plataforma] ${n.texto}`);
+      const solta = () => deps.db.query('delete from public.ia_plataforma_alertas where dia = $1 and nivel = $2', [dia, n.id]);
+      let desfecho: string;
+      try {
+        desfecho = await deps.enviar(deps.orgDoAviso, `[Alerta de IA da plataforma] ${n.texto}`);
+      } catch (err) {
+        await solta(); // sem isso o nivel fica "enviado" no dia sem ninguem ter recebido
+        throw err;
+      }
       if (desfecho === 'enviado') resumo.enviados += 1;
-      else resumo.falhas.push(`${n.id}:${desfecho}`);
+      else {
+        await solta();
+        resumo.falhas.push(`${n.id}:${desfecho}`);
+      }
     }
   } catch (err) {
     resumo.falhas.push(`rodada:${err instanceof Error ? err.message : String(err)}`);

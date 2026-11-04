@@ -4,7 +4,7 @@
  * O gate por chamada (`aplicarOrcamento` em run-model-call) já corta o preview
  * quando o teto estoura; o que faltava era barrar ANTES de abrir o run e conter
  * clique repetido: teto mensal, um preview por vez e rajada por hora.
- * Erro de leitura recusa (fail-closed): errar frouxo aqui gasta de verdade.
+ * Erro de leitura recusa (fail-closed), exceto a etapa (a), que falha ABERTA (o gate por chamada ainda corta).
  */
 import { env } from "@/lib/env";
 import { podeGastarComIa } from "@/lib/ai/budget/pode-gastar";
