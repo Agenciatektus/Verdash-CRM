@@ -407,7 +407,10 @@ export async function aplicarOrcamento(d: EntradaDoGate): Promise<void> {
 
   // (1b) Corte diário da chave da PLATAFORMA: só NAO_ESSENCIAIS (preview, flywheel). Turno de cliente
   // nunca cai aqui; quem o protege é o teto mensal da org, logo abaixo.
-  if (!(await naoEssencialPodeSair(d.db, d.purpose, d.origemDaChave === 'chave_da_instalacao'))) {
+  // agent_preview COM lead é rascunho assistido em conversa real: atendimento nunca cai.
+  const ensaioSemLead = d.purpose === 'agent_preview' && !d.input?.leadId;
+  const cortavel = d.purpose !== 'agent_preview' || ensaioSemLead;
+  if (cortavel && !(await naoEssencialPodeSair(d.db, d.purpose, d.origemDaChave === 'chave_da_instalacao'))) {
     d.log?.warn('llm: chave da plataforma passou do corte do dia — tarefa não essencial recusada', comum);
     throw new LlmBudgetExceededError(MOTIVO_CORTE_DA_PLATAFORMA);
   }

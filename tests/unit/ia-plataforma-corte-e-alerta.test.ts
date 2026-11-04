@@ -80,6 +80,24 @@ describe("corte diário da chave da plataforma", () => {
     await expect(gate("agent_preview")).rejects.toBeInstanceOf(LlmBudgetExceededError);
     await expect(gate("agent_turn")).resolves.toBeUndefined();
   });
+
+  it("agent_preview COM lead (rascunho assistido em conversa real) não cai no corte", async () => {
+    const { pool } = poolDoGasto(500);
+    await expect(
+      aplicarOrcamento({
+        db: pool,
+        organizationId: "00000000-0000-4000-8000-000000000001",
+        orcamentoDaConfig: { modo: "off" },
+        orcamentoIndisponivelPorque: "dublê",
+        chave: "on",
+        origemDaChave: "chave_da_instalacao",
+        purpose: "agent_preview",
+        provider: "openrouter",
+        model: "anthropic/claude-haiku-5.5",
+        input: { leadId: "lead-1" },
+      } as unknown as Parameters<typeof aplicarOrcamento>[0]),
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("alerta de gasto e saldo da plataforma", () => {
