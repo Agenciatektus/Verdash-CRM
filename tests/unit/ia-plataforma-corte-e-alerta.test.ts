@@ -30,10 +30,10 @@ beforeEach(() => {
 });
 
 describe("corte diário da chave da plataforma", () => {
-  it("padrões: alerta 0,50 e 1,00, corte 1,00, 3 dias de saldo; aceita vírgula", () => {
-    expect(limitesDaPlataforma({})).toEqual({ alertasCents: [50, 100], corteCents: 100, diasDeSaldo: 3 });
+  it("padrões: alerta 0,50 e 1,00, corte 3,00, 3 dias de saldo; aceita vírgula", () => {
+    expect(limitesDaPlataforma({})).toEqual({ alertasCents: [50, 100], corteCents: 300, diasDeSaldo: 3 });
     expect(limitesDaPlataforma({ AI_PLATAFORMA_ALERTA_USD_DIA: "2|0,75", AI_PLATAFORMA_CORTE_USD_DIA: "lixo" }))
-      .toEqual({ alertasCents: [75, 200], corteCents: 100, diasDeSaldo: 3 });
+      .toEqual({ alertasCents: [75, 200], corteCents: 300, diasDeSaldo: 3 });
   });
 
   it("preview na chave da plataforma acima do corte cai; abaixo, segue", () => {

@@ -54,7 +54,7 @@ export function limitesDaPlataforma(env: Record<string, string | undefined> = pr
   const dias = Number.parseFloat((env.AI_PLATAFORMA_ALERTA_DIAS_DE_SALDO ?? '').trim());
   return {
     alertasCents: (alertasCents.length ? alertasCents : [50, 100]).sort((a, b) => a - b),
-    corteCents: usdParaCents(env.AI_PLATAFORMA_CORTE_USD_DIA, 100),
+    corteCents: usdParaCents(env.AI_PLATAFORMA_CORTE_USD_DIA, 300),
     diasDeSaldo: Number.isFinite(dias) && dias > 0 ? dias : 3,
   };
 }
