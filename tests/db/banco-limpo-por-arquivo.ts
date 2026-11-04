@@ -71,7 +71,7 @@ execFileSync(
   "docker",
   ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"],
   {
-    input: `create function public.zz_teste_llm_padrao_anthropic() returns trigger language plpgsql as $$
+    input: `create function public.zz_teste_llm_padrao_anthropic() returns trigger language plpgsql set search_path = public as $$
 begin
   if new.settings->'llm'->>'provider' = 'openrouter' and new.settings->'llm'->>'default_model' = 'anthropic/claude-haiku-5.5' then
     new.settings := jsonb_set(new.settings, '{llm}', (new.settings->'llm') || '{"provider":"anthropic","default_model":"claude-sonnet-4-6"}'::jsonb);
