@@ -146,7 +146,7 @@ describe("POST de teste do agente: isolamento e efeitos explícitos", () => {
     const db = bancoDaRota(ORG);
     mocks.admin.mockReturnValue(db.admin);
     await POST(requisicao(), ctx);
-    expect(db.updates[0].dados).toMatchObject({ steps_count: 2, tokens_in: 100, tokens_out: 50, cost_cents: 0.6235 });
+    expect(db.updates[0]?.dados).toMatchObject({ steps_count: 2, tokens_in: 100, tokens_out: 50, cost_cents: 0.6235 });
   });
 
   it("trava recusa: devolve o status da trava, sem INSERT e SEM chamar o modelo", async () => {
