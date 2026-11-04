@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   preview: vi.fn(),
   audit: vi.fn(async () => undefined),
   admin: vi.fn(),
+  trava: vi.fn(),
+  unico: vi.fn(),
 }));
 
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: mocks.support }));
@@ -18,6 +20,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.admin }));
 vi.mock("@/lib/agent-engine/agent/sandbox", () => ({ testAgentVersion: mocks.preview }));
 vi.mock("@/lib/agent-engine/agent/request-deps", () => ({ requestTurnDeps: () => ({}) }));
 vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: () => ({}) }));
+vi.mock("@/lib/ai/budget/trava-do-preview", () => ({ travaDoPreview: mocks.trava, confirmarUnicoEmVoo: mocks.unico }));
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
 
 import { POST } from "@/app/api/v1/ai/agents/[id]/versions/[vid]/test/route";
@@ -47,6 +50,17 @@ function bancoDaRota(orgDaVersao: string) {
           },
         };
         return consulta;
+      }
+      if (table === "llm_calls") {
+        // Soma do uso do preview: 2 chamadas, 100/50 tokens e 1,23456 centavo cada.
+        const q: Record<string, unknown> = {
+          select: () => q, eq: () => q, gte: () => q,
+          lte: async () => ({ data: [
+            { input_tokens: 60, output_tokens: 20, cost_cents: "0.5" },
+            { input_tokens: 40, output_tokens: 30, cost_cents: 0.1234567 },
+          ], error: null }),
+        };
+        return q;
       }
       if (table !== "ai_agent_runs") throw new Error(`Escrita ou leitura inesperada: ${table}`);
       return {
@@ -82,6 +96,8 @@ const ctx = { params: Promise.resolve({ id: AGENT, vid: VERSION }) };
 describe("POST de teste do agente: isolamento e efeitos explícitos", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.trava.mockResolvedValue({ ok: true });
+    mocks.unico.mockResolvedValue(true);
     mocks.requireRole.mockResolvedValue({
       ok: true, user: { id: "ffffffff-ffff-4fff-8fff-ffffffffffff", idioma: "pt-BR" },
       org: { orgId: ORG, role: "admin" },
@@ -124,6 +140,32 @@ describe("POST de teste do agente: isolamento e efeitos explícitos", () => {
       organizationId: ORG, agentId: AGENT, versionId: VERSION, runId: RUN,
       sampleMessage: "Mensagem de teste", channelId: null,
     }));
+  });
+
+  it("preenche steps, tokens e custo do run somando llm_calls", async () => {
+    const db = bancoDaRota(ORG);
+    mocks.admin.mockReturnValue(db.admin);
+    await POST(requisicao(), ctx);
+    expect(db.updates[0].dados).toMatchObject({ steps_count: 2, tokens_in: 100, tokens_out: 50, cost_cents: 0.6235 });
+  });
+
+  it("trava recusa: devolve o status da trava, sem INSERT e SEM chamar o modelo", async () => {
+    mocks.trava.mockResolvedValue({ ok: false, codigo: "limite_de_previews", status: 429, mensagem: "x" });
+    const db = bancoDaRota(ORG);
+    mocks.admin.mockReturnValue(db.admin);
+    const resposta = await POST(requisicao(), ctx);
+    expect(resposta.status).toBe(429);
+    expect(db.inserts).toHaveLength(0);
+    expect(mocks.preview).not.toHaveBeenCalled();
+  });
+
+  it("corrida pós-INSERT perdida: 429 sem chamar o modelo", async () => {
+    mocks.unico.mockResolvedValue(false);
+    const db = bancoDaRota(ORG);
+    mocks.admin.mockReturnValue(db.admin);
+    const resposta = await POST(requisicao(), ctx);
+    expect(resposta.status).toBe(429);
+    expect(mocks.preview).not.toHaveBeenCalled();
   });
 
   it("candidato com a mídia pendente sai como teste BLOQUEADO (#2490)", async () => {
