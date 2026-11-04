@@ -107,7 +107,7 @@ describe("alerta de gasto e saldo da plataforma", () => {
       }
       return { rows: [{ cents: sql.includes("interval '7 days'") ? 50 : 60 }], rowCount: 1 };
     });
-    const enviar = vi.fn(async () => "enviado" as const);
+    const enviar = vi.fn(async (_orgId: string, _texto: string) => "enviado" as const);
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: { total_credits: 10, total_usage: 9 } }))) as unknown as typeof fetch;
     const deps = { db: { query } as unknown as Pool, enviar, orgDoAviso: "org-tektus", apiKey: "k", agora: new Date("2026-11-04T15:00:00Z"), fetchFn, env: {} };
 
