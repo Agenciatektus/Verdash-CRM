@@ -1,4 +1,4 @@
--- manifest: 9096 — toda organização nasce com IA padrão na chave que a plataforma TEM (openrouter + anthropic/claude-haiku-5.5, com preço no catálogo) e com teto mensal que PARA a IA (US$ 10, bloquear, efetivo na criação). Backfill idempotente: provedor sem chave da plataforma e sem credencial própria ativa vai para o padrão; orçamento ausente, `off` ou abaixo do piso vira o teto padrão. Escolha explícita (credencial própria, assinatura, modo avisar/bloquear já gravado) não é tocada. Incidente 04/11: org semeada em anthropic sem ANTHROPIC_API_KEY caía no Sonnet via OpenRouter e 11 previews zeraram o saldo da plataforma.
+-- manifest: 9096 — toda organização nasce com IA padrão na chave que a plataforma TEM (openrouter + anthropic/claude-haiku-5.5, com preço no catálogo) e com teto mensal que PARA a IA (US$ 10, bloquear, efetivo na criação). Backfill idempotente: provedor sem chave da plataforma e sem credencial própria ativa vai para o padrão; orçamento ausente ou `off` vira o teto padrão, só em org sem credencial própria ativa, efetivo em 7 dias. Escolha explícita (credencial própria, assinatura, modo avisar/bloquear já gravado, inclusive avisar com limite 0) não é tocada. Incidente 04/11: org semeada em anthropic sem ANTHROPIC_API_KEY caía no Sonnet via OpenRouter e 11 previews zeraram o saldo da plataforma.
 --
 -- Por que NÃO typesafe/jev-router: está em ai_models sem preço (input/output nulos) e as 2.411 chamadas
 -- medidas gravaram cost_cents nulo; com ele de padrão o teto mensal nunca enxergaria gasto.
@@ -43,10 +43,13 @@ update public.organizations o
      select 1 from public.ai_provider_credentials c
       where c.organization_id = o.id and c.provider = o.settings->'llm'->>'provider' and c.is_active);
 
--- Backfill (2): nenhuma org sem teto. Sem linha, `off` ou teto abaixo do piso (100) vira o padrão;
--- `avisar` e `bloquear` gravados são escolha de admin e ficam.
+-- Backfill (2): so org SEM credencial propria ativa (essa paga a propria IA) e sem linha, ou com linha `off`.
+-- `avisar`/`bloquear` gravados (inclusive `avisar` com limite 0 = "sem limite") sao escolha de admin e ficam.
+-- Efetivo em 7 dias: da tempo de ver o aviso antes de a IA parar.
 insert into public.ai_budgets (organization_id, monthly_limit_cents, enforcement_mode, enforcement_effective_at, alarm_threshold_pct)
-select o.id, 1000, 'bloquear', now(), 80 from public.organizations o
+select o.id, 1000, 'bloquear', now() + interval '7 days', 80 from public.organizations o
+ where not exists (select 1 from public.ai_provider_credentials c where c.organization_id = o.id and c.is_active)
 on conflict (organization_id) do update
-   set monthly_limit_cents = 1000, enforcement_mode = 'bloquear', enforcement_effective_at = now()
- where public.ai_budgets.enforcement_mode = 'off' or public.ai_budgets.monthly_limit_cents < 100;
+   set monthly_limit_cents = case when public.ai_budgets.monthly_limit_cents < 100 then 1000 else public.ai_budgets.monthly_limit_cents end,
+       enforcement_mode = 'bloquear', enforcement_effective_at = now() + interval '7 days'
+ where public.ai_budgets.enforcement_mode = 'off';

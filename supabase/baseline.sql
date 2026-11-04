@@ -64031,10 +64031,10 @@ select o.id, 'visao_de_imagem', 'openrouter', 'google/gemini-2.5-flash-lite', tr
 on conflict (organization_id, purpose) do nothing;
 
 -- ---- IA padrao barata e teto que para, desde a criacao da org (migration 9096) ----
--- Mesmo corpo da migration 9096 ate o backfill (1). Fica ANTES da VARREDURA anon porque cria funcao.
+-- Mesmo corpo da migration 9096 ate os gatilhos, sem os backfills. Fica ANTES da VARREDURA anon porque cria funcao.
 -- O backfill (2) do teto NAO entra aqui: o baseline reaplica a cada update e desfaria um `off` escolhido depois pelo admin.
 
--- manifest: 9096 — toda organização nasce com IA padrão na chave que a plataforma TEM (openrouter + anthropic/claude-haiku-5.5, com preço no catálogo) e com teto mensal que PARA a IA (US$ 10, bloquear, efetivo na criação). Backfill idempotente: provedor sem chave da plataforma e sem credencial própria ativa vai para o padrão; orçamento ausente, `off` ou abaixo do piso vira o teto padrão. Escolha explícita (credencial própria, assinatura, modo avisar/bloquear já gravado) não é tocada. Incidente 04/11: org semeada em anthropic sem ANTHROPIC_API_KEY caía no Sonnet via OpenRouter e 11 previews zeraram o saldo da plataforma.
+-- manifest: 9096 — toda organização nasce com IA padrão na chave que a plataforma TEM (openrouter + anthropic/claude-haiku-5.5, com preço no catálogo) e com teto mensal que PARA a IA (US$ 10, bloquear, efetivo na criação). Backfill idempotente: provedor sem chave da plataforma e sem credencial própria ativa vai para o padrão; orçamento ausente ou `off` vira o teto padrão, só em org sem credencial própria ativa, efetivo em 7 dias. Escolha explícita (credencial própria, assinatura, modo avisar/bloquear já gravado, inclusive avisar com limite 0) não é tocada. Incidente 04/11: org semeada em anthropic sem ANTHROPIC_API_KEY caía no Sonnet via OpenRouter e 11 previews zeraram o saldo da plataforma.
 --
 -- Por que NÃO typesafe/jev-router: está em ai_models sem preço (input/output nulos) e as 2.411 chamadas
 -- medidas gravaram cost_cents nulo; com ele de padrão o teto mensal nunca enxergaria gasto.
@@ -64053,6 +64053,10 @@ begin
   return new;
 end; $$;
 
+-- shortcut: o gatilho acima semeia openrouter sem checar OPENROUTER_API_KEY (SQL nao enxerga o env, e a cerca
+-- apendice-do-baseline-nao-diverge-da-cadeia exige o mesmo corpo da migration). Instalacao sem essa chave: trocar o provider
+-- da org nova no onboarding. O BACKFILL de provider (anthropic->openrouter) fica so na migration 9096: o baseline reaplica a cada update.
+
 create or replace function public.fn_seed_org_teto_de_ia() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
@@ -64068,16 +64072,6 @@ drop trigger if exists trg_seed_org_teto_de_ia on public.organizations;
 create trigger trg_seed_org_teto_de_ia
   after insert on public.organizations
   for each row execute function public.fn_seed_org_teto_de_ia();
-
--- Backfill (1): provedor padrão sem chave da plataforma (só OPENROUTER existe) e sem credencial ativa da org.
-update public.organizations o
-   set settings = jsonb_set(o.settings, '{llm}',
-         coalesce(o.settings->'llm', '{}'::jsonb)
-           || jsonb_build_object('provider', 'openrouter', 'default_model', 'anthropic/claude-haiku-5.5'), true)
- where coalesce(o.settings->'llm'->>'provider', '') <> 'openrouter'
-   and not exists (
-     select 1 from public.ai_provider_credentials c
-      where c.organization_id = o.id and c.provider = o.settings->'llm'->>'provider' and c.is_active);
 
 
 
