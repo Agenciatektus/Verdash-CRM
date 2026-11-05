@@ -39,7 +39,9 @@ export function IdentidadeDaConversa({ nome, status, encerrada, canal, rotuloCan
   return (
     // Sem avatar: no protótipo ele mora só no painel do lead, ao lado, e
     // repeti-lo aqui gastava 52px da linha do nome na coluna mais disputada.
-    <div className="flex min-w-0 flex-1 items-center gap-3">
+    // `basis-56`: no cabeçalho com `flex-wrap`, sem base o nome encolhia a zero e as
+    // ações cobriam a linha (iPad 820px, chat estreito); com base, as ações descem.
+    <div className="flex min-w-0 flex-1 basis-56 items-center gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="min-w-0 truncate text-base font-bold" title={nome}>
