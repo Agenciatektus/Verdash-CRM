@@ -26,6 +26,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
+// Fork: a chave da instalação só atende se a org pode usar a IA da instalação (billing); aqui ela pode.
+vi.mock("@/lib/cobranca/ia-propria", async (orig) => ({
+  ...(await orig<typeof import("@/lib/cobranca/ia-propria")>()),
+  instalacaoPodeServirIa: vi.fn(async () => true),
+}));
+
 import { generateText, streamText, type ModelMessage } from "ai";
 
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";

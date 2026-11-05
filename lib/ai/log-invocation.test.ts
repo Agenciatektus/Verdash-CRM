@@ -39,6 +39,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// Fork: a chave da instalação só atende se a org pode usar a IA da instalação (billing); aqui ela pode.
+vi.mock("@/lib/cobranca/ia-propria", async (orig) => ({
+  ...(await orig<typeof import("@/lib/cobranca/ia-propria")>()),
+  instalacaoPodeServirIa: vi.fn(async () => true),
+  instalacaoPodeServirIaViaRpc: vi.fn(async () => true),
+  instalacaoPodeServirIaComMemo: vi.fn(async () => true),
+}));
+
 // ── Dublês ───────────────────────────────────────────────────────────────────
 //
 // O resolvedor real lê `ai_purpose_bindings` e decifra a credencial; o log

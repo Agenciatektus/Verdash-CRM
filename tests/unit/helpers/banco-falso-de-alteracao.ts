@@ -46,7 +46,10 @@ export function bancoFalso(opcoes: Opcoes = {}) {
         eq(col: string, v: unknown) { c.filtros.push([col, v]); return q; },
         is() { return q; },
         maybeSingle: async () => ({ data: linhas[tabela] ?? null, error: null }),
-        then(ok: (v: unknown) => unknown) { return Promise.resolve(ok({ data: null, error: null })); },
+        // O update devolve a linha alterada (`.select("id")`, upstream #3279): sem linha, o apagar é eco.
+        then(ok: (v: unknown) => unknown) {
+          return Promise.resolve(ok({ data: c.op === "update" ? [{ id: "msg-orig" }] : null, error: null }));
+        },
       };
       return q;
     },

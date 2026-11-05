@@ -65,6 +65,11 @@ vi.mock("@/lib/supabase/admin", () => ({
       from: () => ({
         download: async () => ({ data: new Blob([estado.baixado]), error: null }),
         createSignedUrl: async () => ({ data: { signedUrl: "https://storage/x" }, error: null }),
+        // A rota assina em lote (`assinarMidias`, upstream 1.90).
+        createSignedUrls: async (caminhos: string[]) => ({
+          data: caminhos.map((path) => ({ path, signedUrl: "https://storage/x", error: null })),
+          error: null,
+        }),
       }),
     },
   }),
