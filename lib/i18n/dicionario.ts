@@ -17321,7 +17321,7 @@ export const DICIONARIO: Traducoes = {
   "Pagar agora": { es: "Pagar ahora" },
   "Você recebe este aviso porque administra esta empresa.": { es: "Recibes este aviso porque administras esta empresa." },
   // ─── Cobrança do revendedor — teto de IA (PR 3a) ───
-  "O uso de IA do plano chegou a 80%": { es: "El uso de IA del plan llegó al 80%" },
+  "O uso de IA do plano está perto do limite": { es: "El uso de IA del plan está cerca del límite" },
   "Neste mês a empresa já usou US$ {gasto} de US$ {teto} incluídos no plano. Ao chegar ao limite, as conversas passam para a equipe. Para aumentar, troque de plano em Plano e cobrança.": { es: "Este mes la empresa ya usó US$ {gasto} de US$ {teto} incluidos en el plan. Al llegar al límite, las conversaciones pasan al equipo. Para aumentarlo, cambia de plan en Plan y facturación." },
   // ─── Cobrança do revendedor — menu e limites (PR 3a) ───
   "Plano e cobrança": { es: "Plan y facturación" },

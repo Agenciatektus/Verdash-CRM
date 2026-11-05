@@ -5,6 +5,7 @@ import {
   AVISO_TITULO,
   SQL_ORCAMENTO,
   SQL_TETO_DO_PLANO,
+  decidirTetoDoPlano,
 } from "@/lib/agent-engine/edge/llm/orcamento";
 
 import { sql } from "./psql-transporte";
@@ -145,5 +146,62 @@ describe("o teto de IA do plano no Postgres real", () => {
     rodarOrcamento(ORG_B);
     expect(abertos(ORG_B, "plano"), "o orçamento da org fechou o aviso do PLANO").toBe(1);
     expect(abertos(ORG_B, "ai_budget")).toBe(0);
+  });
+});
+
+/**
+ * O TETO DO PLANO É A COTA DA CHAVE DA INSTALAÇÃO (migration 9098, P1 do Cassio na #498).
+ * Gasto com credencial ou assinatura da org (`chave_da_instalacao = false`) não entra; linha
+ * nula (anterior à 9098) entra. A decisão pura recebe o gasto que o Postgres devolveu.
+ */
+describe("o teto do plano soma só a chave da instalação (9098)", () => {
+  const ORG_C = "c0de0510-7e70-4000-8000-0000000000d4";
+  const PLANO_C = "c0de0510-7e70-4000-8000-0000000000e5";
+
+  function gastarCom(chaveDaInstalacao: boolean | null, cents: number): void {
+    sql(`insert into public.llm_calls
+           (organization_id, purpose, provider, model, input_tokens, output_tokens, cost_cents, latency_ms, chave_da_instalacao)
+         values ('${ORG_C}', 'agent_turn', 'openai', 'gpt-x', 10, 10, ${cents}, 100, ${chaveDaInstalacao === null ? "null" : chaveDaInstalacao});`);
+  }
+
+  const decidir = (gasto: number) =>
+    decidirTetoDoPlano({
+      tetoUsdCents: 600,
+      gastoUsdCents: gasto,
+      origemDaChave: "chave_da_instalacao",
+      purpose: "visao_de_imagem",
+      chave: "on",
+    }).acao;
+
+  beforeAll(() => {
+    ligarCobranca(true);
+    sql(`
+      insert into public.organizations (id, slug, legal_name, display_name, settings) values
+        ('${ORG_C}', 'inv-teto-plano-c', 'Teto C LTDA', 'Teto C', '{}'::jsonb);
+      insert into public.cobranca_planos (id, nome, preco_cents, intervalo, teto_ia_usd_cents)
+        values ('${PLANO_C}', 'Sem IA', 15700, 'mes', 600);
+      insert into public.cobranca_assinaturas (organization_id, plano_id, estado, trial_ate)
+        values ('${ORG_C}', '${PLANO_C}', 'trial', now() + interval '14 days');
+    `);
+  });
+
+  it("⭐ chave própria paga acima do teto NÃO bloqueia visão/transcrição na chave da instalação", () => {
+    ligarCobranca(true);
+    gastarCom(false, 5000);
+    const { teto, gasto } = rodarTeto(ORG_C);
+    expect(Number(teto)).toBe(600);
+    expect(Number(gasto), "gasto da chave própria entrou na cota da instalação").toBe(0);
+    expect(decidir(Number(gasto))).toBe("seguir");
+    // O orçamento da org (régua única) continua vendo tudo.
+    expect(Number(sql(`select public.fn_gasto_de_ia_do_mes('${ORG_C}'::uuid);`))).toBe(5000);
+  });
+
+  it("⭐ gasto da instalação acima do teto bloqueia; linha antiga (nula) conta", () => {
+    ligarCobranca(true);
+    gastarCom(true, 400);
+    gastarCom(null, 300);
+    const gasto = Number(rodarTeto(ORG_C).gasto);
+    expect(gasto).toBe(700);
+    expect(decidir(gasto)).toBe("bloquear");
   });
 });
