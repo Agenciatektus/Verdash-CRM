@@ -500,7 +500,8 @@ with plano as (
 ),
 leitura as (
   select teto,
-         case when teto is null then null else public.fn_gasto_de_ia_do_mes($1) end as gasto
+         -- Só a chave da instalação conta no teto do PLANO (9098); o orçamento da org segue em fn_gasto_de_ia_do_mes.
+         case when teto is null then null else public.fn_gasto_de_ia_da_instalacao_do_mes($1) end as gasto
     from plano
 ),
 retrata as (

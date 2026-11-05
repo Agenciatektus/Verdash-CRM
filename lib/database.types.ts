@@ -4531,6 +4531,7 @@ export type Database = {
       }
       cobranca_planos: {
         Row: {
+          aviso_ia_usd_cents: number | null
           arquivado_em: string | null
           created_at: string
           ia_propria: boolean
@@ -4550,6 +4551,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          aviso_ia_usd_cents?: number | null
           arquivado_em?: string | null
           created_at?: string
           ia_propria?: boolean
@@ -4569,6 +4571,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          aviso_ia_usd_cents?: number | null
           arquivado_em?: string | null
           created_at?: string
           ia_propria?: boolean
