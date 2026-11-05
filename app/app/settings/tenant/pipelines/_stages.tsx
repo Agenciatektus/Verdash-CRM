@@ -183,15 +183,15 @@ type Arquivamento = {
  * no navegador, mas só depois de alguém rodá-la). Constante compartilhada torna
  * a divergência impossível em vez de indetectável.
  */
-// ⚠️ AS CLASSES SÃO LITERAIS INTEIRAS, com o prefixo `sm:` incluído: o Tailwind
-// varre o texto-fonte, então `sm:${...}` montado por interpolação NÃO gera CSS.
+// ⚠️ AS CLASSES SÃO LITERAIS INTEIRAS, com o prefixo `@3xl:` incluído: o Tailwind
+// varre o texto-fonte, então `@3xl:${...}` montado por interpolação NÃO gera CSS.
 // E o prefixo é o certo de qualquer jeito — no celular a linha empilha e largura
 // fixa espremeria os controles.
 const LARGURA = {
-  chance: "sm:w-[124px]",
-  ordem: "sm:w-[76px]",
-  papel: "sm:w-56",
-  arquivar: "sm:w-[104px]",
+  chance: "@3xl:w-[124px]",
+  ordem: "@3xl:w-[76px]",
+  papel: "@3xl:w-56",
+  arquivar: "@3xl:w-[104px]",
 } as const;
 
 /**
@@ -457,7 +457,9 @@ export function StagesSection({
   }
 
   return (
-    <div className="space-y-4" id={ancoraDasEtapas(pipelineId)} data-testid={`etapas-${pipelineId}`}>
+    // `@container` + `@3xl:`: a linha vira tabela pela largura do CARTÃO (768px), não da tela;
+    // no iPad o cartão tem ~630px e as colunas fixas (528px) espremiam o nome.
+    <div className="@container space-y-4" id={ancoraDasEtapas(pipelineId)} data-testid={`etapas-${pipelineId}`}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{t("Etapas deste funil")}</h3>
         <p className="max-w-3xl text-sm leading-relaxed text-text-muted">
@@ -479,13 +481,13 @@ export function StagesSection({
           sobre coisa nenhuma — a dona da clínica precisa adivinhar o que cada
           controle faz. No celular a linha EMPILHA e um cabeçalho de colunas não
           alinha com nada: lá o mesmo texto vai em cima de cada controle
-          (`sm:hidden`, mesmas constantes). `aria-label` não substitui nenhum dos
+          (`@3xl:hidden`, mesmas constantes). `aria-label` não substitui nenhum dos
           dois — é invisível para quem enxerga. */}
       {/* `border border-transparent`: a lista abaixo tem borda de 1px, que empurra
           o conteúdo dela 1px para dentro. Sem a mesma borda aqui, cada rótulo
           fica 1px à direita do controle que nomeia — medido, não estimado. */}
       <div
-        className="hidden gap-3 border border-transparent px-4 text-xs font-medium text-text-muted sm:flex"
+        className="hidden gap-3 border border-transparent px-4 text-xs font-medium text-text-muted @3xl:flex"
         data-testid="etapas-cabecalho"
       >
         <span className="w-6 shrink-0" />
@@ -515,15 +517,15 @@ export function StagesSection({
               className="flex flex-col gap-3 p-4"
               data-testid={`etapa-${etapa.id}`}
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center">
                 <span className="w-6 shrink-0 text-xs tabular-nums text-text-muted">
                   {i + 1}.
                 </span>
 
                 {/* No empilhado, cada controle carrega o rótulo que no desktop
-                    vive no cabeçalho — mesmas constantes, `sm:hidden`. */}
+                    vive no cabeçalho — mesmas constantes, `@3xl:hidden`. */}
                 <div className="min-w-0 flex-1 space-y-1">
-                  <span className="block text-xs font-medium text-text-muted sm:hidden">
+                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
                     {t(ROTULO.nome)}
                   </span>
                   <NomeDaEtapa
@@ -537,7 +539,7 @@ export function StagesSection({
                     100 e 0 NA REGRA, então o campo fica desabilitado ali —
                     digitar um número seria uma promessa que a regra ignora. */}
                 <div className={`${LARGURA.chance} shrink-0 space-y-1`}>
-                  <span className="block text-xs font-medium text-text-muted sm:hidden">
+                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
                     {t(ROTULO.chance)}
                   </span>
                   <ProbabilidadeDaEtapa
@@ -584,9 +586,9 @@ export function StagesSection({
                     rótulo em y=4893, setas em y=4883) e a linha ficava com três
                     rótulos em duas convenções diferentes. */}
                 <div
-                  className={`flex flex-col gap-1 ${LARGURA.ordem} shrink-0 sm:flex-row sm:items-center sm:justify-center sm:gap-1`}
+                  className={`flex flex-col gap-1 ${LARGURA.ordem} shrink-0 @3xl:flex-row @3xl:items-center @3xl:justify-center @3xl:gap-1`}
                 >
-                  <span className="text-xs font-medium text-text-muted sm:hidden">
+                  <span className="text-xs font-medium text-text-muted @3xl:hidden">
                     {t(ROTULO.ordem)}
                   </span>
                   <div className="flex items-center gap-1">
@@ -617,8 +619,8 @@ export function StagesSection({
                   </div>
                 </div>
 
-                <div className={`w-full shrink-0 space-y-1 ${LARGURA.papel} sm:space-y-0`}>
-                  <span className="block text-xs font-medium text-text-muted sm:hidden">
+                <div className={`w-full shrink-0 space-y-1 ${LARGURA.papel} @3xl:space-y-0`}>
+                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
                     {t(ROTULO.papel)}
                   </span>
                   <Select
