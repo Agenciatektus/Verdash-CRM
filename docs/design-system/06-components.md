@@ -4,13 +4,17 @@
 
 Inventário completo dos componentes de UI do DeskcommCRM. Cada um tem variants finitos, states nomeados e regras de uso. Não fork, não custom-CSS solto: se um componente precisa de variant novo, ele entra aqui.
 
-## Componentes shadcn instalados
+## O que existe de fato
 
-Localização: `components/ui/`. Os 14 instalados (ver `ls components/ui/`):
+`components/ui/` (shadcn customizado): `alert-dialog` · `avatar` · `badge` · `button` · `campo-de-data` · `card` · `chip` · `dialog` · `digitar-data` · `dropdown-menu` · `escolha` · `grade-do-calendario` · `input` · `label` · `popover` · `scroll-area` · `select` · `seletor-de-data-hora` · `separator` · `sheet` · `skeleton` · `sonner` · `switch` · `table` · `tabs` · `textarea` · `tooltip`.
 
-`avatar` · `badge` · `button` · `card` · `dialog` · `dropdown-menu` · `input` · `label` · `scroll-area` · `separator` · `sheet` · `skeleton` · `sonner` · `tabs` · `textarea`
+`components/pagina/` (casca de página): `Pagina` · `BarraDeFiltros` · `BotaoDaTela` · `LinkDeVolta` · `ListaDaPagina` · `TabelaEmpilhada`.
 
-Próximas adições previstas (não instalados ainda): `tooltip`, `select`, `command`, `popover`, `toggle`, `progress`. Quando chegarem, atualizar este doc.
+`components/mobile/` (app de celular, abaixo de 760px): `CascaDoCelular` · `BarraDeTela` · `BarraInferior` · `BotaoCriar` · `CabecalhoGrande` · `CampoDeBusca` · `FolhaInferior` · `FunisDoMenu` · `LinhaDeslizante` · `telas/` (Conversas, ConversaAberta, Funil, Tarefas, Agenda, Canais, Mais etc.).
+
+Do produto: `components/inbox/` (`ChatThread`, `MessageBubble`, `CRMSidePanel`), `components/kanban/` (`KanbanCard`).
+
+**Previstos, ainda não existem:** `StatusPill`, `TagPill`, `CardDeIndicador`, `Aviso`, `OwnerAvatar`, `ConversationItem` e o estado `loading` do `Button`. As seções abaixo descrevem a intenção; não importe esses nomes até serem criados e este doc ser atualizado.
 
 ---
 
@@ -56,7 +60,7 @@ Search input usa o mesmo Input com `type="search"` + leading `MagnifyingGlass`. 
 
 ## Card
 
-3 variants. Sempre sobre `surface` (white em light, `#1d1c17` em dark).
+3 variants. Sempre sobre `surface` (white em light, `#181a1c` em dark).
 
 | Variant | Border | Hover | Uso |
 |---------|--------|-------|-----|
@@ -88,7 +92,7 @@ Padding: `space-5` (20px) em Aerada. Radius: `radius-md` (12px).
 | Variant | bg | fg | Uso |
 |---------|----|----|-----|
 | `neutral` | `surface-elevated` | `text-muted` | Tag genérica, status default |
-| `accent` | `accent-soft` (`#e4ebe0`) | `accent` | Highlight não-semântico, "novo" |
+| `accent` | `accent-soft` (`#daeee6`) | `accent` | Highlight não-semântico, "novo" |
 | `success` | `success/14%` | `success` | Resolvido, Pago, Entregue |
 | `warning` | `warning/14%` | `warning` | SLA próximo, Aguardando |
 | `error` | `error/14%` | `error` | Vencido, Falhou, Cancelado |
@@ -170,9 +174,9 @@ Se a interação tem mais de 1 step ou exige foco total → use Dialog.
 
 ---
 
-## Tooltip *(não instalado, próximo)*
+## Tooltip
 
-Quando entrar: estilo dark sobre claro (text bg, fg bg-color). Delay 250ms. Font 11.5px. Não use pra texto longo (>40 chars) — vira `Popover`.
+Estilo dark sobre claro (text bg, fg bg-color). Delay 250ms. Font 11.5px. Não use pra texto longo (>40 chars) — vira `Popover`.
 
 ---
 
@@ -193,7 +197,7 @@ Action button opcional (Desfazer): `<Toast action={{ label: 'Desfazer', onClick:
 
 ## Skeleton
 
-Bg shimmer linear-gradient `surface-elevated → accent-soft → surface-elevated`, animation 1.6s linear infinite. Radius `xs` default, ou matching do componente que substitui.
+Bg `.ds-esqueleto` (faixa neutra, 1,6s linear infinite; ver `07-motion-language.md`). Radius `xs` default, ou matching do componente que substitui.
 
 ```tsx
 <Skeleton className="h-4 w-32" />              {/* texto */}
@@ -225,9 +229,9 @@ Wrapper sobre Radix ScrollArea. Use SEMPRE em listas longas (inbox, kanban col).
 
 # Componentes custom DeskcommCRM
 
-Componentes específicos do produto. Especificação detalhada em **Spec 04 §6** (`docs/specs/04-presentation.md`); resumo abaixo.
+Componentes específicos do produto. Spec de apresentação: `docs/specs/04-spec-pipeline-attendance.md`; resumo abaixo.
 
-## ConversationItem
+## ConversationItem *(previsto; hoje a linha da lista vive em `components/inbox/`)*
 
 Item de lista do Inbox. Compõe Avatar + body (title/preview) + meta (timestamp + badge SLA).
 
@@ -266,7 +270,7 @@ Hover: `border-accent` + `translateY(-1px)` + `shadow-sm`. Drag state: `cursor: 
 
 Sheet lateral com info completa do cliente. Sections: Avatar grande + nome + status, Contact info, Métricas (LTV, n° pedidos), Conversas recentes, Pedidos recentes, Tags.
 
-## StatusPill
+## StatusPill *(previsto, ainda não existe)*
 
 Variante de Badge especializada para status de conversa/pedido. Sempre com dot leading. Cores mapeadas por estado:
 
@@ -276,11 +280,11 @@ Variante de Badge especializada para status de conversa/pedido. Sempre com dot l
 - `resolvida` → success
 - `cancelada` → text-muted (sem cor)
 
-## OwnerAvatar
+## OwnerAvatar *(previsto, ainda não existe)*
 
 Avatar (sm/md) com tooltip mostrando nome do owner. Suporta "unassigned" (ícone `UserCircle` em text-muted). Click abre dropdown de reassign.
 
-## TagPill
+## TagPill *(previsto, ainda não existe)*
 
 Badge especializada para tags livres (cliente VIP, frete-grátis, etc.). Cor neutra default; usuário pode escolher de palette restrita (5 stops do greige + accent). Suporta close button (`X` 12px) em modo editável.
 

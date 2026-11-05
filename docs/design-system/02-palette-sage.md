@@ -1,163 +1,98 @@
-# 02 — Paleta Sage
+# 02 — Paleta Verdash
 
-> **Source of truth:** `app/design/lib/tokens.ts` → `PALETTES.sage`
+> **Source of truth:** `app/globals.css` (`:root` = claro, `[data-theme="dark"]` = escuro). Este texto descreve; se divergir, **o CSS vence**.
+> Referência visual: canvas "CRM Inbox v2" (https://claude.ai/artifact/5ietsYc7JmwqE8KjoETHJ4, board DS_V2Verdash).
+> O nome do arquivo (`palette-sage`) é histórico: a Sage #506D48 foi a paleta até a etapa 2 do DS e hoje é só um preset. O padrão é o **Verde Verdash #0E7A5F** (claro) e o **azul #2690B1** (escuro).
 
-## Filosofia da paleta
+## Filosofia
 
-Sage é verde-erva desaturado: o suficiente pra ter personalidade vegetal, longe o suficiente pra não evocar o cliché "wellness/saúde mental". O DeskcommCRM é uma ferramenta de **trabalho operacional**, e Sage projeta:
+O CRM é ferramenta de trabalho para quem passa 8 horas na tela. A paleta é calma: neutros frios e suaves (azul-acinzentados, não greige), um accent único e estados dessaturados. Claro e escuro são **desenhados separadamente**, não invertidos.
 
-- **Calma sem fragilidade** — saturação ≤ 30% no accent 500 evita a sensação clínica.
-- **Confiança warm** — neutros greige (warm-gray, base bege/oliva) ao invés de slate/zinc, que carregam tom corporativo frio.
-- **Anti-genérico** — 80%+ dos CRMs SaaS usam blue/indigo/violet. Sage diverge sem cair em cores de risco (laranja, vermelho, rosa).
-- **Funcional em monitores 8h/dia** — luminosidade calibrada pra não cansar; backgrounds nunca puro `#fff` (offwhite warm) nem puro `#000` (very-dark warm).
+O accent é a marca: uma organização pode substituí-lo em runtime (rampa derivada de uma semente, `lib/branding/rampa.ts`). Por isso cor de pessoa (agenda, avatar) **nunca** usa o accent.
 
-A paleta tem **dois temas desenhados independentemente**, não invertidos. Light não é dark com inversão de luminosidade; cada um foi calibrado pra contraste e conforto na sua direção.
+## Claro — accent (Verde Verdash)
 
-## Light theme — accent (Sage verde)
+| Stop | Hex | Uso |
+|------|-----|-----|
+| 50 | `#eef7f4` | Hover muito sutil |
+| 100 | `#daeee6` | `--color-accent-soft`: fundo de chip e item ativo |
+| 200 | `#b4ddcd` | Bordas de elemento accent secundário |
+| 300 | `#82c4ad` | Disabled do accent |
+| 400 | `#4ead8f` | — |
+| 500 | `#229676` | — |
+| 600 | `#0e7a5f` | `--color-accent`: botão primary, link, foco |
+| 700 | `#17614c` | `--color-accent-hover` |
+| 800 | `#1a4f3f` | Texto sobre fundo accent claro |
+| 900 | `#1a4235` | — |
+| 950 | `#0a211a` | — |
 
-| Stop | Hex | Uso prescrito |
-|------|-----|---------------|
-| 50 | `#f3f6f1` | Background de hover muito sutil, soft chip background |
-| 100 | `#e4ebe0` | `--ds-accent-soft` — bg de badge accent, hover de nav-link, focus ring outer |
-| 200 | `#c8d6c1` | Borders de elementos accent secundários |
-| 300 | `#a4ba9a` | Disabled state do accent, decorative dividers |
-| 400 | `#82a077` | Hover de elementos accent claros |
-| 500 | `#67885d` | **Brand accent canônico** — botão primary bg, link, focus ring color |
-| 600 | `#506d48` | Hover de primary button (escurece) |
-| 700 | `#41573b` | Pressed state de primary button |
-| 800 | `#374731` | Texto sobre fundos accent claros (a11y AAA) |
-| 900 | `#2f3c2b` | — (raramente usado em light) |
-| 950 | `#171f15` | — (uso extremo, evite) |
+`--color-accent-fg` = `#ffffff`.
 
-## Light theme — neutral greige
+## Claro — superfícies, texto, bordas e neutros
 
-| Stop | Hex | Uso prescrito |
-|------|-----|---------------|
-| 50 | `#faf9f6` | `--ds-bg` — page background (offwhite warm) |
-| 100 | `#f3f1ec` | Background de seções, alt-row de tabela |
-| 200 | `#e7e3da` | `--ds-border` — borders default |
-| 300 | `#d2cdbf` | Borders mais firmes, divider de tabela |
-| 400 | `#a9a395` | Placeholder text, ícone disabled |
-| 500 | `#7d786c` | Texto utilitário (timestamp, helper) |
-| 600 | `#5d594f` | `--ds-text-muted` — texto secundário, label |
-| 700 | `#46433b` | Texto importante mas não primary |
-| 800 | `#2e2c26` | Heading secundário |
-| 900 | `#1c1a16` | `--ds-text` — texto primary (corpo, headings) |
-| 950 | `#0e0d0a` | Texto extremamente alto contraste (raro) |
+| Token | Hex | Uso |
+|-------|-----|-----|
+| `--color-bg` | `#eef1f5` | Fundo da página |
+| `--color-surface` | `#ffffff` | Cards, painéis |
+| `--color-surface-elevated` | `#f5f7f9` | Cabeçalho, dropdown, alt-bg |
+| `--color-hover` | `#eaedf2` | Hover de linha/item |
+| `--color-thread` | `#f2f5f8` | Fundo da conversa |
+| `--color-text` | `#171d26` | Texto primário |
+| `--color-text-muted` | `#474d58` | Texto secundário |
+| `--color-text-subtle` | `#606671` | Timestamp, helper |
+| `--color-border` | `#e0e3e8` | Borda padrão |
+| `--color-border-strong` | `#cdd1d7` | Borda firme |
+| `--color-overlay` | `rgba(17,22,31,0.32)` | Fundo de modal |
 
-**Surfaces light:**
-- `bg`: `#faf9f6` — página
-- `surface`: `#ffffff` — cards e superfícies elevadas (puro branco)
-- `surfaceElevated`: `#f5f3ee` — alt-bg, header, dropdown bg
-- `text`: `#1c1a16` / `textMuted`: `#5d594f` / `border`: `#e7e3da`
+Rampa neutra claro (`--color-neutral-N`): 50 `#eef1f5` · 100 `#eaedf2` · 200 `#e0e3e8` · 300 `#cdd1d7` · 400 `#999fa7` · 500 `#606671` · 600 `#474d58` · 700 `#323842` · 800 `#232933` · 900 `#171d26` · 950 `#070b12`.
 
-## Dark theme — accent (Sage verde, ajustado)
+## Escuro
 
-| Stop | Hex | Uso prescrito |
-|------|-----|---------------|
-| 50 | `#f3f6f1` | Texto sobre fundo accent escuro (raro) |
-| 100 | `#e4ebe0` | — |
-| 200 | `#c8d6c1` | — |
-| 300 | `#a4ba9a` | Hover state em link |
-| 400 | `#82a077` | **Brand accent em dark** — primary button bg, link, focus |
-| 500 | `#67885d` | Versão "calma" do accent em dark, alguns hovers |
-| 600 | `#506d48` | Hover ainda mais escuro (raro) |
-| 700 | `#41573b` | Border accent em dark |
-| 800 | `#374731` | Soft accent bg (badges) |
-| 900 | `#2f3c2b` | Soft accent bg (mais discreto) |
-| 950 | `#171f15` | Background quase invisível (decorativo) |
+| Token | Hex |
+|-------|-----|
+| `--color-bg` | `#0d0e11` |
+| `--color-surface` | `#181a1c` |
+| `--color-surface-elevated` | `#1f2225` |
+| `--color-hover` | `#212326` |
+| `--color-thread` | `#111315` |
+| `--color-text` / `muted` / `subtle` | `#f8f8f8` / `#c8cbce` / `#a1a5aa` |
+| `--color-border` / `strong` | `#292c2f` / `#3a3d41` |
 
-> **Nota:** em dark, o "primary" sobe pro stop 400 (mais luminoso) pra preservar contraste sobre fundos escuros.
+Accent no escuro (azul, semente `#2690B1`): 50 `#edf7fb` · 100 `#daf0f8` · 200 `#b6e1f2` · 300 `#87cde7` · 400 `#54b9dc` · 500 `#2da6cc` · 600 `#2690b1` (`--color-accent`) · 700 `#247089` · 800 `#21596c` · 900 `#1f4958` · 950 `#072028`. `--color-accent-fg` = `#000000`, `--color-accent-hover` = stop 500, `--color-accent-soft` = `rgba(38,144,177,0.2)`.
 
-## Dark theme — neutral greige
+Neutros escuro (parcial; a rampa completa está no CSS): 50 `#f8f8f8` · 100 `#e3e5e7` · 200 `#c8cbce` · 300 `#a1a5aa` · 400 `#6e7276`.
 
-| Stop | Hex | Uso prescrito |
-|------|-----|---------------|
-| 50 | `#f5f4ef` | `--ds-text` — texto primary em dark |
-| 100 | `#e6e4dc` | Texto sobre surface escuro (alta hierarquia) |
-| 200 | `#bbb8ac` | Texto importante em dark |
-| 300 | `#8e8b7f` | `--ds-text-muted` — texto secundário |
-| 400 | `#605e54` | Placeholder, helper |
-| 500 | `#444239` | Disabled |
-| 600 | `#33312a` | `--ds-border` — borders default |
-| 700 | `#272620` | `--ds-surface-elevated` — header, dropdown |
-| 800 | `#1d1c17` | `--ds-surface` — cards |
-| 900 | `#161510` | `--ds-bg` — page background (very-dark warm) |
-| 950 | `#0c0b08` | Voids decorativos (raro) |
+## Estados
 
-**Surfaces dark:**
-- `bg`: `#161510` — página (NÃO `#000` nem `#0a0a0a`; warm-tinted)
-- `surface`: `#1d1c17` — cards
-- `surfaceElevated`: `#272620` — header, dropdown
-- `text`: `#f5f4ef` / `textMuted`: `#8e8b7f` / `border`: `#33312a`
+Cada estado tem três tokens: sólido (`--color-X`, fundo de botão com texto branco), fundo suave (`-bg`) e texto sobre o fundo suave (`-fg`).
 
-## Estados (success / warning / error / info)
+| Estado | Sólido claro | bg claro | fg claro | Sólido escuro | bg escuro | fg escuro |
+|--------|--------------|----------|----------|---------------|-----------|-----------|
+| `success` | `#5a8a5f` | `#dff6e2` | `#287c42` | `#82a077` | `#0a3723` | `#41ce90` |
+| `warning` | `#b07a2b` | `#ffeed2` | `#824c00` | `#d09455` | `#412805` | `#ffb848` |
+| `error` | `#b02a2d` | `#ffe9e6` | `#b02a2d` | `#fa8785` | `#521c1d` | `#fa8785` |
+| `info` | `#4a7a93` | `#e1f1ff` | `#0077bc` | `#7da9bf` | `#182e4b` | `#65a7fa` |
 
-Estados têm versões light e dark calibradas. Saturação fica ≤ 55% em light, ≤ 65% em dark (mantém calma).
+Badge de estado = `-bg` + `-fg`. Nota interna: `--color-note-bg` `#fff1cc` / `--color-note-fg` `#54360b` (escuro `#392c0c` / `#f3dba9`).
 
-| Estado | Light | Dark | Uso |
-|--------|-------|------|-----|
-| `success` | `#5a8a5f` | `#82a077` | Confirmação positiva, status "ativo", "lido" |
-| `warning` | `#b07a2b` | `#d09455` | Atenção sem urgência, SLA próximo de vencer |
-| `error` | `#a94a3c` | `#c87263` | Erro, ação destrutiva, SLA estourado |
-| `info` | `#4a7a93` | `#7da9bf` | Mensagem informativa, dica |
+## Cor de pessoa (fora do accent)
 
-**Como aplicar estados (3 padrões):**
+- **Avatar:** 6 pares fundo/texto (`--color-avatar-1..6` e `-fg`), escolhidos por hash estável do id (`lib/inbox/cor-do-avatar.ts`).
+- **Agenda:** 8 trilhas `--agenda-pessoa-1..8` (telha, âmbar, oliva, turquesa, azul, índigo, violeta, framboesa). Cor nunca é a única informação: leva junto a inicial da pessoa.
 
-```css
-/* 1. Como bg de badge: estado a 14% transparência + estado como fg */
-.badge-success {
-  background: color-mix(in srgb, var(--ds-success) 14%, transparent);
-  color: var(--ds-success);
-}
+## Contraste
 
-/* 2. Como border (foco específico): full opacity */
-.input-error { border-color: var(--ds-error); }
+A régua de contraste (`lib/branding/contraste.ts`) lê os hex do `globals.css` e há testes que reprovam par abaixo do mínimo. Regras:
 
-/* 3. Como bg de botão destrutivo: full opacity, fg branco */
-.btn-destructive { background: var(--ds-error); color: #fff; }
-```
+- Prosa e corpo: AAA (`text` sobre `bg`).
+- Texto de UI 14px+: AA, 4,5:1.
+- Não textual (borda, ícone): 3:1.
+- Nunca dependa só de cor para estado: ícone Phosphor + cor + texto.
 
-## Contraste WCAG
+## Anti-padrões de cor
 
-Validações realizadas pela paleta:
-
-| Combinação | Ratio | Nível | OK pra |
-|------------|-------|-------|--------|
-| `text` (`#1c1a16`) sobre `bg` (`#faf9f6`) | ~14.8:1 | AAA | Prosa longa, body text |
-| `text-muted` (`#5d594f`) sobre `bg` | ~6.7:1 | AA+ | Secondary, helper, timestamps |
-| `accent-500` (`#67885d`) sobre `bg` | ~4.6:1 | AA | Texto UI 14px+, botão primary |
-| `accent-700` (`#41573b`) sobre `accent-soft` | ~7.2:1 | AAA | Link em chip, label sobre badge |
-| Dark: `text` (`#f5f4ef`) sobre `bg` (`#161510`) | ~14.1:1 | AAA | Body text |
-| Dark: `accent-400` (`#82a077`) sobre `bg` | ~5.9:1 | AA+ | Link, primary |
-| `error` light (`#a94a3c`) sobre `bg` | ~4.7:1 | AA | UI text 14px+ |
-
-**Regras:**
-- Body text e prosa: AAA mínimo (`text` + `bg`).
-- UI text 14px+: AA mínimo (4.5:1).
-- Componentes não-textuais (borders, ícones): AA UI mínimo (3:1).
-- Nunca usar `text-muted` para texto em prosa longa (apenas labels, helpers, timestamps).
-
-## Anti-padrões — como NÃO usar Sage
-
-❌ **Saturar accent além de 600.** Stops 700–950 só pra texto em fundo claro accent, nunca como bg de área grande.
-
-❌ **Accent como bg de toda a sidebar.** Sidebar é greige (`surface` ou `surface-elevated`). Accent na sidebar fica como hover-state e active-state apenas.
-
-❌ **Accent em texto de longa leitura.** Body de e-mail, descrição de pedido, prosa de doc — tudo `text` (`#1c1a16`). Accent só em link, label de status, ações.
-
-❌ **`#000` ou `#fff` puro.** Texto preto puro contra bg warm-offwhite cria vibração; use `#1c1a16` e `#faf9f6`.
-
-❌ **Misturar Sage com cores fora dos estados.** Não importe roxo, azul-bandeira, ciano — não fazem parte do sistema. Se precisa diferenciar tags do usuário, use stops do greige + 1 acento; se precisa de cores categóricas (gráfico), abrir RFC.
-
-❌ **Gradients accent → accent.** Sage não usa gradients; use solid + shadow se precisar profundidade.
-
-## Acessibilidade (visão de cor)
-
-Sage foi escolhida também por segurança em deficiências de visão:
-
-- **Deuteranopia** (verde-cego, ~6% homens): Sage 500 vira marrom-acinzentado dessaturado; mantém 4.2:1 contra bg, ainda AA. Diferenciação verde-vermelho dos estados (success vs error) preservada porque error é warm-red (não puro green/red).
-- **Protanopia** (vermelho-cego): comportamento similar; Sage 500 vira amarelo-oliva.
-- **Tritanopia** (azul-amarelo, raro): menos afetada — Sage permanece reconhecível como verde dessaturado.
-
-Em todos os casos, **nunca dependa só de cor pra comunicar estado**. Use ícone Phosphor + cor + label de texto. Ex: badge de SLA estourado tem cor error, ícone `Warning`, e texto "Vencido há 2h".
+- Accent como fundo de área grande (sidebar inteira) ou em texto de leitura longa.
+- `#000`/`#fff` soltos em texto: use `--color-text` e `--color-surface`.
+- Cor fora do sistema (roxo, ciano) para tag de usuário. Categórica de gráfico: abrir RFC.
+- Gradiente decorativo accent → accent.
+- Hex literal em feature: leia o token.
