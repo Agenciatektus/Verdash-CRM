@@ -105,6 +105,30 @@ Compose: healthcheck do app a cada 10 s com 15 tentativas.
 - `ai/cases/alerta` com `as never` em `p_resposta_whatsapp_habilitada` (`database.types` a regerar).
 - Scheduler com `task-due-reminder` (nosso, 1 min) e `task-reminder` (upstream, 5 min): conferir lembrete duplicado.
 
+## Testes da subida (CI vermelho depois do merge)
+
+280 casos em 94 arquivos falharam por causa do merge; a dev estava verde. O que mudou:
+
+- **Código que voltou às regras do fork:** barra lateral `sticky top-[var(--faixas-de-cima,0px)]` com altura descontando as faixas;
+  grade do Inbox descontando as faixas; `Select` preserva o texto sob a tradução do navegador (correção do upstream, que a nossa
+  `components/ui/select` não tinha); controles nativos do upstream (10 arquivos) trocados por `Escolha`/`CampoDeData`; dois
+  client components voltam a importar `@/lib/i18n/traducao`; vitrine do DS não deixa a lista de fluxos de follow-up sair para a rede.
+- **Código novo por defeito real:** `GET .../assinatura/estorno` engolia `mfa_required` como `forbidden`; as ações de funil dos pedidos
+  da Nuvemshop não cobravam `mfaEmDivida`; reordenar dentro da coluna de ganho/perda não adia mais com o "Desfazer" de 5 s;
+  `AudioPlayer` não converte áudio de nota interna; selo "Exemplo para a IA" na lista (também para quem só lê).
+- **Testes adaptados (o código mudou de forma legítima):** fonte do turno remontada com a nova desestruturação de `corrigirAposOModelo`;
+  snapshot do rastro do turno (entram `agent_turn_traces` e `prospecting_candidates`); dublês que ganharam dependência
+  (`moduloDaEmpresa`, `instalacaoPodeServirIa`, `getAdapterOpcional`, `requireRole`, `usePermission`, `usePaisDaOrgAtiva`, `matchMedia`,
+  QueryClient, `createSignedUrls`, `.not()` no dublê de banco); contagem de drenos da poda 17 para 18; convite de equipe com o molde nosso.
+- **Casos do upstream removidos (feature fora ou substituída no fork):** `chat-thread-follow-latest` (nosso ChatThread é virtualizado),
+  `Composer.sugestao` (#3027), cercas de toque/`max-md`/`h-11` (`toque-nos-primitivos`, `SearchTrigger`, `InterfaceEditor`, `tags-acoes`,
+  tabelas empilhadas, nome da campanha, Aviso de proposta, `RequestsTable`, Segurança, Equipe, Desempenho), "Voltar aos casos",
+  "Selecionar todos os visíveis" do celular, tela cheia do Inbox no celular, `EtapaNoDossie` ligado pelo quadro (o dossiê usa o nosso
+  `SeletorDeEtapa`), filtro de responsável da tela de Tarefas, `message` do service worker (ninguém enviava `show-os-notify`).
+- **Lista de herdados (`arquivos-grandes-herdados.json`):** +58 arquivos acima de 300 linhas. 25 vieram do upstream (novos); 33 já existiam
+  e o upstream os fez crescer. Cinco ficaram acima de 300 também por acréscimo nosso: `lib/lgpd/redact-cascade.ts`,
+  `lib/schemas/routing.ts`, `hooks/campanhas/useCampanhas.ts`, `contacts/[id]/crm-summary/route.ts`, `lib/campanhas/preparacao.ts`.
+
 ## Validação
 
 Ver a descrição do PR.
