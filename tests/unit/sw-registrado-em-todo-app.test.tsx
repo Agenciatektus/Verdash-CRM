@@ -8,9 +8,16 @@ import { describe, expect, it, vi } from "vitest";
  */
 const registrar = vi.hoisted(() => vi.fn().mockResolvedValue(null));
 vi.mock("@/lib/notifications/service_worker", () => ({ ensureNotifyServiceWorker: registrar }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/app",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/components/shell/Sidebar", () => ({ Sidebar: () => null }));
 vi.mock("@/components/shell/TopBar", () => ({ TopBar: () => null }));
 vi.mock("@/components/shell/BarraDeProgressoNavegacao", () => ({ BarraDeProgressoNavegacao: () => null }));
+// Fork: a casca do celular (abas, criar, Mais) tem teste próprio e lê o AuthProvider.
+vi.mock("@/components/mobile/CascaDoCelular", () => ({ CascaDoCelular: () => null }));
 vi.mock("@/components/shell/BarraInferior", () => ({ BarraInferior: () => null }));
 vi.mock("@/hooks/atendimento/useSinalDePresenca", () => ({ useSinalDePresenca: () => {} }));
 vi.mock("@/hooks/notifications/useInboundMessageAlerts", () => ({ useInboundMessageAlerts: () => {} }));

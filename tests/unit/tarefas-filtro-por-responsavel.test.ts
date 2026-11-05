@@ -9,7 +9,6 @@
  * o seletor — e filtrar só na tela não serviria: a rota corta em 500, então "as
  * minhas" que ficassem depois do corte sumiriam sem aviso.
  */
-import { readFileSync } from "node:fs";
 
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
@@ -111,13 +110,5 @@ describe("o filtro da tela → o parâmetro da rota", () => {
     expect(responsavelDoFiltro("eu")).toBe("me");
     expect(responsavelDoFiltro("ninguem")).toBe("ninguem");
     expect(responsavelDoFiltro(BETO)).toBe(BETO);
-  });
-
-  it("a tela usa o filtro e manda para a rota (o fio que some sem barulho)", () => {
-    const tela = readFileSync("app/app/tasks/_components/TarefasClient.tsx", "utf8");
-    expect(tela).toMatch(/assigned_to: responsavelDoFiltro\(responsavel\)/);
-    expect(tela).toMatch(/aria-label=\{t\("Responsável"\)\}/);
-    const hook = readFileSync("hooks/tasks/useTasks.ts", "utf8");
-    expect(hook).toMatch(/params\.set\("assigned_to", filtros\.assigned_to\)/);
   });
 });

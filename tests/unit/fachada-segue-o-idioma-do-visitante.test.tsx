@@ -41,6 +41,9 @@ async function fachada(): Promise<string> {
   // O useT vem DEPOIS do resetModules, do mesmo grafo da casca: importado no topo, ele leria o contexto de OUTRA
   // instância do IdiomaProvider e devolveria sempre o padrão — um vermelho que é do teste, não da casca.
   const { useT } = await import("@/hooks/i18n/useT");
+  // Fork: o dicionário é baixado sob demanda; o provider suspende (HTML vazio) até ele chegar.
+  const { carregarDicionario } = await import("@/lib/i18n/traducao");
+  await carregarDicionario();
   /** O que um formulário do cliente faz: traduz pelo provider da casca. */
   function Sonda() {
     const t = useT();
