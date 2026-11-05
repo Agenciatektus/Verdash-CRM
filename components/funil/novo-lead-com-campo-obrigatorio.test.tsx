@@ -236,8 +236,9 @@ describe("Novo Lead numa etapa que exige campo personalizado (#3038)", () => {
     abrir(settingsCom([campoData()]));
 
     const campo = await screen.findByLabelText("Renovação");
-    expect(campo.getAttribute("type")).toBe("date");
-    fireEvent.change(campo, { target: { value: "2026-12-01" } });
+    // Fork: o campo de data é o CampoDeData do DS (botão + input nativo escondido), não o <input type=date>.
+    const nativo = campo.parentElement!.querySelector<HTMLInputElement>("input[data-campo-nativo]")!;
+    fireEvent.change(nativo, { target: { value: "2026-12-01" } });
 
     await preencherTitulo(user);
     await clicarEmCriarLead(user);

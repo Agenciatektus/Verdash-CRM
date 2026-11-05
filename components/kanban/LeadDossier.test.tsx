@@ -1,11 +1,19 @@
 // components/kanban/LeadDossier.test.tsx
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LeadDossier } from "./LeadDossier";
 import { CHAVE_DAS_SECOES_RECOLHIDAS } from "./SecaoDoDossie";
 import type { Lead } from "@/lib/types/leads";
+
+// jsdom não tem matchMedia; o dossiê o lê para saber se a tela é larga (conta como vista).
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = ((q: string) => ({
+    matches: false, media: q, addEventListener: () => {}, removeEventListener: () => {},
+  })) as unknown as typeof window.matchMedia;
+}
 
 /**
  * A ORDEM E O RECOLHIMENTO DAS SEÇÕES DO DOSSÊ — issue #3181.
@@ -64,6 +72,7 @@ vi.mock("./LeadFieldsForm", () => ({ LeadFieldsForm: () => <div data-peca="campo
 vi.mock("./TarefasDoNegocio", () => ({ TarefasDoNegocio: () => <div data-peca="tarefas" /> }));
 vi.mock("./PropostasDoNegocio", () => ({ PropostasDoNegocio: () => null }));
 vi.mock("./ConversaNoDossie", () => ({ ConversaNoDossie: () => null }));
+vi.mock("./AbrirConversaDoLead", () => ({ AbrirConversaDoLead: () => null, temAlvoParaAbrir: () => false }));
 vi.mock("./ScoreSlot", () => ({ ScoreSlot: () => null }));
 vi.mock("./OwnerBadge", () => ({ OwnerBadge: () => null }));
 vi.mock("./LeadTimeline", () => ({
@@ -96,14 +105,16 @@ const LEAD = {
 
 function montarDossie() {
   return render(
-    <LeadDossier
-      open
-      onOpenChange={() => undefined}
-      lead={LEAD}
-      pipelineId="funil-1"
-      fieldDefs={[]}
-      stageName="Novo"
-    />,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <LeadDossier
+        open
+        onOpenChange={() => undefined}
+        lead={LEAD}
+        pipelineId="funil-1"
+        fieldDefs={[]}
+        stageName="Novo"
+      />
+    </QueryClientProvider>,
   );
 }
 

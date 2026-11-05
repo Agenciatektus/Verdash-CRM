@@ -341,7 +341,8 @@ export function KanbanBoard({
         mover();
         return;
       }
-      if (destino?.is_won || destino?.is_lost) {
+      // Reordenar DENTRO da coluna de ganho/perda não fecha nada (o negócio já está fechado): sem adiamento.
+      if ((destino?.is_won || destino?.is_lost) && source.droppableId !== destination.droppableId) {
         // A trava confere ganho, perda e troca deste negócio (`fechamentoPendente`).
         adiarFechamento(
           destino.is_won ? "ganho" : "perda",
