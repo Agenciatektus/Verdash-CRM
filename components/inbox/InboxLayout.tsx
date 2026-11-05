@@ -37,6 +37,7 @@ import { CaretLeft, ChatCircle } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BarraDaConversaNoCelular, FaixaDoLead } from "@/components/mobile/telas/ConversaAberta";
+import { TarefaPedidaPelaUrl } from "@/components/inbox/menu/TarefaDaConversa";
 import { FichaDoLeadNoCelular } from "@/components/mobile/telas/FichaDoLead";
 import { useEhCelular } from "@/lib/mobile/useEhCelular";
 import { MenuDaConversa } from "./menu/MenuDaConversa";
@@ -447,6 +448,8 @@ export function InboxLayout({
     else params.delete("id");
     // O ?rascunho= é da conversa que ficou para trás (ver `rascunhoVivo`).
     params.delete("rascunho");
+    // Idem o ?tarefa= do "+" (consumido por `TarefaPedidaPelaUrl`): se sobrar, abriria em outra conversa.
+    params.delete("tarefa");
     const query = params.toString();
     window.history.pushState(null, "", query ? `${pathname}?${query}` : pathname);
   }, [selectedId, searchParams, pathname]);
@@ -655,6 +658,7 @@ export function InboxLayout({
               onAbrirMenu={(el) => menuDoCelular.abrir(selectedConversation.id, el, el)}
             />
             {celular && selectedConversation.contacts?.id && <FaixaDoLead contactId={selectedConversation.contacts.id} />}
+            {celular && selectedConversation.contacts?.id && <TarefaPedidaPelaUrl key={selectedConversation.contacts.id} contactId={selectedConversation.contacts.id} />}
             {celular && (
               <MenuDaConversa
                 alvo={menuDoCelular.alvo}

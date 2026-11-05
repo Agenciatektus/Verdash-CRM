@@ -96,3 +96,57 @@ describe("repeticao", () => {
     expect(normalizarTexto("Olá, 12!")).toBe("ola");
   });
 });
+
+describe("ura", () => {
+  // Salão Fabiana, 04/11: a URA da Light voltou 6 a 8 s depois de cada resposta da IA.
+  const ia = (texto: string, segAtras: number): MensagemDaConversa => ({
+    direcao: "outbound", texto, enviadoEm: new Date(agora.getTime() - segAtras * 1000), enviadaPelaIa: true,
+  });
+  const entrada = (texto: string, segAtras: number): MensagemDaConversa => ({
+    direcao: "inbound", texto, enviadoEm: new Date(agora.getTime() - segAtras * 1000), enviadaPelaIa: false,
+  });
+  const luz = [
+    entrada("Olá! Eu sou a *Lia*, a assistente virtual da *Light* ⚡. Estou falando com Fabiana?", 300),
+    ia("Este é o WhatsApp do Salão Fabiana Lopes.", 290),
+    entrada("Hmm... Não entendi o que você digitou. Por favor, digite uma das opções que te apresentei", 284),
+    ia("Não precisamos de atendimento da Light por aqui.", 250),
+    entrada("Não consegui identificar sua resposta, por isso vou encerrar o atendimento", 244),
+  ];
+  it("duas frases de URA que voltam em segundos, depois da IA responder, silenciam", () => {
+    expect(detectarLacoComRobo(luz, agora)).toEqual({ laco: true, motivo: "ura" });
+  });
+  it("uma frase só não silencia (pode ser citação do cliente)", () => {
+    expect(detectarLacoComRobo(luz.slice(0, 3), agora).laco).toBe(false);
+  });
+  it("cliente irritada repetindo 'assistente virtual' devagar NÃO silencia", () => {
+    const m = [
+      ia("Olá, sou a Júlia, assistente virtual do salão.", 400),
+      entrada("é assistente virtual que responde aqui?", 300),
+      ia("Sim, posso ajudar com horários.", 280),
+      entrada("não quero falar com atendente virtual, quero a Fabiana", 200),
+    ];
+    expect(detectarLacoComRobo(m, agora).laco).toBe(false);
+  });
+  it("sinais de máquina depois de saída HUMANA (sem a IA ter respondido) não silenciam", () => {
+    const humana = (texto: string, segAtras: number): MensagemDaConversa => ({
+      direcao: "outbound", texto, enviadoEm: new Date(agora.getTime() - segAtras * 1000), enviadaPelaIa: false,
+    });
+    const m = [
+      humana("Oi, aqui é a Fabiana", 300), entrada("Eu sou a assistente virtual da Light", 295),
+      humana("Quem é?", 250), entrada("Não entendi o que você digitou", 245),
+    ];
+    expect(detectarLacoComRobo(m, agora).laco).toBe(false);
+  });
+  it("texto nulo numa entrada de máquina passa pela normalização sem quebrar nem contar", () => {
+    const m = [...luz.slice(0, 3), ia("Ok", 10), { direcao: "inbound" as const, texto: null, enviadoEm: new Date(agora.getTime() - 5000), enviadaPelaIa: false }];
+    expect(detectarLacoComRobo(m, agora)).toEqual({ laco: false, motivo: null });
+  });
+  it("cliente comum perguntando por atendente não dispara", () => {
+    const m = [ia("Oi!", 60), entrada("Você ainda está por aí? Preciso agendar", 40), entrada("Quero falar com uma atendente", 20)];
+    expect(detectarLacoComRobo(m, agora).laco).toBe(false);
+  });
+  it("sinal fora da janela de 60 min não conta", () => {
+    const velhas = luz.map((m) => ({ ...m, enviadoEm: new Date(agora.getTime() - 120 * 60_000 + (m.enviadoEm.getTime() - agora.getTime())) }));
+    expect(detectarLacoComRobo(velhas, agora).laco).toBe(false);
+  });
+});

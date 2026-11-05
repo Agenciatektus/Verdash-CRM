@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const nav = vi.hoisted(() => ({ rota: "/app/inbox", push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.rota,
+  useSearchParams: () => new URLSearchParams(),
   useRouter: () => ({ push: nav.push }),
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));

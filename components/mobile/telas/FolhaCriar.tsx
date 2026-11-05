@@ -1,10 +1,10 @@
 "use client";
 import type { ComponentType } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useT } from "@/hooks/i18n/useT";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
-import { destinoDeCriar, type OpcaoDeCriar } from "@/lib/mobile/abas";
+import { conversaAberta, destinoDeCriar, type OpcaoDeCriar } from "@/lib/mobile/abas";
 import { useOpcoesDeCriar } from "@/lib/mobile/useOpcoesDeCriar";
 import { CalendarPlus, ChatCircle, Kanban, ListChecks, Users } from "@/lib/ui/icons";
 
@@ -27,6 +27,8 @@ const OPCOES: Record<OpcaoDeCriar, { icone: ComponentType<{ size?: number; "aria
 export function FolhaCriar({ aberta, aoMudar }: { aberta: boolean; aoMudar: (aberta: boolean) => void }) {
   const t = useT();
   const rota = usePathname() ?? "";
+  const busca = useSearchParams()?.toString() ?? "";
+  const naConversa = conversaAberta(rota, new URLSearchParams(busca).get("id"));
   const router = useRouter();
   const opcoes = useOpcoesDeCriar();
   // O funil padrão só é lido com a folha aberta e só se "Novo lead" depende dele.
@@ -35,14 +37,14 @@ export function FolhaCriar({ aberta, aoMudar }: { aberta: boolean; aoMudar: (abe
 
   const ir = (opcao: OpcaoDeCriar) => {
     aoMudar(false);
-    router.push(destinoDeCriar(opcao, rota, funil));
+    router.push(destinoDeCriar(opcao, rota, funil, busca));
   };
 
   return (
     <FolhaInferior aberto={aberta} aoMudar={aoMudar} titulo={t("Criar")}>
       {opcoes.map((opcao) => {
         const o = OPCOES[opcao];
-        return <ItemDaFolha key={opcao} icone={o.icone} titulo={t(o.titulo)} apoio={t(o.apoio)} aoTocar={() => ir(opcao)} />;
+        return <ItemDaFolha key={opcao} icone={o.icone} titulo={t(o.titulo)} apoio={t(opcao === "tarefa" && naConversa ? "Presa a esta conversa e ao negócio" : o.apoio)} aoTocar={() => ir(opcao)} />;
       })}
     </FolhaInferior>
   );

@@ -97,6 +97,16 @@ describe("rotas do app de celular", () => {
     expect(destinoDeCriar("lead", "/app/inbox", "p-9")).toBe("/app/pipelines/p-9?criar=1");
     expect(destinoDeCriar("lead", "/app/inbox", null)).toBe("/app/kanban");
   });
+
+  it("com a conversa aberta, a tarefa fica na conversa (presa a ela) e mantém os filtros da URL", () => {
+    expect(destinoDeCriar("tarefa", "/app/inbox", null, "id=c-1")).toBe("/app/inbox?id=c-1&tarefa=1");
+    expect(destinoDeCriar("tarefa", "/app/inbox", null, "aba=minhas&id=c-1")).toBe("/app/inbox?aba=minhas&id=c-1&tarefa=1");
+  });
+
+  it("sem conversa aberta (lista, funil, tarefas), a tarefa segue para a tela de Tarefas", () => {
+    expect(destinoDeCriar("tarefa", "/app/inbox", null, "aba=minhas")).toBe("/app/tasks?criar=1");
+    expect(destinoDeCriar("tarefa", "/app/kanban", null, "id=c-1")).toBe("/app/tasks?criar=1");
+  });
 });
 
 describe("barra inferior", () => {

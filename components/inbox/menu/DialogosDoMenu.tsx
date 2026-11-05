@@ -11,10 +11,12 @@ import { MoveToOtherPipelineDialog } from "@/components/kanban/MoveToOtherPipeli
 import { avisarQueOCrmDoContatoMudou } from "@/lib/inbox/releitura-do-contato";
 
 import { DialogoDeTransferir } from "./DialogoDeTransferir";
+import { TarefaDaConversa } from "./TarefaDaConversa";
 import { chaveDoResumoDoMenu, type DialogoDoFunil } from "./SubmenuDoFunil";
 
 export type DialogoDoMenu =
   | { tipo: "transferir"; conversationId: string; destino: { userId: string; nome: string } }
+  | { tipo: "adicionar-tarefa"; contactId: string }
   | (DialogoDoFunil & { contactId: string });
 
 /**
@@ -37,6 +39,10 @@ export function DialogosDoMenu({ dialogo, onFechar }: {
 
   if (dialogo.tipo === "transferir") {
     return <DialogoDeTransferir conversationId={dialogo.conversationId} destino={dialogo.destino} onFechar={onFechar} />;
+  }
+
+  if (dialogo.tipo === "adicionar-tarefa") {
+    return <TarefaDaConversa contactId={dialogo.contactId} onFechar={onFechar} />;
   }
 
   if ("lead" in dialogo) {
