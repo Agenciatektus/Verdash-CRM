@@ -532,7 +532,7 @@ export function InboxLayout({
         // próprio `<main>` quando há painel de chamada (a mesma conta do padding
         // dele), e o `pb-2` (`--space-2`) quando não há. Sem respiro em cima: o cartão encosta no
         // topo e na barra lateral, como o `.work` do protótipo.
-        "relative grid h-[calc(100dvh-3.5rem-var(--respiro-do-main,max(var(--space-2),var(--rodape-ocupado,0px))))] w-full grid-cols-1 overflow-hidden rounded-xl border border-border bg-surface pele-cartao largo:grid-cols-[300px_minmax(0,1fr)]",
+        "relative grid h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-var(--respiro-do-main,max(var(--space-2),var(--rodape-ocupado,0px))))] w-full grid-cols-1 overflow-hidden rounded-xl border border-border bg-surface pele-cartao largo:grid-cols-[300px_minmax(0,1fr)]",
         // No celular a altura sai da casca do app: o topo que está na tela (nenhum com
         // a conversa aberta, que tem barra própria) e o respiro de baixo do `<main>`,
         // que no celular já soma a barra inferior e a área segura. Com painel de chamada
