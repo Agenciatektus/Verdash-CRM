@@ -14,6 +14,7 @@ import { type NextRequest } from "next/server";
 
 import { audit, isServiceRoleConfigured } from "@/lib/audit";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
+import { sincronizarNegocioAbertoDoContato } from "@/lib/inbox/negocio-aberto-do-contato";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
@@ -99,8 +100,21 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
 
   const conv = row as unknown as Conversation;
 
-  // Como no claim: transferir à mão leva junto o dono dos leads abertos do contato
-  // (substitui o dono atual, humano ou agente).
+  // #3177: o negócio ABERTO do contato segue o mesmo responsável. A conversa já
+  // é do destino neste ponto; o card do funil não era, e ficava para trás (o
+  // responsável antigo, ou nenhum). Cliente da SESSÃO de propósito: quem
+  // transfere a conversa não ganha aqui nenhuma permissão que a rota de
+  // negócios já não dê — quando o banco recusa, a transferência segue de pé e o
+  // motivo fica no `metadata` da auditoria. Ver
+  // `lib/inbox/negocio-aberto-do-contato.ts` para a régua (um aberto leva; zero
+  // ou mais de um, nada é tocado).
+  const sincronia = await sincronizarNegocioAbertoDoContato(supabase, {
+    organizationId: conv.organization_id,
+    contactId: conv.contact_id,
+    toUserId: input.to_user_id,
+  });
+  // Fork Tektus: depois da sincronia do upstream, assumir/transferir à mão também troca o dono dos
+  // demais leads abertos (substitui humano ou agente). Convive com o motivo da auditoria acima.
   if (isServiceRoleConfigured()) {
     await adotarLeadsDoContato(createAdminClient(), orgId, conv.contact_id, input.to_user_id, {
       substituir: true,
@@ -117,6 +131,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     metadata: {
       to_user_id: input.to_user_id,
       ...(input.reason ? { note: input.reason } : {}),
+      negocio_aberto: sincronia.motivo,
+      ...(sincronia.leadId ? { negocio_id: sincronia.leadId } : {}),
     },
   });
 

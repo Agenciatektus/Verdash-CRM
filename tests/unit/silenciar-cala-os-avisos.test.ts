@@ -68,7 +68,7 @@ beforeEach(() => {
 describe("push do servidor", () => {
   it("quem silenciou a conversa não recebe; o colega recebe", async () => {
     silenciaram = [{ user_id: "eu" }];
-    const r = await enviarPushDaOrg("org-1", payload, store as never, { conversationId: "c1" });
+    const r = await enviarPushDaOrg("org-1", payload, { conversationId: "c1" }, store as never);
     expect(enviados).toEqual(["https://push/colega"]);
     expect(r.sent).toBe(1);
     // A leitura do silêncio é da conversa, na organização, e só o que vale AGORA.
@@ -81,13 +81,13 @@ describe("push do servidor", () => {
     const quebrado = {
       from: (t: string) => (t === "conversation_user_state" ? (() => { throw new Error("boom"); })() : store.from(t)),
     };
-    await enviarPushDaOrg("org-1", payload, quebrado as never, { conversationId: "c1" });
+    await enviarPushDaOrg("org-1", payload, { conversationId: "c1" }, quebrado as never);
     expect(enviados.sort()).toEqual(["https://push/colega", "https://push/eu"]);
   });
 
   it("CONTROLE: sem conversa (aviso que não é de mensagem), todo mundo recebe e o silêncio nem é lido", async () => {
     silenciaram = [{ user_id: "eu" }];
-    await enviarPushDaOrg("org-1", payload, store as never);
+    await enviarPushDaOrg("org-1", payload, {}, store as never);
     expect(enviados.sort()).toEqual(["https://push/colega", "https://push/eu"]);
     expect(filtrosDoSilencio).toEqual({});
   });

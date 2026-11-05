@@ -27,7 +27,7 @@ export function AgentOperation({ agent, readOnly }: { agent: AgentRow; readOnly?
       className="flex flex-wrap items-center gap-3 rounded-md border p-3"
       aria-label={t("Operação do agente")}
     >
-      <label className="text-sm">
+      <label className="text-sm max-md:w-full max-md:min-w-0">
         {t("Operação do agente")}{" "}
         <Escolha
           className="ml-2"

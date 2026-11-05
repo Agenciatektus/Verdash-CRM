@@ -5,13 +5,13 @@ import { useRef, type ReactNode } from "react";
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import { useEhCelular } from "@/lib/mobile/useEhCelular";
 import { useT } from "@/hooks/i18n/useT";
-import { Robot } from "@/lib/ui/icons";
+import { Robot, Sparkle } from "@/lib/ui/icons";
 import { ChannelLogo } from "@/components/inbox/ChannelLogo";
 import { Badge } from "@/components/ui/badge";
 import { comandoDaConversa, esperaDaConversa } from "@/lib/inbox/comando-da-conversa";
 import { cn } from "@/lib/utils";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
-import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 
 import { AvatarDoContato } from "./AvatarDoContato";
 import { BotaoMaisAcoes } from "./menu/BotaoMaisAcoes";
@@ -82,6 +82,13 @@ interface Props {
    * conversa, e quem abre não marca.
    */
   onAlternarSelecao?: (id: string) => void;
+  /**
+   * Marca (ou desmarca) ESTA conversa como exemplo para o agente aprender (#3006).
+   * Presente = a linha monta o controle; AUSENTE = a linha é a de sempre. A
+   * chamada à rota NÃO mora aqui (uma resposta por lista, não por linha): quem faz
+   * o `POST .../usable-for-rag` é a lista.
+   */
+  onAlternarExemplo?: (id: string, enabled: boolean) => void;
 }
 
 export function ConversationListItem({
@@ -98,13 +105,14 @@ export function ConversationListItem({
   menuAberto,
   selecionado = false,
   onAlternarSelecao,
+  onAlternarExemplo,
 }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const celular = useEhCelular();
   const caixaRef = useRef<HTMLDivElement | null>(null);
   const c = conversation.contacts ?? null;
-  const displayName = rotuloDoContato(c, t);
+  const displayName = rotuloParaAEquipe(c, t);
   const phoneFallback = siglaDoTelefone(c?.phone_number);
   // L15: a prévia é cortada pelo CSS (`truncate`), na largura que a coluna tem,
   // e não em 60 caracteres fixos que sobravam na lista larga e estouravam na
@@ -158,6 +166,12 @@ export function ConversationListItem({
   const canal = conversation.channel_sessions ?? null;
   const rotuloCanal = rotuloDoCanalDaConversa(canal, t);
 
+  // A conversa marcada como exemplo (#3006): `usable_for_rag` vem no SELECT da lista.
+  // Os dois rótulos são literais `t()` separados (a cerca de espanhol cobra chave por chave).
+  const exemploMarcado = Boolean(conversation.usable_for_rag);
+  const rotuloExemplo = exemploMarcado
+    ? t("Deixar de usar como exemplo")
+    : t("Usar como exemplo para a IA");
   const gatilhos = gatilhosDoMenu(conversation.id, onAbrirMenu, !!menuAberto);
 
   const linha = (
@@ -337,6 +351,28 @@ export function ConversationListItem({
         aberto={!!menuAberto}
         onAbrir={(el) => onAbrirMenu(conversation.id, el, el)}
       />
+      {/* O CONTROLE DE "EXEMPLO PARA A IA" (#3006), IRMÃO da linha (controle dentro
+          de <button> é HTML inválido). Marcado fica sempre visível: é o selo do
+          estado. Desmarcado aparece no hover/foco e no toque, como o "…". */}
+      {onAlternarExemplo && (
+        <button
+          type="button"
+          data-testid={`exemplo-ia-${conversation.id}`}
+          aria-pressed={exemploMarcado}
+          aria-label={rotuloExemplo}
+          title={rotuloExemplo}
+          onClick={() => onAlternarExemplo(conversation.id, !exemploMarcado)}
+          className={cn(
+            "absolute right-[46px] top-2 grid size-[30px] place-items-center rounded-lg transition-opacity",
+            "focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-accent",
+            exemploMarcado
+              ? "text-accent hover:bg-accent-soft"
+              : "text-text-muted opacity-0 hover:bg-tint hover:text-text group-hover/linha:opacity-100 group-focus-within/linha:opacity-100 [@media(hover:none)]:opacity-100",
+          )}
+        >
+          <Sparkle size={14} weight={exemploMarcado ? "fill" : "regular"} aria-hidden />
+        </button>
+      )}
     </div>
   );
 }

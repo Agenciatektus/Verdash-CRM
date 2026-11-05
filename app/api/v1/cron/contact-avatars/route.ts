@@ -18,6 +18,30 @@
  * entra antes de quem só está desatualizado. O rosto que falta incomoda mais
  * que o rosto velho.
  *
+ * DE QUAL CONEXÃO
+ * A foto vem da conexão por onde o contato FALA — e não de qualquer conexão
+ * ativa da empresa. Antes, a rota escolhia a primeira `channel_sessions`
+ * `WORKING` da organização (sem ordem, sem ligação com o contato). Quando a
+ * empresa tem WhatsApp E Instagram/Facebook ligados, o banco às vezes devolvia
+ * a linha social (`waha_session_name` nulo, provider `zernio_social`): o `ref`
+ * saía nulo, o cron gravava "sem foto" e só revisitava o contato em 7 dias.
+ * Medido: 40 de 163 contatos de uma empresa marcados "sem foto", e o WhatsApp
+ * devolvia foto para eles quando perguntado direto. Agora, para cada contato, lê
+ * a conversa mais recente dele, pega a sessão dessa conversa (só se `WORKING`
+ * e não arquivada), resolve o `sessionRef` dessa sessão e pede a foto ao adapter
+ * dela. Conversa cuja sessão está parada, arquivada, sem `sessionRef` ou com
+ * adapter sem `fetchProfilePictureUrl` → carimba sem foto, sem tentar outra.
+ *
+ * A regra é: conversa do contato; sem conversa nenhuma, a conexão de mensagem
+ * da empresa que sabe buscar foto. O contato SEM conversa é comum (POST
+ * /contacts, importação de contatos e de leads, webhook de entrada, importação
+ * B2B, a linha de voz) e não tem conversa para indicar a conexão. Para ele, e só
+ * para ele, a rota lista as conexões de mensagem `WORKING` da empresa, em ordem
+ * de criação, e fica com a primeira que sabe buscar foto. Quem descarta a social
+ * é essa checagem de capacidade (`fetchProfilePictureUrl` presente), não o
+ * `sessionRef`, que na social existe. O defeito antigo era pegar UMA conexão
+ * qualquer, sem ordem e sem perguntar se ela busca foto.
+ *
  * Auth: Bearer INTERNAL_SECRET (fail-closed), igual aos demais crons.
  */
 import { randomUUID } from "node:crypto";

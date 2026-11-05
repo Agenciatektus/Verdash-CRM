@@ -168,6 +168,13 @@ export async function aplicarDesfechoDoEnvio(
     );
   }
 
+  // O traço precisa do que só o turno vê: quantas mensagens saíram e qual
+  // modelo respondeu (quem grava a linha é o envoltório, e ele não passa por aqui).
+  if (input.tracoDoTurno !== undefined) {
+    input.tracoDoTurno.desfecho.messagesSent = outcomes.length;
+    input.tracoDoTurno.desfecho.model = turn.model;
+  }
+
   runLog.info('turno do agente concluído', {
     kind: liveJob().kind,
     messages_sent: outcomes.length,

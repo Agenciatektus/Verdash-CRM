@@ -15,11 +15,20 @@ import { tipoDeEnvio } from '../../guardrails/before-send';
 import { claimOfJob } from '../../queue/claim';
 import { matchesHandoffKeyword } from '../agent-config';
 import { avisarLeadDaEscalacao } from '../aviso-de-escalacao';
-import { detectAmbiguousOptOut, detectHumanHandoffRequest, performHumanHandoff } from '../human-handoff';
+import {
+  detectAmbiguousOptOut,
+  detectHumanHandoffRequest,
+  ehRespostaDeRobo,
+  performHumanHandoff,
+} from '../human-handoff';
 import { latestInboundSignal } from '../skills';
 import { montarBriefingDaPassagem } from '@/lib/escalacao/briefing-da-passagem';
 // Valores lidos só dentro da função (nunca na carga do módulo): o ciclo de import é seguro.
-import { eTurnoDeResposta, inboundsNaoRespondidos } from '../inbound-turn';
+import {
+  TITULO_DO_HANDOFF_POR_SUSPEITA_DE_OPT_OUT,
+  eTurnoDeResposta,
+  inboundsNaoRespondidos,
+} from '../inbound-turn';
 import type { carregarContextoDoTurno } from './contexto';
 import type { ContextoDoTurno, Passo } from './portoes-de-entrada';
 import type { SaidaDoRoteamento } from './roteamento';
@@ -118,11 +127,18 @@ export async function tratarDesviosDeterministicos(c: ContextoDoTurno, e: Entrad
   const mensagemDoJob =
     currentInboundText ?? latestInboundSignal(openingContext.context.messages);
   const inboundsPendentes = inboundsNaoRespondidos(openingContext.context.messages);
+  // A GUARDA DO MENU DE ROBÔ (issue 3106): o casamento determinístico segue
+  // existindo, mas NÃO passa a conversa quando o que casou é fala de automação do
+  // outro lado — menu de opções numeradas ("4 - Falar com um atendente"), mensagem
+  // que se declara robô, ou saudação que chega segundos depois do NOSSO disparo de
+  // Prospecção/campanha (`ehRespostaDeRobo`). Nesses casos o turno segue para o
+  // MODELO, que vê a mensagem e já sabe reconhecer robô.
   if (
     !preview &&
     inboundsPendentes.some(
       (texto) =>
-        detectHumanHandoffRequest(texto) ||
+        (detectHumanHandoffRequest(texto) &&
+          !ehRespostaDeRobo(texto, openingContext.context.messages)) ||
         (agentConfig !== null && matchesHandoffKeyword(texto, agentConfig.handoffKeywords)),
     )
   ) {
@@ -184,7 +200,7 @@ export async function tratarDesviosDeterministicos(c: ContextoDoTurno, e: Entrad
       {
         reason: 'suspected_optout',
         conversationSummary: briefing.body,
-        inboxTitle: 'Suspeita de opt-out — confirmar bloqueio do contato no CRM',
+        inboxTitle: TITULO_DO_HANDOFF_POR_SUSPEITA_DE_OPT_OUT,
         passagem: { origem: 'opt_out_provavel', motivoCodigo: 'suspected_optout', briefing },
         avisoAoLead: aviso,
         log: runLog,
@@ -198,9 +214,34 @@ export async function tratarDesviosDeterministicos(c: ContextoDoTurno, e: Entrad
     return { seguir: false, motivo: 'suspeita_de_opt_out' } as const;
   }
 
+  /**
+   * Resposta da IA barrada pela restrição comercial (#2877): avisa o cliente e
+   * passa para a equipe. Vale para o `send_message` e o `send_template` — os dois
+   * corpos que o modelo escolhe. O aviso vem ANTES da passagem, que arma o
+   * silêncio que a cadeia lê.
+   */
+  const passarComercialParaEquipe = async (code: string) => {
+    const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
+      ...avisoDaEscalacao().base,
+      motivo: 'outro',
+    });
+    const briefing = montarBriefingDaPassagem({ checkpoint: null, pendentesDoCliente: [],
+      motivo: { codigo: 'low_confidence', texto: 'Resposta comercial barrada; valores e negociação são exclusivos da equipe.' } });
+    await performHumanHandoff(pool, { tenantId, leadId, conversationId: input.conversationId },
+      { reason: 'low_confidence', conversationSummary: briefing.body,
+        inboxTitle: 'Valores e negociação — atendimento humano necessário',
+        passagem: { origem: 'runtime_nativo', motivoCodigo: 'low_confidence', briefing },
+        avisoAoLead: aviso, log: runLog });
+    return { ok: false as const, error: { code,
+      message: 'Resposta barrada e necessidade de atendimento humano registrada. Não envie valores nem negocie.' } };
+  };
+
   return {
     seguir: true,
-    valor: { channel, liveChannel, optedOutThisTurn, lgpd, avisoDaEscalacao, mensagemDoJob, inboundsPendentes },
+    valor: {
+      channel, liveChannel, optedOutThisTurn, lgpd, avisoDaEscalacao, mensagemDoJob, inboundsPendentes,
+      passarComercialParaEquipe,
+    },
   } as const satisfies Passo<unknown>;
 }
 

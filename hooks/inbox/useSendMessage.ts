@@ -1,5 +1,6 @@
 "use client";
 import { useMutation, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useRef } from "react";
 import { apiClient } from "@/lib/api/client";
 import { randomId } from "@/lib/random-id";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
@@ -46,14 +47,50 @@ interface MessagesPage {
  */
 const idDoEnvio = new WeakMap<SendArgs, string>();
 
+/** O mesmo envio (mesma conversa, mesmo conteúdo) tem a mesma identidade. */
+const identidadeDoEnvio = (input: SendArgs) => JSON.stringify(input);
+
+/**
+ * Por quanto tempo o mesmo texto depois de um erro ainda é "tentar de novo".
+ * Mais tarde que isto, "ok" ou "Bom dia!" é uma mensagem nova — e o recibo do
+ * servidor vale 24h, então reaproveitar a chave calaria a mensagem nova.
+ */
+const REAPROVEITA_CHAVE_MS = 2 * 60 * 1000;
+
 export function useSendMessage() {
   const qc = useQueryClient();
+  /**
+   * A chave de idempotência de cada envio que FALHOU há pouco.
+   *
+   * Depois de um erro de rede o texto volta ao campo; se a pessoa toca Enviar
+   * de novo com o mesmo texto, a chave é a mesma e o servidor devolve o recibo
+   * do primeiro envio em vez de mandar duas vezes (o primeiro pode ter saído).
+   * Texto editado é outra mensagem e ganha outra chave. Só em memória: nada do
+   * atendimento fica guardado no aparelho.
+   */
+  const chaves = useRef(new Map<string, { chave: string; falhouEm: number }>());
 
   return useMutation({
     mutationFn: async (input: SendArgs) => {
+      // O `client_id` da bolha otimista vai só no corpo; a identidade (chave de
+      // idempotência) é calculada do `input`, que não o carrega.
       const clientId = idDoEnvio.get(input);
       const corpo = clientId ? { ...input, metadata: { ...(input.metadata ?? {}), client_id: clientId } } : input;
-      return apiClient.post<{ data: Message }>("/api/v1/messages", corpo);
+      const identidade = identidadeDoEnvio(input);
+      const anterior = chaves.current.get(identidade);
+      // Só a chave de um envio que FALHOU há pouco. A de um envio ainda em voo
+      // não: o campo foi limpo no envio, então o mesmo texto de novo é a pessoa
+      // escrevendo outra vez, e não o mesmo toque repetido.
+      const idempotencyKey = anterior && Date.now() - anterior.falhouEm < REAPROVEITA_CHAVE_MS
+        ? anterior.chave
+        : randomId();
+      chaves.current.delete(identidade);
+      try {
+        return await apiClient.post<{ data: Message }>("/api/v1/messages", corpo, { idempotencyKey });
+      } catch (err) {
+        chaves.current.set(identidade, { chave: idempotencyKey, falhouEm: Date.now() });
+        throw err;
+      }
     },
     onMutate: async (args) => {
       if (args.media_storage_path || args.media_url || args.type === "contact") return {};
@@ -94,6 +131,8 @@ export function useSendMessage() {
         edited_at: null,
         revoked_at: null,
         created_at: new Date().toISOString(),
+        // Sem isto a regra de reenvio não sabe que a linha acabou de nascer.
+        updated_at: new Date().toISOString(),
       };
 
       qc.setQueryData<InfiniteData<MessagesPage>>(queryKey, (old) => {

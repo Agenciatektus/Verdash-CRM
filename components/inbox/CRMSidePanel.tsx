@@ -8,7 +8,7 @@ import { escutar } from "@/lib/ui/comandos-da-tela";
 import { usePermission, useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
-import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 
 import { LeadEnrichment } from "./LeadEnrichment";
 import { AbaAtividade } from "./painel/AbaAtividade";
@@ -112,7 +112,7 @@ export function CRMSidePanel({ conversation }: Props) {
     );
   }
 
-  const displayName = rotuloDoContato(contact, t);
+  const displayName = rotuloParaAEquipe(contact, t);
   const doContato = resumo.summaryContactId === resumo.contactId;
 
   return (

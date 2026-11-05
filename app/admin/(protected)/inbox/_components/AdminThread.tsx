@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import { useAdminConversation } from "@/hooks/useAdminConversation";
 import { MessageBubble } from "@/components/inbox/MessageBubble";
+import { separarReacoes } from "@/lib/inbox/reacoes-no-fio";
 import { TenantBadge } from "@/components/admin/inbox/TenantBadge";
 import { AdminSidePanel } from "./AdminSidePanel";
 import { CircleNotch, Lock } from "@/lib/ui/icons";
@@ -38,6 +39,7 @@ export function AdminThreadClient({ conversationId }: Props) {
     const msgs = data?.messages ?? [];
     return ([...msgs].reverse() as Message[]).filter((m) => !mensagemSemDado(m));
   }, [data?.messages]);
+  const fio = useMemo(() => separarReacoes(messages), [messages]);
 
   if (isLoading) {
     return (
@@ -86,7 +88,7 @@ export function AdminThreadClient({ conversationId }: Props) {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto py-2">
-          {messages.length === 0 ? (
+          {fio.falas.length === 0 ? (
             <p className="p-4 text-center text-xs text-muted-foreground">
               {t("Sem mensagens nesta conversa.")}
             </p>
@@ -95,7 +97,10 @@ export function AdminThreadClient({ conversationId }: Props) {
             // plataforma, olhando a conversa de OUTRA organização. Nenhuma
             // mensagem é dele, então "Você" seria falso em todas — sem o id, o
             // balão rotula "Atendente", que é o que o dado sustenta.
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+            // A reação não é balão: vira marca no alvo, como no fio da Inbox.
+            fio.falas.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} reacoes={fio.reacoesPorAlvo.get(msg.id)} />
+            ))
           )}
         </div>
 

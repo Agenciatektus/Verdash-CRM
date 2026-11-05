@@ -34,7 +34,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { FILTRO_VAZIO, filtroDeAudienciaSchema, type FiltroDeAudiencia } from "./audiencia";
-import { buscarCandidatos, contatosJaEmCampanha } from "./consulta-de-audiencia";
+import type { TemplateContract } from "@/lib/channels/meta/template-contract";
+
+import {
+  buscarCandidatos,
+  contatosJaEmCampanha,
+  contatosQueRecusaramMarketingNaPlataforma,
+} from "./consulta-de-audiencia";
 import { hashDoEndereco, hashesExcluidos } from "./exclusoes";
 import {
   classificarAudiencia,
@@ -42,8 +48,27 @@ import {
   type CandidatoDaAudiencia,
 } from "./elegibilidade";
 import { filtroDaEtapaDeEntrada, type EntradaDaCampanha } from "./entrada-continua";
+import {
+  camposDoNegocioUsados,
+  resolverValoresDaCampanha,
+  textoDoModeloParaAConversa,
+  type VariaveisDaCampanha,
+} from "./modelo";
+import type { DefinicaoDoModelo } from "./modelo-da-conexao";
 import { renderizarVariacao, spintaxDasVariantes, variantesDaCampanha } from "./renderizador";
 import type { MotivoDeExclusao } from "./tipos";
+
+/**
+ * O modelo aprovado de uma campanha oficial, já conferido
+ * (`conferirModeloDaCampanha`). Com ele, quem sai por `variavel_ausente` é
+ * decidido pelo MAPA de variáveis, e o texto congelado é o do modelo com os
+ * valores de cada contato.
+ */
+export interface ModeloPreparado {
+  definicao: DefinicaoDoModelo;
+  contrato: TemplateContract;
+  variaveis: VariaveisDaCampanha;
+}
 
 export interface ResumoDoSnapshot {
   total: number;
@@ -72,6 +97,7 @@ export async function preverAudiencia(
     agora: Date;
     /** Campanha a ignorar na conta de "já em campanha" (a que está sendo editada). */
     campanhaId?: string;
+    modelo?: ModeloPreparado;
   },
 ): Promise<
   ResumoDoSnapshot & {
@@ -109,16 +135,32 @@ export async function classificar(
     variacoes?: readonly string[];
     agora: Date;
     campanhaId?: string;
+    modelo?: ModeloPreparado;
   },
-): Promise<{ linhas: ReturnType<typeof classificarAudiencia>; truncado: boolean }> {
-  const { candidatos, truncado } = await buscarCandidatos(admin, {
+): Promise<{
+  linhas: ReturnType<typeof classificarAudiencia>;
+  truncado: boolean;
+  /** Os valores do modelo de cada contato elegível — só em campanha com modelo. */
+  valoresDoModelo: Map<string, Record<string, string>>;
+}> {
+  const modelo = entrada.modelo;
+  const { candidatos: lidos, truncado } = await buscarCandidatos(admin, {
     organizationId: entrada.organizationId,
     filtro: entrada.filtro,
     agora: entrada.agora,
     // Todas as variantes: campo personalizado usado só numa variação também
     // precisa da coluna (senão a pessoa sairia como `variavel_ausente`).
-    corpo: variantesDaCampanha(entrada.corpo, entrada.variacoes).join(" "),
+    corpo: modelo ? "" : variantesDaCampanha(entrada.corpo, entrada.variacoes).join(" "),
+    lerCamposDoNegocio: modelo ? camposDoNegocioUsados(modelo.variaveis).length > 0 : false,
   });
+  // No número oficial, quem já desligou o marketing NA PLATAFORMA sai como quem
+  // recusou pelo cadastro: o envio não entregaria e conta como falha do número.
+  const recusaramNaPlataforma = modelo
+    ? await contatosQueRecusaramMarketingNaPlataforma(admin, entrada.organizationId)
+    : new Set<string>();
+  const candidatos = recusaramNaPlataforma.size
+    ? lidos.map((c) => (recusaramNaPlataforma.has(c.contactId) ? { ...c, recusouMarketing: true } : c))
+    : lidos;
   const jaEmCampanha = await contatosJaEmCampanha(
     admin,
     entrada.organizationId,
@@ -126,29 +168,41 @@ export async function classificar(
   );
   const suprimidos = await hashesExcluidos(admin, entrada.organizationId);
   const variantes = variantesDaCampanha(entrada.corpo, entrada.variacoes);
+  const valoresDoModelo = new Map<string, Record<string, string>>();
   return {
     linhas: classificarAudiencia(candidatos, {
       excluidosAMao: new Set(entrada.filtro.excluir_contatos),
       jaEmCampanha,
       suprimidos,
       hashDoEndereco,
-      // A saudação NÃO é resolvida aqui: ela é da hora do envio. O token fica no
+      renderizar: modelo
+        ? (c: CandidatoDaAudiencia) => {
+            const r = resolverValoresDaCampanha(modelo.contrato, modelo.variaveis, {
+              nomeDoContato: c.nome,
+              camposDoNegocio: (c.lead ?? {}) as Record<string, unknown>,
+            });
+            if (!r.ok) return { texto: "", faltando: r.problemas };
+            valoresDoModelo.set(c.contactId, r.values);
+            return { texto: textoDoModeloParaAConversa(modelo.definicao, r.values), faltando: [] };
+          }
+        : // A saudação NÃO é resolvida aqui: ela é da hora do envio. O token fica no
       // corpo congelado e o despacho o troca — ver `rodada.ts`.
-      // A variante sai do `contact_id`: a MESMA pessoa recebe a MESMA variação,
-      // inclusive ao repreparar. Semente por campanha faria a lista trocar de
-      // texto a cada clique em Preparar, sem nada ter mudado.
-      renderizar: (c: CandidatoDaAudiencia) => {
-        const r = renderizarVariacao({
-          variantes,
-          semente: c.contactId,
-          valores: { nome: c.nome, lead: c.lead, contato: c.contato },
-        });
-        // `vazio` sobe junto: texto que resolveu para nada não pode virar
-        // `rendered_body` em branco e seguir para o envio.
-        return { texto: r.texto, faltando: r.faltando, vazio: r.vazio, varianteIndex: r.varianteIndex };
-      },
+        // A variante sai do `contact_id`: a MESMA pessoa recebe a MESMA variação,
+        // inclusive ao repreparar. Semente por campanha faria a lista trocar de
+        // texto a cada clique em Preparar, sem nada ter mudado.
+        (c: CandidatoDaAudiencia) => {
+          const r = renderizarVariacao({
+            variantes,
+            semente: c.contactId,
+            valores: { nome: c.nome, lead: c.lead, contato: c.contato },
+          });
+          // `vazio` sobe junto: texto que resolveu para nada não pode virar
+          // `rendered_body` em branco e seguir para o envio.
+          return { texto: r.texto, faltando: r.faltando, vazio: r.vazio, varianteIndex: r.varianteIndex };
+        },
     }),
     truncado,
+    valoresDoModelo,
   };
 }
 
@@ -166,6 +220,7 @@ export async function prepararCampanha(
     variacoes?: readonly string[];
     contentVersion: number;
     agora: Date;
+    modelo?: ModeloPreparado;
   },
 ): Promise<ResumoDoSnapshot> {
   const filtro = filtroDeAudienciaSchema.safeParse(entrada.filtro);
@@ -185,13 +240,14 @@ export async function prepararCampanha(
     );
   }
 
-  const { linhas } = await classificar(admin, {
+  const { linhas, valoresDoModelo } = await classificar(admin, {
     organizationId: entrada.organizationId,
     filtro: filtro.data,
     corpo: entrada.corpo,
     variacoes: entrada.variacoes,
     agora: entrada.agora,
     campanhaId: entrada.campanhaId,
+    ...(entrada.modelo ? { modelo: entrada.modelo } : {}),
   });
 
   // Reconstrução limpa: a rota só chega aqui quando nada saiu, então apagar a
@@ -219,7 +275,15 @@ export async function prepararCampanha(
     // `variante_index` fica no snapshot para a tela poder dizer QUAL texto esta
     // pessoa recebeu — sem ele, uma campanha de cinco variações mostra cinco
     // corpos diferentes e nenhuma forma de agrupá-los.
-    variables: { nome: l.candidato.nome, variante_index: l.varianteIndex ?? 0 },
+    // Com modelo, os valores de cada variável ficam congelados aqui: é o que o
+    // despacho manda, e o que a LGPD apaga junto (`fn_redigir_campanhas_do_contato_anonimizado`).
+    variables: valoresDoModelo.has(l.candidato.contactId)
+      ? {
+          nome: l.candidato.nome,
+          variante_index: l.varianteIndex ?? 0,
+          modelo: valoresDoModelo.get(l.candidato.contactId),
+        }
+      : { nome: l.candidato.nome, variante_index: l.varianteIndex ?? 0 },
     cancelled_at: null,
     created_at: agoraIso,
   }));

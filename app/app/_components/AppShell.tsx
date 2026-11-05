@@ -1,5 +1,5 @@
 "use client";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/shell/Sidebar";
 import type { FunilDoMenu } from "@/lib/navigation/funis-no-menu";
@@ -13,6 +13,7 @@ import { useInboundMessageAlerts } from "@/hooks/notifications/useInboundMessage
 import { useInboundCallAlerts } from "@/hooks/calls/useInboundCallAlerts";
 import { useCrmAlerts } from "@/hooks/notifications/useCrmAlerts";
 import { useNotifyOpenFromServiceWorker } from "@/lib/notifications/notify_open";
+import { ensureNotifyServiceWorker } from "@/lib/notifications/service_worker";
 import { estiloDaReserva, useOcupacaoDoRodape } from "@/lib/ui/rodape-ocupado";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,13 @@ export function AppShell({ sidebarCollapsed, menuFixoNaInbox = false, podeAtende
   useInboundCallAlerts();
   useCrmAlerts();
   useNotifyOpenFromServiceWorker();
+  // O SW em todo /app, e não só depois da permissão de avisos: é ele que
+  // responde a página neutra quando a navegação cai sem rede (ADR-0006, D4),
+  // e é aqui que a versão nova dele substitui a antiga depois de um deploy.
+  // Sem contexto seguro (http://IP) a função devolve null e nada acontece.
+  useEffect(() => {
+    void ensureNotifyServiceWorker();
+  }, []);
   // O SINAL DE PRESENÇA (issue #996) sai daqui porque presença é "esta aba
   // está aberta" — não "a pessoa está na tela Equipe". Quem atende passa o dia
   // no Inbox e na Agenda; um emissor amarrado à tela de gestão diria que só o
@@ -80,7 +88,9 @@ export function AppShell({ sidebarCollapsed, menuFixoNaInbox = false, podeAtende
   const naInbox = ehAInbox(usePathname());
   return (
     // A área segura dos lados mora no `body` (globals.css), para valer em toda página.
-    <div className="pele-moldura flex min-h-dvh w-full bg-background">
+    // `min-h-dvh` menos `--faixas-de-cima` (publicada por `FaixasDeCima`): as faixas do topo
+    // ficam ACIMA da casca, e sem o desconto o documento ficaria rolável com o WhatsApp desconectado.
+    <div className="pele-moldura flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] w-full bg-background">
       <BarraDeProgressoNavegacao />
       {/* Só no celular (abaixo de 760px) e uma vez por aparelho. */}
       <ConviteDeInstalacao />
@@ -106,7 +116,7 @@ export function AppShell({ sidebarCollapsed, menuFixoNaInbox = false, podeAtende
         SEGUNDA medida da mesma coisa — a que discordava e deixava a barra por
         cima da lista.
       */}
-      <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
+      <div className="flex min-h-[calc(100dvh-var(--faixas-de-cima,0px))] min-w-0 flex-1 flex-col">
         {/* Abaixo de 760px o topo e a gaveta saem: entra a casca do app de celular
             (cabeçalho, barra inferior com as 5 abas, FAB e o menu "Mais"). */}
         <div className="hidden largo:contents">

@@ -28,6 +28,7 @@ export interface EntradaDaAbertura {
   fusoDaOrg: string;
   leadState: SaidaDoContexto['leadState'];
   currentInboundText: SaidaDoContexto['currentInboundText'];
+  currentInboundSender: SaidaDoContexto['currentInboundSender'];
   roteiro: SaidaDoPreparo['roteiro'];
   effectivePrevious: SaidaDoPreparo['effectivePrevious'];
   effectiveContext: SaidaDoPreparo['effectiveContext'];
@@ -43,7 +44,7 @@ export interface EntradaDaAbertura {
 export async function montarAberturaDaChamada(c: ContextoDoTurno, r: EntradaDaAbertura) {
   const { deps, pool, input, preview, tenantId, clock, runLog } = c;
   const {
-    agentConfig, fusoDaOrg, leadState, currentInboundText, roteiro, effectivePrevious, effectiveContext,
+    agentConfig, fusoDaOrg, leadState, currentInboundText, currentInboundSender, roteiro, effectivePrevious, effectiveContext,
     notesIndexBlock, compromissosBlock, origemBlock, mcpToolIdsDoTurno, entregues, matchedSkillsBlock,
     stageHintBlock,
   } = r;
@@ -67,6 +68,9 @@ export async function montarAberturaDaChamada(c: ContextoDoTurno, r: EntradaDaAb
     compromissosBlock,
     origemBlock,
     ...(currentInboundText !== null ? { currentInboundText } : {}),
+    // #2729 — o autor da mensagem canônica, quando ela é de grupo. Vai junto
+    // do texto: sem ele o modelo ouve a voz e não sabe de quem é.
+    ...(currentInboundSender !== null ? { currentInboundSender } : {}),
   });
   // Sufixos por-lead (situacionais, voláteis — depois do prefixo cacheável F2-17): corpos de
   // skill casadas (F3-09) + hint do classificador (F3-11) + instrução de split (F4-xx, quando

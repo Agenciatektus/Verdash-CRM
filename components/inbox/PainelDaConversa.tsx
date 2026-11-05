@@ -2,7 +2,8 @@
 import { forwardRef, useEffect, useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
-import { usePermission } from "@/hooks/auth/AuthProvider";
+import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
+import { composerBloqueadoAteAssumir } from "@/lib/inbox/bloqueio-ate-assumir";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { motivoDaJanelaFechada, motivoDoContato } from "@/lib/inbox/motivo-do-envio-bloqueado";
 import { estadoDaJanela } from "@/lib/channels/janela";
@@ -58,17 +59,20 @@ export interface PainelDaConversaProps {
   onAbrirConversa?: (id: string) => void;
   /** Rascunho sugerido por integração (issue #1611) — `null` é o caso comum. */
   rascunho?: AvisoDeRascunho | null;
+  /** Encaminhar mensagem (#2835): quem monta abre o diálogo de destino. Sem isto o gesto não aparece. */
+  onEncaminhar?: (m: ConversationMensagem) => void;
 }
 
 export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps>(
   function PainelDaConversa(
-    { conversation, onde = "inbox", searchTerm = "", onAbrirConversa, rascunho = null },
+    { conversation, onde = "inbox", searchTerm = "", onAbrirConversa, rascunho = null, onEncaminhar },
     composerRef,
   ) {
     const t = useT();
     // Acompanhamento de suporte somente leitura já chega aqui como `viewer`
     // (`resolveActiveOrg` o rebaixa), então este gate também o cobre.
     const podeResponder = usePermission("inbox.reply");
+    const { activeOrg, user } = useAuth();
 
     /**
      * A mensagem escolhida para responder "em cima". Quem ESCOLHE é a lista de
@@ -105,6 +109,7 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
             searchTerm={searchTerm}
             provider={provider}
             onResponder={podeResponder ? setRespondendo : undefined}
+            onEncaminhar={podeResponder ? onEncaminhar : undefined}
             // O cartão da passagem escolhe o gesto a partir de quem é o dono da
             // conversa: sem dono convida a assumir, com outro dono diz quem
             // atende. Sem estes campos ele ficaria mudo para quem mais precisa.
@@ -147,6 +152,15 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
               janelaFechada={motivoDaJanela}
               disabled={conversation.status === "closed"}
               fechada={conversation.status === "closed"}
+              // A caixa travada até assumir (#3012): opção da ORGANIZAÇÃO; desligada
+              // (o padrão) a expressão é `false`, e assumir libera sozinho.
+              aguardandoAssumir={composerBloqueadoAteAssumir({
+                ligada: activeOrg?.interface_settings?.bloquearAteAssumir === true,
+                donoDaConversa: conversation.assigned_to_user_id,
+                atendenteId: user.id,
+              })}
+              // A barra de recursos lembra o recolhimento POR usuário (#3282).
+              usuarioId={user.id}
               contatoBloqueadoId={conversation.contacts?.is_blocked ? (conversation.contacts.id ?? null) : null}
               contactName={conversation.contacts?.name ?? null}
               contactDisplayName={conversation.contacts?.display_name}

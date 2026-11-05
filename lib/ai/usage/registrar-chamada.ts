@@ -26,7 +26,7 @@
  * ligação em curso. A falha vai para o log.
  */
 import { custoGravavel } from "@/lib/agent-engine/edge/llm/pricing";
-import { codigoDoErro, providerDoModelo } from "@/lib/ai/log-invocation";
+import { codigoDoErro, provedorDaChamada } from "@/lib/ai/log-invocation";
 import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
@@ -57,7 +57,8 @@ export interface ChamadaDeIa {
 export async function registrarChamadaDeIa(admin: Admin, chamada: ChamadaDeIa): Promise<void> {
   try {
     const erro = chamada.erro ?? null;
-    const provider = chamada.provider ?? providerDoModelo(chamada.model);
+    // A MESMA régua de `logInvocation` (importada, nunca copiada — #3098).
+    const provider = provedorDaChamada(chamada.provider, chamada.model);
     const { error } = await admin.from("llm_calls").insert({
       organization_id: chamada.organization_id,
       // Mesma rede de `logInvocation` (issue #160): `""` numa coluna uuid faz o

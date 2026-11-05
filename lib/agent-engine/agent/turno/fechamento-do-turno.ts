@@ -10,6 +10,8 @@ import { runModelCall, type ModelMessage } from '../../edge/llm/run-model-call';
 import { agendaNoFechamento } from '../abertura/agenda-no-fechamento';
 import { CHECKPOINT_INSTRUCTION, fecharOTurno, insertCheckpoint } from '../abertura/checkpoint';
 import { latestCheckpoint } from '../inbound-turn';
+import { desfechoSemCandidato, tetoDePassosAtingido } from '../desfecho-da-previa';
+import type { chamarOModelo } from './chamada-do-modelo';
 import { pruneToolResults, toolPartsAsText } from '../prune-tool-results';
 import type { carregarContextoDoTurno } from './contexto';
 import type { ContextoDoTurno, Passo } from './portoes-de-entrada';
@@ -22,11 +24,20 @@ export interface EntradaDoFechamento {
   openingTextOnly: ModelMessage[];
   compromissosBlock: Awaited<ReturnType<typeof prepararContextoDoTurno>>['compromissosBlock'];
   mensagensDoTurno: ModelMessage[];
+  // #3093 — os sinais de FALHA da geração, para a prévia separar falha de decisão.
+  turn: Awaited<ReturnType<typeof chamarOModelo>>['turn'];
+  maxSteps: number;
+  saidaTruncada: boolean;
+  correcaoTruncou: boolean;
+  tetoNaCorrecao: boolean;
 }
 
 export async function fecharOTurnoComCheckpoint(c: ContextoDoTurno, r: EntradaDoFechamento) {
   const { deps, job, pool, preview, tenantId, leadId, clock, runLog, liveJob } = c;
-  const { agentConfig, system, openingTextOnly, compromissosBlock, mensagensDoTurno } = r;
+  const {
+    agentConfig, system, openingTextOnly, compromissosBlock, mensagensDoTurno, turn, maxSteps, saidaTruncada,
+    correcaoTruncou, tetoNaCorrecao,
+  } = r;
 
   // F3-10: poda os tool results antigos da fita do run ANTES de reenviá-los no fechamento
   // (é onde a fita inteira é re-serializada num prompt) — o conteúdo durável já foi para
@@ -50,13 +61,28 @@ export async function fecharOTurnoComCheckpoint(c: ContextoDoTurno, r: EntradaDo
   // turno. Aqui o lead já recebeu resposta, mas a conversa ficaria sem
   // checkpoint e sem dono, e o próximo inbound cairia no mesmo bloqueio, agora
   // sem nada tendo mudado no meio.
-  // Prévia sem candidato e sem impedimento: quem opera precisa saber que o agente não propôs nada.
+  // Prévia sem candidato e sem impedimento: quem opera precisa saber POR QUE.
+  //
+  // #3093 — o mesmo `no_candidate` cobria decisão e falha da geração. A decisão
+  // mora em `desfecho-da-previa.ts` (pura, testável) e devolve o código da
+  // CAUSA: `output_truncated`, `max_steps_exhausted` ou `no_candidate` (só a
+  // DECISÃO de não responder). `null` quando há candidato ou quando um
+  // impedimento já explica o desfecho.
   const avisarSemCandidato = (p: NonNullable<typeof preview>): void => {
-    if (p.result.candidates.length === 0 && p.result.impediments.length === 0)
-      p.result.impediments.push({
-        code: 'no_candidate',
-        message: 'O agente não propôs uma resposta. Revise o cenário ou a configuração.',
-      });
+    const desfecho = desfechoSemCandidato({
+      candidatos: p.result.candidates.length,
+      impedimentos: p.result.impediments.length,
+      // A correção que termina truncada ou no teto dela é FALHA, não decisão
+      // — a produção trata o mesmo sinal como `correction_truncated_failed`.
+      saidaTruncada: saidaTruncada || correcaoTruncou,
+      tetoDePassosAtingido:
+        tetoDePassosAtingido({
+          passosUsados: turn.result.steps?.length ?? 0,
+          maxSteps,
+          finishReason: turn.result.finishReason,
+        }) || tetoNaCorrecao,
+    });
+    if (desfecho !== null) p.result.impediments.push(desfecho);
   };
   // ⚠️ RASCUNHO (modo assistido) não fecha o turno com checkpoint. O checkpoint
   // da prévia não é gravado (a prévia retorna antes do `insertCheckpoint`, logo

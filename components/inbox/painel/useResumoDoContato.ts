@@ -5,6 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { ouvirMudancaNoCrmDoContato } from "@/lib/inbox/releitura-do-contato";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
+import type { PersonalizacaoProspeccao } from "@/lib/prospecting/personalizar";
+
+import type { AnuncioDeOrigem, AnuncioMaisRecente } from "../AnuncioDoContato";
 
 import type {
   ActivityRow,
@@ -20,12 +23,15 @@ interface RespostaDoResumo {
   data: {
     enrichment?: Enriquecimento;
     enrichment_error?: boolean;
+    personalizacao?: PersonalizacaoProspeccao | null;
     leads: LeadRow[];
     orders: OrderRow[];
     activities: ActivityRow[];
     demandas: DemandaRow[];
     fatos?: Fato[];
     historico?: DemandaEncerrada[];
+    anuncio_de_origem?: AnuncioDeOrigem | null;
+    anuncio_mais_recente?: AnuncioMaisRecente | null;
   };
 }
 
@@ -46,6 +52,8 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
 
   const [enrichment, setEnrichment] = useState<Enriquecimento>(null);
   const [enrichmentError, setEnrichmentError] = useState(false);
+  const [personalizacao, setPersonalizacao] = useState<PersonalizacaoProspeccao | null>(null);
+  const [anuncios, setAnuncios] = useState<{ origem: AnuncioDeOrigem | null; recente: AnuncioMaisRecente | null }>({ origem: null, recente: null });
   const [leads, setLeads] = useState<LeadRow[] | null>(null);
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
   const [activities, setActivities] = useState<ActivityRow[] | null>(null);
@@ -70,6 +78,7 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
       setDemandas(null);
       setFatos([]);
       setHistorico([]);
+      setAnuncios({ origem: null, recente: null });
       return;
     }
     let cancelled = false;
@@ -82,6 +91,7 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
         setSummaryContactId(contactId);
         setEnrichment(r.data.enrichment ?? null);
         setEnrichmentError(r.data.enrichment_error ?? false);
+        setPersonalizacao(r.data.personalizacao ?? null);
         setLeads(r.data.leads);
         setOrders(r.data.orders);
         setActivities(r.data.activities);
@@ -91,6 +101,7 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
         setDemandas(r.data.demandas ?? []);
         setFatos(r.data.fatos ?? []);
         setHistorico(r.data.historico ?? []);
+        setAnuncios({ origem: r.data.anuncio_de_origem ?? null, recente: r.data.anuncio_mais_recente ?? null });
       } catch {
         if (cancelled) return;
         // Falha NÃO vira lista vazia: os dados ficam `null` e o painel diz que
@@ -102,6 +113,7 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
         setDemandas(null);
         setFatos([]);
         setHistorico([]);
+        setAnuncios({ origem: null, recente: null });
       }
     }
 
@@ -153,6 +165,8 @@ export function useResumoDoContato(conversation: ConversationWithContact | null)
     summaryContactId,
     enrichment,
     enrichmentError,
+    personalizacao,
+    anuncios,
     leads,
     orders,
     activities,

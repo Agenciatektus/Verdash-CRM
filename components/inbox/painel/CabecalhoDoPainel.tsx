@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ChipDeEtiqueta } from "@/components/tags/ChipDeEtiqueta";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import type { ContactSummary } from "@/hooks/inbox/useConversationsRealtime";
@@ -86,7 +87,11 @@ export function CabecalhoDoPainel({
       <div className="flex items-center gap-3">
         <AvatarDoContato contato={contact} nome={displayName} iniciais={initials(displayName, siglaDoTelefone(contact?.phone_number))} className="h-12 w-12 text-base" />
         <div className="min-w-0">
-          <div className="truncate text-[17px] font-bold leading-tight text-text">{displayName}</div>
+          <div className="flex items-center gap-2">
+            <div className="truncate text-[17px] font-bold leading-tight text-text">{displayName}</div>
+            {/* Tipo lido da COLUNA (`contacts.contact_type`), nunca da etiqueta; só o fornecedor ganha selo (3005). */}
+            {contact?.contact_type === "fornecedor" && <Badge variant="secondary">{t("Fornecedor")}</Badge>}
+          </div>
           {telefone && (
             <div className="flex items-center gap-1 text-[13px] text-text-muted">
               <span className="font-mono tabular-nums">{telefone}</span>

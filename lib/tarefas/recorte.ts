@@ -71,7 +71,8 @@ export function filtrosDaUrl(params: URLSearchParams): FiltrosDeTarefas {
   const f: FiltrosDeTarefas = {};
   const q = params.get("q")?.trim();
   if (q) f.busca = q.slice(0, 120);
-  if (params.get("minhas") === "1") f.minhas = true;
+  // `?assigned_to=me` é o endereço que o lembrete e o push de tarefa abrem (upstream 1.90).
+  if (params.get("minhas") === "1" || params.get("assigned_to") === "me") f.minhas = true;
   if (params.get("atrasadas") === "1") f.atrasadas = true;
   if (params.get("hoje") === "1") f.hoje = true;
   if (params.get("sem_resp") === "1") f.semResponsavel = true;

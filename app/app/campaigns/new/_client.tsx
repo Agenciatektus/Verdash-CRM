@@ -29,7 +29,11 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Escolha } from "@/components/ui/escolha";
-import { useCriarCampanha, usePreviaDaAudiencia } from "@/hooks/campanhas/useCampanhas";
+import {
+  useCriarCampanha,
+  useModelosDaCampanha,
+  usePreviaDaAudiencia,
+} from "@/hooks/campanhas/useCampanhas";
 import { useConfiguracaoDeCampanhas } from "@/hooks/campanhas/useConfiguracao";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useT } from "@/hooks/i18n/useT";
@@ -50,6 +54,13 @@ import {
   useEtapas,
   useFunis,
 } from "@/hooks/campanhas/useDestinoDaCampanha";
+
+import {
+  ModeloDaCampanha,
+  variaveisIncompletas,
+  type EscolhaDoModelo,
+} from "../_components/ModeloDaCampanha";
+import { VelocidadeDaCampanha, type Velocidade } from "../_components/VelocidadeDaCampanha";
 
 export function NovaCampanha() {
   const t = useT();
@@ -115,6 +126,27 @@ export function NovaCampanha() {
   // O MODO DE PÚBLICO (9039). Nasce em LISTA, e nada aqui o liga sozinho.
   const [continua, setContinua] = useState(false);
   const [etapaDeEntrada, setEtapaDeEntrada] = useState("");
+
+  const [modelo, setModelo] = useState<EscolhaDoModelo | null>(null);
+  const [velocidade, setVelocidade] = useState<Velocidade>("gradual");
+
+  // O que o número escolhido aceita: texto livre (QR) ou modelo aprovado
+  // (oficial). Quem decide é o servidor, pela capability do canal.
+  const doCanal = useModelosDaCampanha(canal);
+  const ehOficial = doCanal.data?.modo === "template";
+  // Rápida só no número oficial: trocar para um número por QR volta a gradual.
+  const rapida = ehOficial && velocidade === "rapida";
+  const providerDoCanal = (canais.data ?? []).find((c) => c.id === canal)?.provider ?? null;
+  const modeloEscolhido =
+    modelo && doCanal.data
+      ? (doCanal.data.modelos.find(
+          (m) => m.name === modelo.name && m.language === modelo.language,
+        ) ?? null)
+      : null;
+  const modeloPronto =
+    modelo !== null &&
+    modeloEscolhido !== null &&
+    variaveisIncompletas(modeloEscolhido, modelo.variables).length === 0;
 
   const funis = useFunis();
   const etapas = useEtapas(funil || null);
@@ -190,7 +222,7 @@ export function NovaCampanha() {
   const podeSalvar =
     nome.trim() !== "" &&
     canal !== "" &&
-    texto.trim() !== "" &&
+    (ehOficial ? modeloPronto : texto.trim() !== "") &&
     // No modo CONTÍNUO o público é a etapa, e o recorte de contatos não é usado:
     // exigir critério ali prenderia o operador num filtro que a campanha ignora.
     // O que o contínuo exige (funil, etapa, teto, janela) é cobrado no Preparar,
@@ -202,17 +234,25 @@ export function NovaCampanha() {
     const criada = await criar.mutateAsync({
       name: nome.trim(),
       channel_session_id: canal,
-      message_body: texto.trim(),
-      message_variants: variacoesExtras,
+      ...(ehOficial && modelo
+        ? {
+            message_mode: "template",
+            provider_template_name: modelo.name,
+            provider_template_language: modelo.language,
+            provider_template_variables: modelo.variables,
+          }
+        : { message_body: texto.trim(), message_variants: variacoesExtras }),
       base_legal: baseLegal,
       lia_ref: liaRef.trim() || null,
       audience_filter: filtro,
-      intervalo_segundos: ritmoEscolhido.intervaloSegundos,
+      // Na rápida o intervalo não vale (a rajada tem o próprio espaçamento).
+      intervalo_segundos: rapida ? null : ritmoEscolhido.intervaloSegundos,
+      velocidade: rapida ? "rapida" : "gradual",
       janela_inicio_hora: ritmoEscolhido.janelaInicioHora,
       janela_fim_hora: ritmoEscolhido.janelaFimHora,
       teto_diario: ritmoEscolhido.tetoDiario,
       teto_horario: ritmoEscolhido.tetoHorario,
-      channel_session_ids: extras,
+      channel_session_ids: ehOficial ? [] : extras,
       pipeline_id: funil || null,
       stage_id: etapa || null,
       agent_id: agente || null,
@@ -249,7 +289,11 @@ export function NovaCampanha() {
             id="canal"
             className="h-9 w-full"
             value={canal}
-            onValueChange={(valorEscolhido) => setCanal(valorEscolhido)}
+            onValueChange={(valorEscolhido) => {
+              setCanal(valorEscolhido);
+              // Cada número tem os próprios modelos: o escolhido no outro não vale aqui.
+              setModelo(null);
+            }}
           >
             <option value="">{t("Escolha um número")}</option>
             {(canais.data ?? []).map((c) => (
@@ -265,7 +309,14 @@ export function NovaCampanha() {
           )}
         </div>
 
-        {(canais.data ?? []).length > 1 && (
+        {ehOficial && (canais.data ?? []).length > 1 && (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Campanha com modelo aprovado sai por um número só: cada número tem os próprios modelos na plataforma.",
+            )}
+          </p>
+        )}
+        {!ehOficial && (canais.data ?? []).length > 1 && (
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">{t("Falar também por estes números")}</legend>
             <p className="text-sm text-muted-foreground">
@@ -358,7 +409,9 @@ export function NovaCampanha() {
         {!continua && (
         <>
         <p className="text-sm text-muted-foreground">
-          {t("Escolha pelo menos um critério — uma lista sem recorte ninguém confere antes de apertar.")}
+          {t(
+            "Escolha pelo menos um critério — uma lista sem recorte ninguém confere antes de apertar.",
+          )}
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -452,8 +505,18 @@ export function NovaCampanha() {
             onClick={() =>
               previa.mutate({
                 audience_filter: filtro,
-                message_body: texto,
-                message_variants: variacoesExtras,
+                message_body: ehOficial ? "" : texto,
+                message_variants: ehOficial ? [] : variacoesExtras,
+                ...(ehOficial && modelo
+                  ? {
+                      modelo: {
+                        channel_session_id: canal,
+                        name: modelo.name,
+                        language: modelo.language,
+                        variables: modelo.variables,
+                      },
+                    }
+                  : {}),
               })
             }
           >
@@ -462,9 +525,7 @@ export function NovaCampanha() {
           {previa.data && (
             <p className="text-sm">
               <strong>{previa.data.elegiveis}</strong> {t("podem receber")}
-              {previa.data.excluidos > 0
-                ? ` · ${previa.data.excluidos} ${t("ficam de fora")}`
-                : ""}
+              {previa.data.excluidos > 0 ? ` · ${previa.data.excluidos} ${t("ficam de fora")}` : ""}
             </p>
           )}
         </div>
@@ -490,7 +551,16 @@ export function NovaCampanha() {
 
       <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Mensagem")}</h2>
-        <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+        {ehOficial ? (
+          <ModeloDaCampanha
+            channelSessionId={canal}
+            provider={providerDoCanal}
+            valor={modelo}
+            onChange={setModelo}
+          />
+        ) : (
+          <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+        )}
       </Card>
 
       <Card className="space-y-4 p-4">
@@ -527,7 +597,9 @@ export function NovaCampanha() {
       <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Quem responder")}</h2>
         <p className="text-sm text-muted-foreground">
-          {t("Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.")}
+          {t(
+            "Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.",
+          )}
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -585,13 +657,16 @@ export function NovaCampanha() {
             ))}
           </Escolha>
           <p className="text-sm text-muted-foreground">
-            {t("Vale só para conversas que nascem desta campanha: quem já falava com você continua com quem o atendia. Quem aborda precisa saber dizer de onde veio o contato — essa resposta tem de estar no material do agente escolhido.")}
+            {t(
+              "Vale só para conversas que nascem desta campanha: quem já falava com você continua com quem o atendia. Quem aborda precisa saber dizer de onde veio o contato — essa resposta tem de estar no material do agente escolhido.",
+            )}
           </p>
         </div>
       </Card>
 
       <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Ritmo desta campanha")}</h2>
+        {canal && <VelocidadeDaCampanha valor={velocidade} onChange={setVelocidade} ehOficial={ehOficial} />}
         <p className="text-sm text-muted-foreground">
           {t(
             "Em branco, vale o ritmo do número (Conexões › Proteção de envio). O que você puser aqui só pode deixar mais devagar.",
@@ -604,6 +679,7 @@ export function NovaCampanha() {
         </p>
         <AvisoDeRitmo ritmo={ritmoEscolhido} />
         <div className="grid gap-4 sm:grid-cols-2">
+          {!rapida && (
           <div className="space-y-2">
             <Label htmlFor="intervalo">{t("Intervalo mínimo entre disparos (minutos)")}</Label>
             <Input
@@ -617,6 +693,7 @@ export function NovaCampanha() {
               {t("Tempo de espera entre um envio e o próximo contato da lista. Não é o intervalo dentro de uma conversa.")}
             </p>
           </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="teto">{t("Máximo por dia")}</Label>
             <Input

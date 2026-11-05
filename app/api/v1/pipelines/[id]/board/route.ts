@@ -28,6 +28,7 @@ import {
 import type { LeadCandidate } from "@/lib/leads/active-lead";
 import { anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "@/lib/kanban/dados-do-contato";
 import { anexarProximoPasso, type TarefaAbertaDoQuadro } from "@/lib/kanban/proximo-passo-do-quadro";
+import { diasDeRecorte, recortaEncerradosAntigos } from "@/lib/kanban/recorte-de-encerrados";
 import { anexarTarefasAosNegocios, type LinhaDaTarefaNoQuadro } from "@/lib/kanban/tarefas-no-quadro";
 import { buscaEmLotes } from "@/lib/supabase/em-lotes";
 import {
@@ -573,7 +574,7 @@ async function withTarefas(
   };
 }
 
-export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const inicioDaRota = performance.now();
   const requestId = randomUUID();
   const { id: pipelineId } = await ctx.params;
@@ -664,9 +665,32 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
         )
       : ((leads ?? []) as Lead[]);
 
+  // ─── O RECORTE DE ENCERRADOS ANTIGOS (#2995) ────────────────────────────
+  // A opção é POR FUNIL (`crm_pipelines.settings.ocultar_encerrados_dias`,
+  // lida do pipeline que a consulta acima já trouxe) e vem desligada: chave
+  // ausente devolve `null` e o quadro segue trazendo tudo, como sempre trouxe.
+  //
+  // Mesmo lugar e mesma técnica do filtro de contato pessoal acima — em MEMÓRIA,
+  // sobre a lista já lida —, e pelo mesmo motivo: o quadro não pagina (ordena
+  // tudo por `position_in_stage` numa leitura só), então filtrar depois de ler
+  // não perde nada e evita uma segunda ida ao banco só para saber a opção antes
+  // de buscar. É pergunta de EXIBIÇÃO: a linha continua no banco com o
+  // histórico intacto, e desligar a opção a traz de volta inteira. Nada aqui
+  // apaga, arquiva ou mexe em `status`.
+  //
+  // O `?lead=` é o negócio que o link pediu (o dossiê abre por ele): fica mesmo
+  // antigo. Ele só é comparado com a lista JÁ filtrada acima, então não traz de
+  // volta nada que o filtro de contato pessoal tirou.
+  const leadsDoQuadro = recortaEncerradosAntigos(
+    leadsVisiveis,
+    diasDeRecorte((pipeline as Pipeline).settings),
+    new Date(),
+    req.nextUrl.searchParams.get("lead"),
+  );
+
   const organizationId = (pipeline as Pipeline).organization_id;
 
-  // As famílias partem do MESMO quadro base (`leadsVisiveis`) e leem só `id`,
+  // As famílias partem do MESMO quadro base (`leadsDoQuadro`) e leem só `id`,
   // `contact_id` e `owner_kind` — nenhuma depende do campo que a outra
   // acrescenta. Rodam ao mesmo tempo e são fundidas por `id` no fim
   // (`lib/kanban/fundir-enriquecimentos.ts`). Encadeadas, estouraram os 10 s do
@@ -675,7 +699,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
   // A única dependência real fica DENTRO da família: o funil padrão da org só
   // serve à próxima ação, então é lido antes dela, na mesma tarefa.
   const { resultados, tempos } = await enriquecerEmParalelo({
-    dono: () => withOwnerAgents(supabase, organizationId, leadsVisiveis),
+    dono: () => withOwnerAgents(supabase, organizationId, leadsDoQuadro),
     acao: async () => {
       const { data: pipelinePadrao } = await supabase
         .from("crm_pipelines")
@@ -686,16 +710,16 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
       return withNextActions(
         supabase,
         organizationId,
-        leadsVisiveis,
+        leadsDoQuadro,
         (pipelinePadrao as { id: string } | null)?.id ?? null,
       );
     },
-    score: () => withScores(supabase, organizationId, leadsVisiveis),
+    score: () => withScores(supabase, organizationId, leadsDoQuadro),
     // Degrada sozinha (devolve os leads sem o campo e loga), como antes.
-    passo: () => withProximosPassos(supabase, organizationId, leadsVisiveis),
-    tarefas: () => withTarefas(supabase, organizationId, leadsVisiveis),
-    conversa: () => withConversas(supabase, organizationId, leadsVisiveis),
-    contato: () => withMarcadoresDoContato(supabase, organizationId, leadsVisiveis),
+    passo: () => withProximosPassos(supabase, organizationId, leadsDoQuadro),
+    tarefas: () => withTarefas(supabase, organizationId, leadsDoQuadro),
+    conversa: () => withConversas(supabase, organizationId, leadsDoQuadro),
+    contato: () => withMarcadoresDoContato(supabase, organizationId, leadsDoQuadro),
   });
   tempos.total = Math.round((performance.now() - inicioDaRota) * 10) / 10;
 
@@ -707,7 +731,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     logger.info("[board] tempos do quadro", {
       requestId,
       pipelineId,
-      leads: leadsVisiveis.length,
+      leads: leadsDoQuadro.length,
       ...tempos,
     });
   }
@@ -727,7 +751,7 @@ export async function GET(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("internal_error", comErro.error, 500, { requestId, headers });
   }
 
-  const leadsEnriquecidos = fundirEnriquecimentos(leadsVisiveis, [
+  const leadsEnriquecidos = fundirEnriquecimentos(leadsDoQuadro, [
     resultados.dono.leads,
     resultados.acao.leads,
     resultados.score.leads,

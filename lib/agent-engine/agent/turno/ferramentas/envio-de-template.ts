@@ -28,11 +28,12 @@ export function criarSendTemplate(
     lgpd: SaidaDosDesvios['lgpd'];
     maxSendsPerTurn: number;
     pararDigitando: () => void;
+    passarComercialParaEquipe: SaidaDosDesvios['passarComercialParaEquipe'];
   },
   estado: EstadoDoTurno,
 ) {
   const { deps, pool, input, tenantId, leadId, clock, runLog, liveJob } = c;
-  const { agentOperation, liveChannel, optedOutThisTurn, lgpd, maxSendsPerTurn, pararDigitando } = r;
+  const { agentOperation, liveChannel, optedOutThisTurn, lgpd, maxSendsPerTurn, pararDigitando, passarComercialParaEquipe } = r;
   return tool({
     ...AGENT_TOOL_DEFS.send_template,
     execute: async ({ template_name, language, values }) => {
@@ -139,6 +140,9 @@ export function criarSendTemplate(
         },
       });
 
+      if (chain.status === 'vetoed' && chain.code === 'commercial_requires_human') {
+        return passarComercialParaEquipe(chain.code);
+      }
       if (chain.status === 'vetoed') {
         return { ok: false, error: { code: chain.code, message: chain.message } };
       }

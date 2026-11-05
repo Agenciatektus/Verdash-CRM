@@ -73,9 +73,10 @@ export function PipelinePageClient({
   funis: Array<{ id: string; name: string }>;
 }) {
   const t = useT();
-  const { data, isLoading, error, pulses, realtimeStatus, seguranca } = useBoard(pipelineId);
   const router = useRouter();
   const searchParams = useSearchParams();
+  // #2995: o negócio de `?lead=` fica no quadro mesmo com o recorte de encerrados.
+  const { data, isLoading, error, pulses, realtimeStatus, seguranca } = useBoard(pipelineId, searchParams.get("lead"));
   const celular = useEhCelular();
   const { user } = useAuth();
   const userId = user?.id ?? "";
