@@ -89,7 +89,7 @@ const REMOCOES_DELIBERADAS: Record<string, { valores: string[]; porque: string }
     valores: ["task_overdue"],
     porque:
       "A 9058 foi escrita na subida 1.81, antes da 0655 (1.90). Na cadeia unida roda depois dela " +
-      "e reconstrói sem `task_overdue`. A 9098 (`integracao_da_subida_1_90`) reafirma a UNIÃO " +
+      "e reconstrói sem `task_overdue`. A 9099 (`integracao_da_subida_1_90`) reafirma a UNIÃO " +
       "(e é a última reconstrução, a que `kind-check-migration-x-baseline` compara com o baseline).",
   },
   "20261021000000_0693_motivo_verificacao_manual.sql::passagens_de_atendimento_motivo_codigo_check": {
@@ -97,7 +97,7 @@ const REMOCOES_DELIBERADAS: Record<string, { valores: string[]; porque: string }
     porque:
       "O ENCONTRO do fork com o upstream v1.90.0: a 0693 (`verificacao_manual`) reconstrói a lista " +
       "que ELE vê, sem os três motivos da cadência (9019, só no fork). Editar a 0693 é proibido " +
-      "(migration do upstream). Forward-fix na 9098, com a UNIÃO literal da lista do baseline.",
+      "(migration do upstream). Forward-fix na 9099, com a UNIÃO literal da lista do baseline.",
   },
   "20261019210000_9055_integracao_da_subida_1_73.sql::agent_inbox_items_kind_check": {
     valores: ["canal_pausado", "cobranca", "email_de_login_trocado", "task_overdue"],
@@ -110,7 +110,7 @@ const REMOCOES_DELIBERADAS: Record<string, { valores: string[]; porque: string }
     valores: ["cobranca", "email_de_login_trocado", "task_overdue"],
     porque:
       "A 9056 foi escrita na subida 1.77, antes da 0601/0614 (1.81) e da 0655 (1.90). Na cadeia " +
-      "unida roda depois delas e reconstrói sem esses. A 9058 e a 9098 reafirmam a UNIÃO.",
+      "unida roda depois delas e reconstrói sem esses. A 9058 e a 9099 reafirmam a UNIÃO.",
   },
   "20261007180001_0589_canal_pausado_na_central.sql::agent_inbox_items_kind_check": {
     valores: ["task_due"],

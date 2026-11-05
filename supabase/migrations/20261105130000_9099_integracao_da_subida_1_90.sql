@@ -1,6 +1,6 @@
--- manifest: 9098 — Tektus: a subida do upstream 1.90 sem um lado apagar o outro. Roda por último e deixa a versão INTEGRADA do que os dois lados redefinem: agent_inbox_items_kind_check com task_overdue (0655) e o vocabulário do fork (9058); passagens_de_atendimento_motivo_codigo_check com verificacao_manual (0693) e os três da cadência (9019); emit_event da 0743 (lead.date_field_due reservado) com ad_conversion.* só do servidor e lead.* só de agent+ (9054); fn_lgpd_cascade_redact_contact da 0657 (rótulo opaco, external_id zerado) com a identidade do Instagram e a transcrição (9023/9058); fn_attendant_metrics da 0754 (mediana, recorte por etiqueta; a de 4 argumentos cai) com os desfechos da época (9053); fn_enfileirar_midia_vencida da 0731 (anexo do negócio) com a miniatura (9033); fn_google_appointment da 0716 (agenda de serviço) com os atendimentos simultâneos (9083); fn_service_inbound da 0764 (grupo carimba o episódio) com o sem-regravação (9094); conversations_select de conjunto da 9027 (a 0726 reinstala a sua); agenda: o índice único do mesmo instante sai de novo (a 0716 o recria) e a capacidade (9083) não barra turma nem bloqueio da agenda de serviço. Idempotente.
+-- manifest: 9099 — Tektus: a subida do upstream 1.90 sem um lado apagar o outro. Roda por último e deixa a versão INTEGRADA do que os dois lados redefinem: agent_inbox_items_kind_check com task_overdue (0655) e o vocabulário do fork (9058); passagens_de_atendimento_motivo_codigo_check com verificacao_manual (0693) e os três da cadência (9019); emit_event da 0743 (lead.date_field_due reservado) com ad_conversion.* só do servidor e lead.* só de agent+ (9054); fn_lgpd_cascade_redact_contact da 0657 (rótulo opaco, external_id zerado) com a identidade do Instagram e a transcrição (9023/9058); fn_attendant_metrics da 0754 (mediana, recorte por etiqueta; a de 4 argumentos cai) com os desfechos da época (9053); fn_enfileirar_midia_vencida da 0731 (anexo do negócio) com a miniatura (9033); fn_google_appointment da 0716 (agenda de serviço) com os atendimentos simultâneos (9083); fn_service_inbound da 0764 (grupo carimba o episódio) com o sem-regravação (9094); conversations_select de conjunto da 9027 (a 0726 reinstala a sua); agenda: o índice único do mesmo instante sai de novo (a 0716 o recria) e a capacidade (9083) não barra turma nem bloqueio da agenda de serviço. Idempotente.
 --
--- 9098: integração da subida do upstream 1.90.
+-- 9099: integração da subida do upstream 1.90.
 --
 -- ## O defeito de ordem (o mesmo da 9055/9056/9058/9059)
 --
@@ -32,7 +32,7 @@
 --
 -- Prova: tests/unit/kind-check-migration-x-baseline.test.ts,
 -- tests/unit/migrations-nao-encolhem-vocabulario.test.ts,
--- tests/invariants/integracao-da-subida-1-90-9098.test.ts.
+-- tests/invariants/integracao-da-subida-1-90-9099.test.ts.
 -- Rollback: reverter o PR; as definições anteriores estão nas migrations citadas.
 
 set local lock_timeout = '3s';
@@ -1501,7 +1501,7 @@ returns trigger language plpgsql security definer set search_path = public as $$
 declare
   cap integer;
 begin
-  -- 9098: compromisso da agenda de serviço (0716) — participante de turma, que divide
+  -- 9099: compromisso da agenda de serviço (0716) — participante de turma, que divide
   -- o profissional no MESMO instante, e bloqueio — tem a guarda própria
   -- (`fn_calendar_service_appointment_guard`); contar aqui recusaria a 2ª pessoa da turma.
   if new.service_occurrence_id is not null or new.service_block then

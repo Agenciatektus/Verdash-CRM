@@ -158,6 +158,9 @@ export function MetaDaConversa({
     Boolean(c?.is_anonymized);
   if (!temAlgo) return null;
 
+  const esperaDaFila = naFila ? esperaCurta(esperaDaConversa(conversation)) : null;
+  const rotuloLongoDaFila = naFila ? waitingLabel(conversation, t, localeDaData) : "";
+
   return (
     // Uma linha só sempre que couber: gap de 4px e etiquetas que encolhem (com
     // reticências) antes de quebrar. Com as pílulas de 22px do protótipo numa
@@ -180,9 +183,13 @@ export function MetaDaConversa({
               "border-transparent",
               CLASSE_DO_TOM[tomDaEspera(esperaDaConversa(conversation))],
             )}
+            title={rotuloLongoDaFila}
+            aria-label={rotuloLongoDaFila}
           >
             <Clock size={12} aria-hidden />
-            {waitingLabel(conversation, t, localeDaData)}
+            {/* Forma curta ("Aguardando 43m"): "Aguardando há 43 minutos" passava da
+                lista de 300px no tablet. O texto longo fica no `title`. */}
+            {esperaDaFila ? `${t("Aguardando")} ${esperaDaFila}` : rotuloLongoDaFila}
           </span>
         </>
       )}

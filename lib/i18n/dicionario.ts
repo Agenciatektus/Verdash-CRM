@@ -13322,6 +13322,10 @@ export const DICIONARIO: Traducoes = {
   "Calendário": { es: "Calendario" },
   "Não foi possível carregar as tarefas.": { es: "No se pudieron cargar las tareas." },
   "Nova tarefa": { es: "Nueva tarea" },
+  "Adicionar tarefa": { es: "Añadir tarea" },
+  "Cria uma tarefa presa a este contato e ao negócio aberto dele.": { es: "Crea una tarea vinculada a este contacto y a su negocio abierto." },
+  "Presa a esta conversa e ao negócio": { es: "Vinculada a esta conversación y al negocio" },
+  "Não foi possível ler o negócio do contato. Tente de novo.": { es: "No se pudo leer el negocio del contacto. Inténtalo de nuevo." },
   "Ninguém": { es: "Nadie" },
   "Membro sem nome": { es: "Miembro sin nombre" },
   "Fora da equipe": { es: "Fuera del equipo" },
@@ -18434,7 +18438,7 @@ export const DICIONARIO: Traducoes = {
   "Pagar agora": { es: "Pagar ahora" },
   "Você recebe este aviso porque administra esta empresa.": { es: "Recibes este aviso porque administras esta empresa." },
   // ─── Cobrança do revendedor — teto de IA (PR 3a) ───
-  "O uso de IA do plano chegou a 80%": { es: "El uso de IA del plan llegó al 80%" },
+  "O uso de IA do plano está perto do limite": { es: "El uso de IA del plan está cerca del límite" },
   "Neste mês a empresa já usou US$ {gasto} de US$ {teto} incluídos no plano. Ao chegar ao limite, as conversas passam para a equipe. Para aumentar, troque de plano em Plano e cobrança.": { es: "Este mes la empresa ya usó US$ {gasto} de US$ {teto} incluidos en el plan. Al llegar al límite, las conversaciones pasan al equipo. Para aumentarlo, cambia de plan en Plan y facturación." },
   // ─── Cobrança do revendedor — menu e limites (PR 3a) ───
   "Plano e cobrança": { es: "Plan y facturación" },

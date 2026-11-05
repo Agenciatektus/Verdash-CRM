@@ -50,6 +50,15 @@
  * o desenho funcionando. A lista fica aqui, vazia: um `Record` vazio continua
  * cobrando as duas direções, e a próxima duplicação temporária tem onde ser
  * declarada sem ninguém precisar reinventar o mecanismo.
+ *
+ * ## A exceção DECLARADA: o teto do PLANO (migration 9098)
+ *
+ * O teto do plano é a cota da chave da INSTALAÇÃO: assinatura GPT e chave própria
+ * da org não entram nela (decisão do Peterson, 05/11/2026). Ele lê
+ * `fn_gasto_de_ia_da_instalacao_do_mes`, a mesma soma com um filtro a mais
+ * (`chave_da_instalacao is not false`). É uma segunda FUNÇÃO no schema, não uma
+ * query inline, e o bloco abaixo cobra que ela seja idêntica nos dois artefatos.
+ * O orçamento da org continua na régua única.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, posix } from "node:path";
@@ -62,6 +71,8 @@ const BASELINE = join(RAIZ, "supabase", "baseline.sql");
 const ORCAMENTO = "lib/agent-engine/edge/llm/orcamento.ts";
 
 const FUNCAO = "fn_gasto_de_ia_do_mes";
+const FUNCAO_DA_INSTALACAO = "fn_gasto_de_ia_da_instalacao_do_mes";
+const MIGRATION_9098 = join(RAIZ, "supabase", "migrations", "20261105120000_9098_teto_de_ia_padrao_por_plano.sql");
 
 const RAIZES_VARRIDAS = ["app", "components", "hooks", "lib", "workers"] as const;
 
@@ -93,8 +104,8 @@ function calculaGastoMensalInline(fonte: string): boolean {
  * vazia, que se compararia como "iguais" entre dois arquivos que perderam a
  * função.
  */
-function definicaoDaFuncao(sql: string): string | null {
-  const inicio = sql.search(new RegExp(`^create\\s+or\\s+replace\\s+function\\s+public\\.${FUNCAO}\\b`, "im"));
+function definicaoDaFuncao(sql: string, funcao: string = FUNCAO): string | null {
+  const inicio = sql.search(new RegExp(`^create\\s+or\\s+replace\\s+function\\s+public\\.${funcao}\\b`, "im"));
   if (inicio === -1) return null;
   const fim = sql.indexOf("$$;", inicio);
   if (fim === -1) return null;
@@ -200,6 +211,39 @@ describe("uma régua só de gasto de IA", () => {
         `${ORCAMENTO} deixou de chamar ${FUNCAO} — o statement do gate voltou a ter conta própria`,
       ).toBeGreaterThan(0);
       expect(calculaGastoMensalInline(fonte)).toBe(false);
+    });
+  });
+
+  describe("a exceção declarada: o teto do plano soma só a chave da instalação (9098)", () => {
+    const m9098 = readFileSync(MIGRATION_9098, "utf8");
+
+    it("a definição é IDÊNTICA na 9098 e no baseline, e é a soma do mês com o filtro da chave", () => {
+      const naMigration = definicaoDaFuncao(m9098, FUNCAO_DA_INSTALACAO);
+      const noBaseline = definicaoDaFuncao(baseline, FUNCAO_DA_INSTALACAO);
+      expect(naMigration).not.toBeNull();
+      expect(normalizar(noBaseline ?? "")).toEqual(normalizar(naMigration ?? ""));
+      // Linha nula (anterior à 9098, ou escritor que não informa) conta.
+      expect(normalizar(naMigration ?? "")).toContain(
+        normalizar(
+          "from public.llm_calls where organization_id = p_org and created_at >= date_trunc('month', now()) and chave_da_instalacao is not false;",
+        ),
+      );
+    });
+
+    it("revogada de public, anon e authenticated nos dois artefatos", () => {
+      for (const texto of [m9098, baseline]) {
+        expect(texto).toMatch(
+          new RegExp(`revoke\\s+execute\\s+on\\s+function\\s+public\\.${FUNCAO_DA_INSTALACAO}\\(uuid\\)\\s*\\n?\\s*from\\s+public,\\s*anon,\\s*authenticated;`, "i"),
+        );
+      }
+    });
+
+    it("o teto do plano lê a régua da instalação; o orçamento da org segue na régua única", () => {
+      const fonte = readFileSync(join(RAIZ, ORCAMENTO), "utf8");
+      const inicio = fonte.indexOf("export const SQL_TETO_DO_PLANO");
+      const tetoDoPlano = fonte.slice(inicio, fonte.indexOf("`;", inicio));
+      expect(tetoDoPlano).toContain(`public.${FUNCAO_DA_INSTALACAO}($1)`);
+      expect(fonte.slice(0, inicio)).toContain(`public.${FUNCAO}($1)`);
     });
   });
 

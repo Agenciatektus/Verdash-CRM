@@ -1,12 +1,12 @@
 # 01 — Foundation Tokens
 
-> **Source of truth:** `app/design/lib/tokens.ts` (`SPACING`, `RADII`, `BORDERS`, `SHADOWS`, `Z_INDEX`, `MOTION`)
+> **Source of truth:** `app/globals.css` (`:root`). O CSS vence; este texto descreve.
 
 Todos os tokens primitivos do DeskcommCRM. Componentes compõem **só** a partir desta camada — nunca digite valores literais (`16px`, `#000`, `300ms`) em CSS de feature.
 
 ## Spacing
 
-Base 4px. Escala não-linear (4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 / 64 / 80). Sem 56, 72 ou 96 — se precisar, repense o layout.
+Base 4px. Escala não-linear (4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 / 64 / 80). Sem 56 nem 72 — se precisar, repense o layout.
 
 | Token | px | Uso típico |
 |-------|----|------------|
@@ -22,23 +22,29 @@ Base 4px. Escala não-linear (4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 / 64 / 80
 | `space-12` | 48 | Margin entre blocos maiores em página de settings |
 | `space-16` | 64 | Margin top/bottom de hero sections |
 | `space-20` | 80 | Padding bottom da última seção de scroll (`.ds-scroll`) |
+| `space-24` / `space-32` | 96 / 128 | Respiro de página inteira (raro) |
 
 **Tailwind:** mapeia direto pro `theme.spacing` (`p-4`, `gap-6`, `mb-12`).
 
 ## Radius
 
-5 stops + uma pill. Cada stop tem prescrição de uso. Não invente valores intermediários.
+Escala base (`--radius-*`) mais raios de forma (o raio cresce com o objeto). Não invente valores intermediários.
 
 | Token | Valor | Use quando |
 |-------|-------|------------|
-| `radius-none` | 0 | Tabelas de dados, cabeçalhos de coluna, qualquer grid denso onde radius distrai |
-| `radius-xs` | 4px | **Default** para controles: botão, input, badge, dropdown menu item |
-| `radius-sm` | 8px | Cards de lista (item de inbox), kanban card, message bubble |
-| `radius-md` | 12px | Containers maiores (panel, side-card), modais menores |
-| `radius-lg` | 16px | Modal full-size, popover grande, sheet |
-| `radius-full` | 9999 | Avatar, pill badge, dot indicator, icon-button circular |
+| `radius-none` | 0 | Tabelas de dados, cabeçalhos de coluna |
+| `radius-sm` | 4px | Badge pequeno, item de dropdown |
+| `radius-md` | 8px | **Default** (`--radius`): cards de lista, kanban card |
+| `radius-lg` | 12px | Painéis, side-card, modal menor |
+| `radius-xl` | 16px | Modal full-size, popover grande, sheet |
+| `radius-full` | 9999 | Avatar, dot, icon-button circular |
+| `radius-pill` | 6px | Pílula/tag |
+| `radius-control` | 9px | Botão |
+| `radius-field` | 10px | Input, select, textarea |
+| `radius-menu` | 14px | Menu, popover |
+| `radius-bubble` | 18px | Balão de mensagem (canto de quem enviou: `radius-bubble-tail`, 6px) |
 
-Regra: **suba de radius só quando o componente for hierarquicamente "mais alto"**. Card (8) > Modal (16). Button (4) sempre menor que Card que o contém.
+Regra: **suba de raio só quando o componente for hierarquicamente "mais alto"**. Card (8) > Modal (16); o controle dentro de um card não ganha raio maior que o do card.
 
 ## Border
 
@@ -46,24 +52,26 @@ Hairline foi removido na densidade Aerada (deixa o layout sem definição). Mant
 
 | Token | Valor | Uso |
 |-------|-------|-----|
-| `border-thin` | `1px solid var(--ds-border)` | **Default** universal — cards, inputs, dividers, separadores |
-| `border-focus` | `2px solid var(--ds-accent)` | Focus ring (a11y). **Sempre 2px**, com `outline-offset: 2px` |
+| `border-thin` | `1px solid var(--color-border)` | **Default** universal — cards, inputs, dividers, separadores |
+| `border-focus` | `2px solid var(--color-accent)` | Focus ring (a11y). **Sempre 2px**, com `outline-offset: 2px` |
 
 Borda 4px ou maior é proibida fora de elementos decorativos isolados (não usados no produto).
 
 ## Shadow
 
-Sombras em **color-mix com a cor de texto neutra (`rgba(20, 18, 14, X)`)**, não preto puro. Isso preserva o tom warm da paleta.
+Sombras em `rgba(16, 24, 40, X)` (azul-acinzentado), não preto puro. No escuro são pretas e mais fortes, com uma linha de 2 a 4px embaixo.
 
-| Token | Valor | Uso |
-|-------|-------|-----|
-| `shadow-none` | `none` | **Default**. Use whitespace + border. 90% dos componentes ficam aqui. |
-| `shadow-sm` | `0 1px 2px 0 rgba(20,18,14,0.04)` | Hover discreto em cards interativos |
-| `shadow-md` | `0 4px 12px -2px rgba(20,18,14,0.06), 0 2px 4px -1px rgba(20,18,14,0.04)` | Popover, dropdown, toast |
-| `shadow-lg` | `0 12px 32px -6px rgba(20,18,14,0.10), 0 4px 12px -2px rgba(20,18,14,0.06)` | Modal, sheet |
-| `shadow-inset` | `inset 0 1px 0 0 rgba(255,255,255,0.04)` | Highlight superior em superfícies dark (subtileza) |
+| Token | Valor (claro) | Uso |
+|-------|---------------|-----|
+| `shadow-xs` | `0 1px 2px 0 rgba(16,24,40,0.05)` | Controle em repouso |
+| `shadow-sm` | `0 1px 2px 0 rgba(16,24,40,0.06), 0 1px 1px 0 rgba(16,24,40,0.04)` | Hover discreto em card interativo |
+| `shadow-md` | `0 4px 12px -2px rgba(16,24,40,0.08), 0 2px 4px -1px rgba(16,24,40,0.05)` | Popover, dropdown, toast |
+| `shadow-lg` | `0 12px 32px -8px rgba(16,24,40,0.22), 0 2px 6px 0 rgba(16,24,40,0.08)` | Modal, sheet |
+| `shadow-xl` | `0 24px 48px -12px rgba(16,24,40,0.24), 0 8px 16px -4px rgba(16,24,40,0.10)` | Overlay de maior elevação |
+| `shadow-pop` | `0 12px 32px -8px rgba(17,22,31,0.22), 0 2px 6px 0 rgba(17,22,31,0.08)` | Menus e popovers do DS v2 |
+| `shadow-bubble` | `0 1px 1px 0 rgba(17,22,31,0.06)` | Balão (escuro: nenhuma) |
 
-**Anti-pattern:** `0 4px 24px rgba(0,0,0,0.2)`. Preto puro com saturação alta = visual genérico.
+Padrão: sem sombra, use whitespace + borda. **Anti-pattern:** `0 4px 24px rgba(0,0,0,0.2)`.
 
 ## Z-index
 
@@ -74,7 +82,7 @@ Sombras em **color-mix com a cor de texto neutra (`rgba(20, 18, 14, X)`)**, não
 | `z-base` | 0 | Conteúdo |
 | `z-raised` | 10 | Sticky headers, badges flutuantes sobre lista |
 | `z-dropdown` | 20 | Select, popover, menu contextual |
-| `z-overlay` | 30 | Tooltip |
+| `z-sticky` | 30 | Cabeçalho fixo |
 | `z-modal` | 40 | Dialog, sheet, drawer |
 | `z-toast` | 50 | Sonner, system messages globais |
 
@@ -97,15 +105,15 @@ Dois caminhos, dependendo do contexto:
 
 ### 1. CSS variables (preferido para showcase e estilos globais)
 
-Definidas em `:root` por `app/design/lib/variant-context.tsx` ou `app/globals.css`. Lidas em CSS comum:
+Definidas em `:root` e `[data-theme="dark"]` de `app/globals.css`. Lidas em CSS comum:
 
 ```css
 .my-card {
   padding: var(--space-5);
-  border-radius: var(--radius-sm);
-  border: var(--border-thin);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
-  transition: background var(--motion-fast);
+  transition: background var(--duration-fast);
 }
 ```
 
@@ -117,7 +125,7 @@ mais — a ponte token → utilitário vive no próprio CSS, logo abaixo dos blo
 `:root` / `[data-theme]`.)
 
 ```tsx
-<div className="p-5 rounded-sm border border-border shadow-sm transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]">
+<div className="p-5 rounded-md border border-border shadow-sm transition-colors duration-150 ease-[cubic-bezier(0.2,0,0,1)]">
 ```
 
 **Regra:** se você precisa de valor que não existe na escala, primeiro pergunte se a escala é o problema. Adicionar token novo é OK quando justificado em PR; usar valor literal nunca é.

@@ -50,6 +50,8 @@ export interface ChamadaDeIa {
    */
   cost_cents: number | null;
   latency_ms: number;
+  /** A chamada saiu na chave da instalação (teto do plano, migration 9098). Ausente = nulo = conta no teto. */
+  chave_da_instalacao?: boolean | null;
   /** Presente = a chamada falhou. `status` HTTP opcional, lido por `codigoDoErro`. */
   erro?: { message: string; status?: number } | null;
 }
@@ -77,6 +79,7 @@ export async function registrarChamadaDeIa(admin: Admin, chamada: ChamadaDeIa): 
       status: erro ? "erro" : "ok",
       error_code: erro ? codigoDoErro({ ...erro }) : null,
       error_message: erro ? erro.message.slice(0, 500) : null,
+      chave_da_instalacao: chamada.chave_da_instalacao ?? null,
     });
     if (error) {
       logger.warn("[llm-calls] insert failed", {

@@ -3,9 +3,9 @@
 > **Versão:** v1.0 (lockada em 2026-04-28)
 > **Status:** Ativa
 > **Direção:** Soft-tech / calmo, anti-genérico
-> **Stack visual:** Sage + Atkinson Hyperlegible + IBM Plex Mono + Aerada + Phosphor (duotone)
+> **Stack visual:** Verdash (verde no claro, azul no escuro) + Atkinson Hyperlegible + IBM Plex Mono + Aerada + Phosphor (duotone)
 
-Esta pasta é a **fonte canônica** da linguagem visual do DeskcommCRM. Toda decisão de UI deve consultar estes documentos antes de implementação. Quando houver conflito entre código e doc, **a doc vence** — ajuste o código.
+Esta pasta é a **fonte canônica** da linguagem visual do DeskcommCRM. Toda decisão de UI deve consultar estes documentos antes de implementação. Quando houver conflito entre código e doc, **`app/globals.css` vence; o doc descreve** — ajuste o doc.
 
 ## Índice
 
@@ -13,7 +13,7 @@ Esta pasta é a **fonte canônica** da linguagem visual do DeskcommCRM. Toda dec
 |---|-----------|-------------|
 | 00 | [Overview](./00-overview.md) | Filosofia, princípios, referências |
 | 01 | [Foundation Tokens](./01-foundation-tokens.md) | Spacing, radius, shadow, motion, z-index |
-| 02 | [Paleta Sage](./02-palette-sage.md) | 22 stops com hex (light + dark), estados, contraste |
+| 02 | [Paleta Verdash](./02-palette-sage.md) | Rampas, superfícies e estados (claro + escuro), contraste |
 | 03 | [Tipografia](./03-typography.md) | Atkinson Hyperlegible, escala, IBM Plex Mono |
 | 04 | [Densidade Aerada](./04-density-aerada.md) | Row 56 / gap 24, quando overrider |
 | 05 | [Iconografia Phosphor](./05-iconography-phosphor.md) | Duotone, mapeamento por feature |
@@ -26,8 +26,8 @@ Esta pasta é a **fonte canônica** da linguagem visual do DeskcommCRM. Toda dec
 
 | Decisão | Onde está canonizada | Quando consultar |
 |---------|----------------------|------------------|
-| Cor (hex, stop, estado) | `02-palette-sage.md` + `app/design/lib/tokens.ts` | Sempre que precisar referenciar uma cor |
-| Spacing / radius / shadow | `01-foundation-tokens.md` + `app/design/lib/tokens.ts` | Toda vez que escrever CSS de layout |
+| Cor (hex, stop, estado) | `02-palette-sage.md` + `app/globals.css` | Sempre que precisar referenciar uma cor |
+| Spacing / radius / shadow | `01-foundation-tokens.md` + `app/globals.css` | Toda vez que escrever CSS de layout |
 | Tamanho/peso de texto | `03-typography.md` | Ao criar headers, body, dados, captions |
 | Altura de linha de inbox / kanban / tabela | `04-density-aerada.md` | Ao desenhar listas e grids |
 | Qual ícone usar para feature X | `05-iconography-phosphor.md` | Ao adicionar novo ícone |
@@ -38,12 +38,13 @@ Esta pasta é a **fonte canônica** da linguagem visual do DeskcommCRM. Toda dec
 
 ## Source of truth (código)
 
-- `app/design/lib/tokens.ts` — tokens em TypeScript (cor, spacing, radius, shadow, motion)
+- `app/globals.css` — tokens de produção (`:root` claro, `[data-theme="dark"]`); **vence o doc**
+- `app/design/lib/tokens.ts` — só o laboratório `/design` (paletas comparadas, inclusive a Sage antiga); não é o que o produto aplica
 - `app/design/lib/fonts.ts` — config das fontes via `next/font/google`
 - `app/design/showcase.css` — CSS vars `.ds-*` canônicas
 - `app/design/` — showcase navegável em `/design`
 
 ## Versionamento
 
-- **v1.0** (2026-04-28) — paleta Sage, tipografia Atkinson, densidade Aerada, iconografia Phosphor lockados.
+- **v1.0** (2026-04-28) — paleta Sage (substituída pela Verdash no DS v2), tipografia Atkinson, densidade Aerada, iconografia Phosphor lockados.
 - Mudanças de versão maior exigem PR + revisão do design owner. Patches (ajuste de hex em ±2 luminosidade, novos ícones, novos exemplos de microcopy) podem ir direto.

@@ -27,9 +27,9 @@ identidade). Acompanham `tests/shell/colisao-de-migration.test.sh` e `tests/unit
 na faixa 9xxx). O passo de árvore do `ci.yml` ainda reprova NNNN repetido: ajustar junto com
 `tests/unit/main-sem-migration-duplicada.test.ts` na etapa em que o upstream repetir um 9xxx nosso (v1.95).
 
-### Objetos redefinidos pelos dois lados → migration `9098`
+### Objetos redefinidos pelos dois lados → migration `9099`
 
-`20261105100000_9098_integracao_da_subida_1_90.sql` roda por último e deixa a versão INTEGRADA:
+`20261105130000_9099_integracao_da_subida_1_90.sql` roda por último e deixa a versão INTEGRADA:
 
 | objeto | upstream | fork | versão final |
 |---|---|---|---|
@@ -45,24 +45,24 @@ na faixa 9xxx). O passo de árvore do `ci.yml` ainda reprova NNNN repetido: ajus
 | agenda | 0716 recria o único do mesmo instante | 9083 (capacidade) | o índice cai de novo; `fn_agenda_respeita_capacidade` ignora turma e bloqueio |
 
 `channel_sessions_tenant_*` (0752 × 9028/9055) não entram: definições idênticas.
-Prova: `tests/invariants/integracao-da-subida-1-90-9098.test.ts` (precisa de banco).
+Prova: `tests/invariants/integracao-da-subida-1-90-9099.test.ts` (precisa de banco).
 
 ### baseline.sql
 
 Remontado como na 1.85: o que vinha antes da 9005; apêndices novos do upstream (0689..0766) antes da VARREDURA; os
-nossos 9005..9097; bloco "SUBIDA 1.90 (migration 9098)" só com funções; VARREDURA e pós-varredura; apêndices do upstream
+nossos 9005..9097; bloco "SUBIDA 1.90 (migration 9099)" só com funções; VARREDURA e pós-varredura; apêndices do upstream
 no fim; apêndice Tektus no FIM. As CHECKs ficam com a união no bloco único de cada constraint. Cortados dos apêndices do
 upstream a `conversations_select` da 0726 e o índice `calendar_appointments_sem_duplicata_idx` da 0716
 (`baseline-nao-constroi-o-que-derruba`).
 
 ### Antes do deploy
 
-- **Conferir duplicata na agenda** (senão a 0716 falha no `create unique index` e o `db push` para antes da 9098):
+- **Conferir duplicata na agenda** (senão a 0716 falha no `create unique index` e o `db push` para antes da 9099):
   `select organization_id, owner_user_id, starts_at, count(*) from calendar_appointments where status in ('pending','confirmed') and owner_user_id is not null and not service_block and coalesce(service_booking_mode,'individual')='individual' group by 1,2,3 having count(*)>1;`
 - Índices sem `concurrently` em tabela grande: `idx_crm_leads_org_pipeline_position_id` (0739, o mais pesado),
   `idx_contacts_name_lookup_pendente` (0593), `idx_contacts_org_fornecedor` (0763). Criar `concurrently` antes.
 - Backfills da 0764 (`UPDATE conversations` e `UPDATE messages` de grupo): fora do pico, com `lock_timeout`.
-- Tudo num `db push` só: entre as 47 e a 9098 a produção fica com as versões do upstream.
+- Tudo num `db push` só: entre as 47 e a 9099 a produção fica com as versões do upstream.
 - Depois: `select indexrelid::regclass from pg_index where not indisvalid;` vazio.
 
 ## Decisões por área
@@ -96,7 +96,7 @@ Compose: healthcheck do app a cada 10 s com 15 tentativas.
 
 ## Pontos para o @Cassio_SecRev
 
-- 9098 inteira (tabela acima), em especial `emit_event` e a `_write`/policies que mexem em permissão.
+- 9099 inteira (tabela acima), em especial `emit_event` e a `_write`/policies que mexem em permissão.
 - Contagem de turnos da cadência mudou de lugar (`roteamento.ts` → `entrada-do-agente.ts`, depois da janela): o turno
   que estoura o teto grava a decisão do roteador e o destino do card antes de parar.
 - Assumir/transferir rodando as duas lógicas: a auditoria pode registrar `ja_tinha_responsavel` e o nosso passo trocar o dono.

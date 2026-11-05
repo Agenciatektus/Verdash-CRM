@@ -1213,8 +1213,8 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
     `insert into llm_calls
        (organization_id, contact_id, job_id, variant_id, purpose, provider, model,
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_cents, latency_ms,
-        status, origem_da_escolha, agent_id)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ok', $14, $15)
+        status, origem_da_escolha, agent_id, chave_da_instalacao)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ok', $14, $15, $16)
      returning id`,
     [
       input.tenantId,
@@ -1232,6 +1232,8 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       latencyMs,
       origem,
       input.agentId ?? null,
+      // Teto do plano soma só a chave da instalação (fn_gasto_de_ia_da_instalacao_do_mes, migration 9098).
+      config.origemDaChave === 'chave_da_instalacao',
     ],
   );
 

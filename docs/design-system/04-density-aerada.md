@@ -1,19 +1,15 @@
 # 04 — Densidade Aerada
 
-> **Source of truth:** `app/design/lib/tokens.ts` → `DENSITIES.aerada`
+> **Source of truth:** `app/globals.css` (`--density-*`, `--row-py`, `@custom-variant mb`). O CSS vence.
 
 ## Tokens
 
-```ts
-aerada: { rowH: "56px", gap: "24px", padX: "20px", padY: "16px" }
-```
-
 | Token | Valor | Onde aplica |
 |-------|-------|-------------|
-| `--density-row-h` | 56px | `min-height` de item de lista (inbox row, kanban list) |
+| `--density-row` | 56px | `min-height` de item de lista (inbox row, kanban list) |
 | `--density-gap` | 24px | `gap` entre items em lista (`.ds-list`) |
-| `--density-pad-x` | 20px | Padding horizontal interno de row |
-| `--density-pad-y` | 16px | Padding vertical interno de row |
+| `--density-px` | 20px | Padding horizontal interno de row |
+| `--density-py` | 16px | Padding vertical interno de row |
 
 CSS vars são consumidas por componentes de lista, kanban e cards de inbox. Componentes de form (input, button) **não** dependem de densidade — têm altura fixa (36px).
 
@@ -83,23 +79,27 @@ Aerada nos campos:
 
 ❌ **Não é desperdício.** Whitespace está calibrado pra hierarquia. Adicionar mais não melhora.
 
-## Mobile e tablet
+## Breakpoints e layout (DS v2)
 
-- **Tablet (≥ 768px):** Aerada se mantém integral. Row 56 é confortável em touch.
-- **Phone (< 768px):** Aerada vira **touch-target compliant**:
-  - Row: 56px (mantém — já é compliant 44px+)
-  - Gap: 12px (reduz de 24, que vira waste em vertical pequena)
-  - Padding-x: 16px (reduz de 20)
-  - Padding-y: 14px (reduz de 16)
+O corte do celular é **760px** (`@custom-variant mb`: `max-width: 759px`), não o `md` de 768 do Tailwind. Abaixo de 760 vale o app de celular (`mb:`, `components/mobile/`); de 760 para cima, tablet e desktop (`largo:`). `tests/unit/paridade-mobile.test.ts` confere o corte. Referência visual: canvas "CRM Inbox v2" (https://claude.ai/artifact/5ietsYc7JmwqE8KjoETHJ4).
 
-DeskcommCRM v1.0 prioriza desktop/tablet. Phone é "view-only mode" (atendente não opera plenamente em phone).
+| Faixa | Layout |
+|-------|--------|
+| ≥ 1280px | Três colunas: navegação, lista, conversa com a coluna do lead |
+| 1024–1279px | A coluna do lead vira gaveta |
+| 760–1023px | Só a 1ª coluna da navegação |
+| < 760px | Uma coluna (app de celular) |
+
+Navegação em 2 colunas: 72px (trilho) + 232px (painel). Topo: 56px.
+
+No celular a densidade se ajusta: gap 12px, padding-x 16px, padding-y 14px; alvo de toque mínimo 44px (`--mb-alvo`). Medidas do celular em `--mb-*`.
 
 ## Como consumir
 
 ```css
 .ds-list-item {
-  min-height: var(--density-row-h);           /* 56px */
-  padding: var(--density-pad-y) var(--density-pad-x);  /* 16px 20px */
+  min-height: var(--density-row);           /* 56px */
+  padding: var(--density-py) var(--density-px);  /* 16px 20px */
 }
 .ds-list { gap: var(--density-gap); }         /* 24px */
 ```
@@ -113,5 +113,5 @@ DeskcommCRM v1.0 prioriza desktop/tablet. Phone é "view-only mode" (atendente n
 Para overrider em contexto específico (tabela densa):
 
 ```tsx
-<table className="density-table">  {/* sobrescreve --density-row-h: 44px */}
+<table className="density-table">  {/* sobrescreve --density-row: 44px */}
 ```

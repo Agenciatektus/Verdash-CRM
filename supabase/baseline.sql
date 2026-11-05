@@ -69256,9 +69256,9 @@ create table if not exists public.ia_plataforma_alertas (
 alter table public.ia_plataforma_alertas enable row level security;
 revoke all on table public.ia_plataforma_alertas from public, anon, authenticated;
 
--- ---- SUBIDA 1.90 (migration 9098): as funções que os dois lados redefinem ----
--- Mesmo corpo da migration 9098, ANTES da VARREDURA anon (cria função). As duas
--- CHECKs da 9098 (agent_inbox_items_kind_check e passagens_de_atendimento_motivo_codigo_check)
+-- ---- SUBIDA 1.90 (migration 9099): as funções que os dois lados redefinem ----
+-- Mesmo corpo da migration 9099, ANTES da VARREDURA anon (cria função). As duas
+-- CHECKs da 9099 (agent_inbox_items_kind_check e passagens_de_atendimento_motivo_codigo_check)
 -- não entram aqui: a união está no bloco ÚNICO de cada uma (uma constraint, um bloco).
 -- A policy `conversations_select` final é a do bloco da 9027; o índice do mesmo
 -- instante sai no bloco da 9083 (o bloco da 0716 já não o cria).
@@ -70641,7 +70641,7 @@ returns trigger language plpgsql security definer set search_path = public as $$
 declare
   cap integer;
 begin
-  -- 9098: compromisso da agenda de serviço (0716) — participante de turma, que divide
+  -- 9099: compromisso da agenda de serviço (0716) — participante de turma, que divide
   -- o profissional no MESMO instante, e bloqueio — tem a guarda própria
   -- (`fn_calendar_service_appointment_guard`); contar aqui recusaria a 2ª pessoa da turma.
   if new.service_occurrence_id is not null or new.service_block then
@@ -70669,6 +70669,45 @@ $$;
 revoke all on function public.fn_agenda_respeita_capacidade() from public, anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ---- teto de IA do plano: régua da chave da instalação e aviso por plano (migration 9098) ----
+-- Mesmo schema da migration 9098, sem os backfills: o baseline reaplica a cada update e eles recolocariam
+-- teto em plano que o admin ajustou depois. Fica ANTES da VARREDURA anon porque cria funcao.
+
+alter table public.llm_calls
+  add column if not exists chave_da_instalacao boolean;
+
+comment on column public.llm_calls.chave_da_instalacao is
+  'true = a chamada saiu na chave de IA da instalação (a plataforma pagou); false = credencial ou assinatura da org. Nulo = linha anterior à 9098 ou escritor que não informa, e CONTA no teto do plano (fn_gasto_de_ia_da_instalacao_do_mes). Migration 9098.';
+
+-- A régua do teto do PLANO. A do orçamento da org continua fn_gasto_de_ia_do_mes (todo gasto).
+create or replace function public.fn_gasto_de_ia_da_instalacao_do_mes(p_org uuid)
+returns numeric
+  language sql
+  stable
+  security invoker
+  set search_path to 'public', 'pg_temp'
+as $$
+  select coalesce(sum(cost_cents), 0)::numeric
+    from public.llm_calls
+   where organization_id = p_org
+     and created_at >= date_trunc('month', now())
+     and chave_da_instalacao is not false;
+$$;
+
+comment on function public.fn_gasto_de_ia_da_instalacao_do_mes(uuid) is
+  'Gasto de IA do mês da organização pago pela chave da INSTALAÇÃO, em centavos de dólar: a régua do teto do plano (SQL_TETO_DO_PLANO em lib/agent-engine/edge/llm/orcamento.ts e o aviso em lib/cobranca/rodada.ts). Linha com chave_da_instalacao nula conta (antiga ou escritor que não informa). security invoker pelo mesmo motivo de fn_gasto_de_ia_do_mes. Migration 9098.';
+
+revoke execute on function public.fn_gasto_de_ia_da_instalacao_do_mes(uuid)
+  from public, anon, authenticated;
+grant  execute on function public.fn_gasto_de_ia_da_instalacao_do_mes(uuid)
+  to service_role;
+
+alter table public.cobranca_planos
+  add column if not exists aviso_ia_usd_cents integer check (aviso_ia_usd_cents > 0);
+
+comment on column public.cobranca_planos.aviso_ia_usd_cents is
+  'Gasto de IA do mês (centavos de dólar, régua de fn_gasto_de_ia_da_instalacao_do_mes) em que a empresa recebe o aviso do teto do plano. Nulo ou >= teto_ia_usd_cents = aviso em 80% do teto (lib/cobranca/rodada.ts). Migration 9098.';
 
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --

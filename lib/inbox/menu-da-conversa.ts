@@ -25,6 +25,8 @@ export interface RegrasDoMenu {
   lembrar: boolean;
   etiquetas: boolean;
   funil: boolean;
+  /** Adicionar tarefa presa ao contato e ao negócio da conversa. */
+  tarefa: boolean;
   fechar: boolean;
   reabrir: boolean;
   arquivar: boolean;
@@ -89,6 +91,7 @@ export function regrasDoMenu({
     lembrar: escreve && !encerrada,
     etiquetas: escreve,
     funil: escreve && !!c?.id,
+    tarefa: escreve && !!c?.id,
     fechar: escreve && !encerrada,
     reabrir: escreve && encerrada,
     arquivar: escreve && status !== "archived",

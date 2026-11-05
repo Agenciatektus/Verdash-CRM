@@ -61,7 +61,7 @@ export async function conversaEmLacoComRobo(
       // O cron de devolução automática ignora conversa com este motivo (`avaliarDevolucao`), senão devolveria à IA e o laço recomeçaria.
       `update conversations set bot_silenced_until = 'infinity', last_handoff_reason = $3
         where organization_id = $1 and id = $2`,
-      [input.organizationId, input.conversationId, `${MOTIVO_LACO_PREFIXO} (${motivo === "volume" ? "volume" : "repetição"})`],
+      [input.organizationId, input.conversationId, `${MOTIVO_LACO_PREFIXO} (${motivo === "volume" ? "volume" : motivo === "ura" ? "URA" : "repetição"})`],
     );
   } catch (err) {
     log.warn("[laco-com-robo] silenciar falhou", {

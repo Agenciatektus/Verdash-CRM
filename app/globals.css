@@ -95,8 +95,9 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   DeskcommCRM — Design System tokens (Sage palette · density Aerada)
-   Source of truth: /app/design/lib/tokens.ts (PALETTES.sage)
+   DeskcommCRM — Design System tokens (Verdash · density Aerada)
+   Source of truth: este arquivo (docs/design-system descreve; aqui vence).
+   /app/design/lib/tokens.ts é só o laboratório /design.
    Light + dark drawn separately (NOT inverted).
    ───────────────────────────────────────────────────────────────────────── */
 

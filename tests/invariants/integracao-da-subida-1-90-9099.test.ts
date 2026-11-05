@@ -1,11 +1,11 @@
 /**
- * 9098 — a subida do upstream 1.90 sem um lado apagar o outro.
+ * 9099 — a subida do upstream 1.90 sem um lado apagar o outro.
  *
  * Cada objeto que as 47 migrations novas do upstream e as nossas 9xxx redefinem
  * tem de terminar com as DUAS marcas: a do upstream e a do fork. Mede-se no
  * catálogo (o que o banco aplicou), não no texto da migration.
  *
- * Previsão escrita antes de rodar (sabotagem): sem a 9098 a cadeia termina com a
+ * Previsão escrita antes de rodar (sabotagem): sem a 9099 a cadeia termina com a
  * versão da 0743/0657/0754/0731/0716/0764 (perde a marca do fork) ou com a da
  * 9058/9083/9094 (perde a do upstream), e o `it` do catálogo acusa o objeto; a
  * policy da 0726 não cita `fn_escopo_orgs`; a 9058 reconstrói o kind sem
@@ -30,7 +30,7 @@ const MARCAS: Array<[string, string, string]> = [
   ["fn_agenda_respeita_capacidade", "service_occurrence_id", "simultaneous_appointments"],
 ];
 
-describe("9098 — integração da subida 1.90", () => {
+describe("9099 — integração da subida 1.90", () => {
   it("catálogo: cada função redefinida pelos dois lados tem as duas marcas", () => {
     const faltando: string[] = [];
     for (const [fn, doUpstream, doFork] of MARCAS) {

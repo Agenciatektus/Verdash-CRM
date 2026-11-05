@@ -40,6 +40,11 @@ export interface ResumoDaRodada {
 export const LIMITE_DA_RECONCILIACAO = 50;
 const LIMIAR_DO_AVISO_DE_IA = 0.8;
 
+/** O aviso gravado no plano (migration 9098) vale se ficar abaixo do teto; senão, 80% do teto. */
+export function limiarDoAviso(teto: number, aviso: number | null): number {
+  return aviso !== null && aviso > 0 && aviso < teto ? aviso : teto * LIMIAR_DO_AVISO_DE_IA;
+}
+
 interface Reconciliavel {
   organization_id: string;
   relida_em: string | null;
@@ -113,10 +118,15 @@ export async function rodadaDaCobranca(admin: SupabaseClient, deps: Dependencias
 async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
   const { data: planos, error } = await admin
     .from("cobranca_planos")
-    .select("id, teto_ia_usd_cents")
+    .select("id, teto_ia_usd_cents, aviso_ia_usd_cents")
     .not("teto_ia_usd_cents", "is", null);
   if (error) throw new Error(`cobranca: planos ilegíveis (${error.code ?? "sem_codigo"})`);
-  const tetoDoPlano = new Map(((planos ?? []) as Array<{ id: string; teto_ia_usd_cents: number }>).map((p) => [p.id, p.teto_ia_usd_cents]));
+  const tetoDoPlano = new Map(
+    ((planos ?? []) as Array<{ id: string; teto_ia_usd_cents: number; aviso_ia_usd_cents: number | null }>).map((p) => [
+      p.id,
+      { teto: p.teto_ia_usd_cents, aviso: limiarDoAviso(p.teto_ia_usd_cents, p.aviso_ia_usd_cents) },
+    ]),
+  );
   if (tetoDoPlano.size === 0) return 0;
 
   const { data: linhas, error: erroDasLinhas } = await admin
@@ -141,20 +151,21 @@ async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
   let avisos = 0;
   for (const { organization_id: org, plano_id: plano } of comTeto) {
     const idioma = idiomaDe.get(org);
-    const teto = tetoDoPlano.get(plano);
-    if (idioma === undefined || teto === undefined) continue;
-    const { data: gastoLido, error: erroDoGasto } = await admin.rpc("fn_gasto_de_ia_do_mes", { p_org: org });
+    const doPlano = tetoDoPlano.get(plano);
+    if (idioma === undefined || doPlano === undefined) continue;
+    const { teto, aviso } = doPlano;
+    const { data: gastoLido, error: erroDoGasto } = await admin.rpc("fn_gasto_de_ia_da_instalacao_do_mes", { p_org: org });
     if (erroDoGasto) {
       logger.warn("cobranca.gasto_de_ia_ilegivel", { organization_id: org, codigo: erroDoGasto.code ?? null });
       continue;
     }
     const gasto = Number(gastoLido ?? 0);
-    if (gasto < teto * LIMIAR_DO_AVISO_DE_IA || gasto >= teto) continue;
+    if (gasto < aviso || gasto >= teto) continue;
     const t = (s: string) => traduzir(s, idioma);
     const usd = (centavos: number) => (centavos / 100).toFixed(2);
     const { data: ganhou, error: erroDoAviso } = await admin.rpc("fn_cobranca_avisar_teto_de_ia", {
       p_org: org,
-      p_titulo: t("O uso de IA do plano chegou a 80%"),
+      p_titulo: t("O uso de IA do plano está perto do limite"),
       p_corpo: t(
         "Neste mês a empresa já usou US$ {gasto} de US$ {teto} incluídos no plano. Ao chegar ao limite, as conversas passam para a equipe. Para aumentar, troque de plano em Plano e cobrança.",
       )
