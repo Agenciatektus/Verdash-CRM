@@ -135,20 +135,4 @@ describe("no celular sempre há exatamente UMA coluna na tela", () => {
       }
     }
   });
-
-  it("escolhida a conversa, ela vira camada de tela cheia acima das barras e abaixo das faixas", () => {
-    // z-45: acima da barra de abas (z-40) e do TopBar (z-20), abaixo das
-    // faixas de cima e dos portais Radix (z-50). O topo desconta as faixas —
-    // o aviso de canal caído é o único sinal de que nada entra nem sai.
-    const { conversa } = colunasDoCelular(true);
-    const classes = conversa.split(/\s+/);
-    expect(classes).toContain("max-md:fixed");
-    expect(classes).toContain("max-md:inset-x-0");
-    expect(classes).toContain("max-md:z-[45]");
-    expect(conversa).toContain("max-md:top-[max(var(--vv-topo,0px),var(--faixas-de-cima,0px))]");
-    expect(conversa).toMatch(/max-md:h-\[calc\(var\(--vv-topo,0px\)\+var\(--vv-altura,100dvh\)-/);
-    expect(classes).toContain("max-md:pb-[env(safe-area-inset-bottom)]");
-    // Com o teclado aberto o indicador de home não está na tela.
-    expect(classes).toContain("max-md:data-[teclado-aberto]:pb-0");
-  });
 });

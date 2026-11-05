@@ -115,7 +115,8 @@ export function AudioPlayer({ messageId, src, srcReserva, mime }: Props) {
   // nunca em Cache Storage nem IndexedDB (D4 da ADR-0006).
   const [erroLigouConversao, setErroLigouConversao] = useState(false);
   const blobRef = useRef<string | null>(null);
-  const podeConverter = convertivel(mime);
+  // Nota interna (src próprio de /notes/) não passa pela rota de conversão das mensagens.
+  const podeConverter = convertivel(mime) && !src?.includes("/notes/");
   // O que o aparelho responde para este mime. `null` no servidor e na
   // hidratação: ali ninguém sabe o que o aparelho toca, e o `<audio>` nasce SEM
   // src. Com src no primeiro commit, o WebKit já baixa o ogg, falha e guarda o

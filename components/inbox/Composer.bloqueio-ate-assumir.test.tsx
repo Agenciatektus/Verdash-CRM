@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { composerBloqueadoAteAssumir } from "@/lib/inbox/bloqueio-ate-assumir";
 
@@ -119,12 +120,15 @@ function renderComposer(entrada: {
     donoDaConversa: entrada.donoDaConversa,
     atendenteId: ATENDENTE,
   });
+  // A sugestão do fork (useSugestaoDeResposta) lê pelo react-query.
   const vista = render(
-    <Composer
-      conversationId="conv-1"
-      contactName="Rafael Melgaço"
-      aguardandoAssumir={aguardandoAssumir}
-    />,
+    <QueryClientProvider client={new QueryClient()}>
+      <Composer
+        conversationId="conv-1"
+        contactName="Rafael Melgaço"
+        aguardandoAssumir={aguardandoAssumir}
+      />
+    </QueryClientProvider>,
   );
   return { ...vista, aguardandoAssumir };
 }

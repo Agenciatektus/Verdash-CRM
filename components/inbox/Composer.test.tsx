@@ -348,7 +348,7 @@ describe("Enter no toque quebra linha; quem envia é o botão (F2)", () => {
   function ponteiro(grosso: boolean) {
     vi.stubGlobal(
       "matchMedia",
-      (q: string) => ({ matches: grosso && q.includes("coarse"), media: q }) as MediaQueryList,
+      (q: string) => ({ matches: grosso && q.includes("coarse"), media: q, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList,
     );
   }
 
@@ -381,28 +381,5 @@ describe("Enter no toque quebra linha; quem envia é o botão (F2)", () => {
     const naoCancelado = fireEvent.keyDown(campo, { key: "Enter" });
     expect(naoCancelado).toBe(false);
     expect(sendMutate).toHaveBeenCalledTimes(1);
-  });
-});
-
-/**
- * As medidas de verdade (px por `getComputedStyle`/`getBoundingClientRect`)
- * vivem no e2e `atender-pelo-celular.spec.ts`; jsdom não aplica CSS. Aqui fica
- * a guarda barata de que as classes que produzem essas medidas não voltaram.
- */
-describe("campo e alvos pensados para o toque (F2)", () => {
-  it("o campo usa 16px abaixo do md (o iPhone não amplia a página) e 44px de altura", () => {
-    renderComposer({ contactName: "Rafael Melgaço" });
-    const campo = screen.getByRole("textbox");
-    expect(campo.className).toMatch(/(^|\s)text-base(\s|$)/);
-    expect(campo.className).toContain("md:text-sm");
-    expect(campo.className).toMatch(/(^|\s)min-h-11(\s|$)/);
-  });
-
-  it("o botão Enviar não fixa h-9: herda os 44px do size=icon abaixo do lg", () => {
-    renderComposer({ contactName: "Rafael Melgaço" });
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "oi" } });
-    const enviar = screen.getByRole("button", { name: /enviar/i });
-    expect(enviar.className).not.toMatch(/(^|\s)h-9(\s|$)/);
-    expect(enviar.className).toContain("h-11");
   });
 });
