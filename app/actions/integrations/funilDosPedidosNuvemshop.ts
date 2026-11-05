@@ -5,14 +5,17 @@
 import { supportWriteError } from "@/lib/impersonate/support";
 import { revalidatePath } from "next/cache";
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { loadAuthUser, mfaEmDivida, resolveActiveOrg } from "@/lib/auth/server";
 import { podeAdministrarEmpresa } from "@/lib/auth/pode-administrar-empresa";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { criarFunilPadrao, gravarEscolha } from "@/lib/nuvemshop/funil-de-pedidos";
 
 export type FunilDosPedidosResult =
   | { ok: true }
-  | { ok: false; error: "auth_required" | "no_active_org" | "forbidden" | "invalid_pipeline" | "db_error" };
+  | {
+      ok: false;
+      error: "auth_required" | "no_active_org" | "forbidden" | "mfa_required" | "invalid_pipeline" | "db_error";
+    };
 
 async function executar(
   user: Awaited<ReturnType<typeof loadAuthUser>>,
@@ -24,6 +27,8 @@ async function executar(
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) return { ok: false, error: "no_active_org" };
   if (!podeAdministrarEmpresa(user, activeOrg)) return { ok: false, error: "forbidden" };
+  // Ação de administrador da empresa cobra a verificação em dois passos (como as irmãs de Nuvemshop).
+  if (await mfaEmDivida()) return { ok: false, error: "mfa_required" };
 
   const admin = createAdminClient();
   let pipelineId: string;
