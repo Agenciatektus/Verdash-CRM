@@ -498,6 +498,12 @@ export function makeDb(opts: DbOpts = {}): Registro {
         negacoes.push([c, v]);
         return b;
       },
+      /** `.not(col, "in", "(a,b)")` — a negação da pertinência vira um `neq` por valor. */
+      not: (c: string, op: string, v: string) => {
+        if (op !== "in") throw new Error(`dublê: .not("${c}", "${op}", ...) só suporta "in"`);
+        for (const item of v.replace(/^(|)$/g, "").split(",")) negacoes.push([c, item.trim()]);
+        return b;
+      },
       limit: (n: number) => {
         teto = n;
         return b;

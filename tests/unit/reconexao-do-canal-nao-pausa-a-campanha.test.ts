@@ -89,6 +89,8 @@ vi.mock("@/app/api/v1/messages/_handler", async () => {
   };
 });
 vi.mock("@/lib/audit", () => ({ audit: mocks.audit }));
+// Fork: o tick confere se o módulo de prospecção está liberado para a empresa.
+vi.mock("@/lib/organizacao/modulos-liberados", () => ({ moduloDaEmpresa: async () => true }));
 vi.mock("@/lib/agent-engine/agent/abordagem-de-formulario", () => ({
   gerarAbordagemDeFormulario: mocks.generate,
 }));

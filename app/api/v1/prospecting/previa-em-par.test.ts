@@ -20,6 +20,11 @@ const deps = vi.hoisted(() => ({
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: async () => null }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
+// Fork: a rota confere se o módulo de prospecção está liberado para a empresa.
+vi.mock("@/lib/organizacao/modulos-liberados", () => ({
+  moduloDaEmpresa: async () => true,
+  seModuloFechadoParaEmpresa: async () => null,
+}));
 vi.mock("@/lib/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
