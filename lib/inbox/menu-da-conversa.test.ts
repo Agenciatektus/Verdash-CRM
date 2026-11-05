@@ -63,10 +63,16 @@ describe("regrasDoMenu", () => {
 
   it("leitura: nada que grave, só ficha e telefone", () => {
     const r = regras({}, true);
-    for (const k of ["assumir", "liberar", "devolver", "pausar", "transferir", "lembrar", "etiquetas", "funil", "fechar", "reabrir", "arquivar"] as const)
+    for (const k of ["assumir", "liberar", "devolver", "pausar", "transferir", "lembrar", "etiquetas", "funil", "tarefa", "fechar", "reabrir", "arquivar"] as const)
       expect(r[k], k).toBe(false);
     expect(r.ficha).toBe(true);
     expect(r.copiarTelefone).toBe(true);
+  });
+
+  it("Adicionar tarefa aparece para quem grava, em conversa aberta ou encerrada, e some em leitura", () => {
+    expect(regras().tarefa).toBe(true);
+    expect(regras({ status: "closed" }).tarefa).toBe(true);
+    expect(regras({}, true).tarefa).toBe(false);
   });
 
   it("grupo não oferece copiar telefone", () => {

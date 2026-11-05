@@ -37,6 +37,7 @@ import { CaretLeft, ChatCircle } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { BarraDaConversaNoCelular, FaixaDoLead } from "@/components/mobile/telas/ConversaAberta";
+import { TarefaPedidaPelaUrl } from "@/components/inbox/menu/TarefaDaConversa";
 import { FichaDoLeadNoCelular } from "@/components/mobile/telas/FichaDoLead";
 import { useEhCelular } from "@/lib/mobile/useEhCelular";
 import { MenuDaConversa } from "./menu/MenuDaConversa";
@@ -655,6 +656,7 @@ export function InboxLayout({
               onAbrirMenu={(el) => menuDoCelular.abrir(selectedConversation.id, el, el)}
             />
             {celular && selectedConversation.contacts?.id && <FaixaDoLead contactId={selectedConversation.contacts.id} />}
+            {celular && selectedConversation.contacts?.id && <TarefaPedidaPelaUrl contactId={selectedConversation.contacts.id} />}
             {celular && (
               <MenuDaConversa
                 alvo={menuDoCelular.alvo}

@@ -77,12 +77,20 @@ export function opcoesDeCriar(rota: string): OpcaoDeCriar[] {
 
 /**
  * Para onde cada opção leva: a tela que já cria aquilo, com `?criar=1` (ver
- * `usePedidoDeCriar`). O lead vai para o funil aberto, ou para o funil padrão.
+ * `usePedidoDeCriar`). O lead vai para o funil aberto, ou para o funil padrão. `search` é a query atual (a
+ * tarefa da conversa aberta a usa).
  */
-export function destinoDeCriar(opcao: OpcaoDeCriar, rota: string, funilPadrao: string | null): string {
+export function destinoDeCriar(opcao: OpcaoDeCriar, rota: string, funilPadrao: string | null, search = ""): string {
   if (opcao === "conversa") return "/app/contacts";
   if (opcao === "contato") return "/app/contacts?criar=1";
-  if (opcao === "tarefa") return "/app/tasks?criar=1";
+  if (opcao === "tarefa") {
+    // Com a conversa aberta a tarefa é DELA (presa ao contato e ao negócio): fica na tela e abre o diálogo,
+    // mantendo os filtros da URL. Em /app/tasks?criar=1 ela nasceria solta.
+    const params = new URLSearchParams(search);
+    if (!conversaAberta(rota, params.get("id"))) return "/app/tasks?criar=1";
+    params.set("tarefa", "1");
+    return `${rota}?${params.toString()}`;
+  }
   if (opcao === "compromisso") return "/app/agenda?criar=1";
   if (/^\/app\/pipelines\/[^/]+$/.test(rota)) return `${rota}?criar=1`;
   return funilPadrao ? `/app/pipelines/${funilPadrao}?criar=1` : "/app/kanban";
