@@ -979,6 +979,7 @@ function buildDeriveDeps(
         cache_write_tokens: uso.cacheWriteTokens,
         cost_cents: costCents(modelo, uso),
         latency_ms: Date.now() - inicio,
+        chave_da_instalacao: llm.origemDaChave === "chave_da_instalacao",
       };
     });
     return res.text;
@@ -1053,6 +1054,7 @@ function buildDeriveDeps(
       provider: providerDaTranscricao,
       model: modeloDaTranscricao,
       origem: decisao.origem,
+      chaveDaInstalacao: origemDaChaveDaTranscricao === "chave_da_instalacao",
     });
   // Todo degrau que transcreve passa pelo teto antes de o áudio sair, como a
   // visão. No degrau 1 o teto vem DEPOIS da recusa de destino
@@ -1153,6 +1155,8 @@ interface ChamadaDeMidia {
    * linha de LLM sem preço conhecido (degrau 3), que acende o aviso.
    */
   origem_da_escolha?: OrigemDaTranscricao;
+  /** A chamada saiu na chave da instalação: só ela conta no teto do plano (migration 9098). Ausente = nulo = conta. */
+  chave_da_instalacao?: boolean;
   /** Ausente = `ok`. */
   status?: "erro";
   error_code?: string;
@@ -1265,6 +1269,7 @@ function comCustoRegistrado(
     provider: string;
     model: string;
     origem: OrigemDaTranscricao;
+    chaveDaInstalacao: boolean;
   },
 ): TranscriptionProvider {
   return {
@@ -1304,6 +1309,7 @@ function comCustoRegistrado(
         cache_write_tokens: uso?.cacheWriteTokens ?? 0,
         cost_cents: uso ? costCents(ctx.model, uso) : custoDoServico,
         latency_ms: Date.now() - inicio,
+        chave_da_instalacao: ctx.chaveDaInstalacao,
       }));
       return texto;
     },

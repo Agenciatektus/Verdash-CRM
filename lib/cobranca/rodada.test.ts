@@ -31,7 +31,7 @@ function responder(c: Cadeia): Resposta {
 }
 function rpc(nome: string, args: Record<string, unknown>): Resposta {
   if (nome === "fn_cobranca_reconciliaveis") return { data: m.reconciliaveis };
-  if (nome === "fn_gasto_de_ia_do_mes") return { data: m.gasto[String(args.p_org)] ?? 0 };
+  if (nome === "fn_gasto_de_ia_da_instalacao_do_mes") return { data: m.gasto[String(args.p_org)] ?? 0 };
   return { data: true };
 }
 

@@ -154,7 +154,7 @@ async function avisarTetoDeIa(admin: SupabaseClient): Promise<number> {
     const doPlano = tetoDoPlano.get(plano);
     if (idioma === undefined || doPlano === undefined) continue;
     const { teto, aviso } = doPlano;
-    const { data: gastoLido, error: erroDoGasto } = await admin.rpc("fn_gasto_de_ia_do_mes", { p_org: org });
+    const { data: gastoLido, error: erroDoGasto } = await admin.rpc("fn_gasto_de_ia_da_instalacao_do_mes", { p_org: org });
     if (erroDoGasto) {
       logger.warn("cobranca.gasto_de_ia_ilegivel", { organization_id: org, codigo: erroDoGasto.code ?? null });
       continue;
