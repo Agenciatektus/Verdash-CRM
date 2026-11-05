@@ -32,6 +32,7 @@ import {
   CheckCircle,
   Copy,
   IdentificationCard,
+  ListChecks,
   Pause,
   Robot,
   SignOut,
@@ -129,7 +130,7 @@ export function ConteudoDoMenu({
   const id = conversation.id;
   const telefone = c?.phone_number ? phoneForDisplay(c.phone_number) : null;
   const temAtendimento = regras.assumir || regras.liberar || regras.devolver || regras.pausar;
-  const temRoteamento = regras.transferir || regras.lembrar || regras.etiquetas || regras.funil;
+  const temRoteamento = regras.transferir || regras.lembrar || regras.etiquetas || regras.funil || regras.tarefa;
 
   return (
     <DropdownMenu open modal={false} onOpenChange={(v) => { if (!v) onFechar(); }}>
@@ -219,6 +220,15 @@ export function ConteudoDoMenu({
           )}
         {regras.lembrar && <SubmenuLembrar conversationId={id} lembreteAtivo={regras.lembreteAtivo} />}
         {regras.etiquetas && <SubmenuEtiquetas conversation={conversation} />}
+        {regras.tarefa && c?.id && (
+          <DropdownMenuItem
+            className={CLASSE_DO_ITEM}
+            title={t("Cria uma tarefa presa a este contato e ao negócio aberto dele.")}
+            onSelect={() => abrirDialogo({ tipo: "adicionar-tarefa", contactId: c.id })}
+          >
+            <ListChecks size={16} aria-hidden /> {t("Adicionar tarefa")}
+          </DropdownMenuItem>
+        )}
         {!leadPrimeiro && regras.funil && c?.id && (
           <SubmenuDoFunil contactId={c.id} onDialogo={(d) => abrirDialogo({ ...d, contactId: c.id })} />
         )}
