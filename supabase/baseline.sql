@@ -64090,6 +64090,16 @@ create table if not exists public.ia_plataforma_alertas (
 alter table public.ia_plataforma_alertas enable row level security;
 revoke all on table public.ia_plataforma_alertas from public, anon, authenticated;
 
+-- ---- aviso do teto de IA por plano (migration 9098) ----
+-- Mesmo schema da migration 9098, sem os backfills: o baseline reaplica a cada update e o (1) recolocaria
+-- teto em plano que o admin deixou sem limite depois.
+
+alter table public.cobranca_planos
+  add column if not exists aviso_ia_usd_cents integer check (aviso_ia_usd_cents > 0);
+
+comment on column public.cobranca_planos.aviso_ia_usd_cents is
+  'Gasto de IA do mês (centavos de dólar, régua de fn_gasto_de_ia_do_mes) em que a empresa recebe o aviso do teto do plano. Nulo ou >= teto_ia_usd_cents = aviso em 80% do teto (lib/cobranca/rodada.ts). Migration 9098.';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria

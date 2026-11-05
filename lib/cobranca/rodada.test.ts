@@ -8,12 +8,12 @@ vi.mock("./compra-efeitos", () => ({ efeitosDaCompra: () => ({ aoCriar: h.efeito
 vi.mock("./sincronizar", () => ({ sincronizar: h.sincronizar, aplicarRegua: h.aplicarRegua }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import { LIMITE_DA_RECONCILIACAO, rodadaDaCobranca } from "./rodada";
+import { LIMITE_DA_RECONCILIACAO, limiarDoAviso, rodadaDaCobranca } from "./rodada";
 
 interface Mundo {
   reconciliaveis: Array<{ organization_id: string; relida_em: string | null; precisa_reler: boolean }>;
   todas: string[];
-  planos: Array<{ id: string; teto_ia_usd_cents: number }>;
+  planos: Array<{ id: string; teto_ia_usd_cents: number; aviso_ia_usd_cents?: number | null }>;
   assinaturasDePlano: Array<{ organization_id: string; plano_id: string }>;
   orgs: Array<{ id: string; status: string; locale: string | null }>;
   gasto: Record<string, number>;
@@ -112,6 +112,31 @@ describe("rodadaDaCobranca", () => {
     expect(avisos.map((a) => a.args.p_org)).toEqual(["A"]);
     expect(String(avisos[0]?.args.p_corpo)).toContain("US$ 8.50 de US$ 10.00");
     expect(r.avisosDeIa).toBe(1);
+  });
+
+  it("⭐ aviso gravado no plano (9098): plano sem IA avisa a partir de US$ 3 e para em US$ 6", async () => {
+    m.planos = [{ id: "p1", teto_ia_usd_cents: 600, aviso_ia_usd_cents: 300 }];
+    m.assinaturasDePlano = [
+      { organization_id: "A", plano_id: "p1" },
+      { organization_id: "B", plano_id: "p1" },
+    ];
+    m.orgs = [
+      { id: "A", status: "active", locale: "pt-BR" },
+      { id: "B", status: "active", locale: "pt-BR" },
+    ];
+    m.gasto = { A: 320, B: 290 };
+    const r = await rodar();
+    const avisos = banco.rpcs.filter((x) => x.nome === "fn_cobranca_avisar_teto_de_ia");
+    expect(avisos.map((a) => a.args.p_org)).toEqual(["A"]);
+    expect(String(avisos[0]?.args.p_corpo)).toContain("US$ 3.20 de US$ 6.00");
+    expect(r.avisosDeIa).toBe(1);
+  });
+
+  it("limiarDoAviso: aviso nulo, zero ou >= teto cai nos 80% do teto", () => {
+    expect(limiarDoAviso(1000, 600)).toBe(600);
+    expect(limiarDoAviso(1000, null)).toBe(800);
+    expect(limiarDoAviso(1000, 0)).toBe(800);
+    expect(limiarDoAviso(600, 600)).toBe(480);
   });
 
   it("venda direta desligada: não repassa as compras e o resumo não ganha o campo", async () => {
