@@ -448,6 +448,8 @@ export function InboxLayout({
     else params.delete("id");
     // O ?rascunho= é da conversa que ficou para trás (ver `rascunhoVivo`).
     params.delete("rascunho");
+    // Idem o ?tarefa= do "+" (consumido por `TarefaPedidaPelaUrl`): se sobrar, abriria em outra conversa.
+    params.delete("tarefa");
     const query = params.toString();
     window.history.pushState(null, "", query ? `${pathname}?${query}` : pathname);
   }, [selectedId, searchParams, pathname]);
@@ -656,7 +658,7 @@ export function InboxLayout({
               onAbrirMenu={(el) => menuDoCelular.abrir(selectedConversation.id, el, el)}
             />
             {celular && selectedConversation.contacts?.id && <FaixaDoLead contactId={selectedConversation.contacts.id} />}
-            {celular && selectedConversation.contacts?.id && <TarefaPedidaPelaUrl contactId={selectedConversation.contacts.id} />}
+            {celular && selectedConversation.contacts?.id && <TarefaPedidaPelaUrl key={selectedConversation.contacts.id} contactId={selectedConversation.contacts.id} />}
             {celular && (
               <MenuDaConversa
                 alvo={menuDoCelular.alvo}
