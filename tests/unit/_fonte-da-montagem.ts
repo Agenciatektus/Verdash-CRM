@@ -61,7 +61,7 @@ export function fonteDoTurnoMontado(): string {
   );
   t = encaixar(
     t,
-    /^ {4}const \{ mensagensDoTurno \} = await corrigirAposOModelo\([\s\S]*?^ {4}\);$/m,
+    /^ {4}const \{ mensagensDoTurno[^}]*\} = await corrigirAposOModelo\([\s\S]*?^ {4}\);$/m,
     corpoDaFase("correcao-pos-modelo.ts"),
   );
   t = encaixar(
