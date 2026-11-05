@@ -127,13 +127,19 @@ describe("ura", () => {
     ];
     expect(detectarLacoComRobo(m, agora).laco).toBe(false);
   });
-  it("sinais sem nenhuma resposta da IA na janela não silenciam", () => {
-    const m = [entrada("Eu sou a assistente virtual da Light", 20), entrada("Não entendi o que você digitou", 10)];
+  it("sinais de máquina depois de saída HUMANA (sem a IA ter respondido) não silenciam", () => {
+    const humana = (texto: string, segAtras: number): MensagemDaConversa => ({
+      direcao: "outbound", texto, enviadoEm: new Date(agora.getTime() - segAtras * 1000), enviadaPelaIa: false,
+    });
+    const m = [
+      humana("Oi, aqui é a Fabiana", 300), entrada("Eu sou a assistente virtual da Light", 295),
+      humana("Quem é?", 250), entrada("Não entendi o que você digitou", 245),
+    ];
     expect(detectarLacoComRobo(m, agora).laco).toBe(false);
   });
-  it("texto nulo numa entrada não quebra", () => {
-    const m = [...luz, { direcao: "inbound" as const, texto: null, enviadoEm: new Date(agora.getTime() - 5000), enviadaPelaIa: false }];
-    expect(detectarLacoComRobo(m, agora).laco).toBe(true);
+  it("texto nulo numa entrada de máquina passa pela normalização sem quebrar nem contar", () => {
+    const m = [...luz.slice(0, 3), ia("Ok", 10), { direcao: "inbound" as const, texto: null, enviadoEm: new Date(agora.getTime() - 5000), enviadaPelaIa: false }];
+    expect(detectarLacoComRobo(m, agora)).toEqual({ laco: false, motivo: null });
   });
   it("cliente comum perguntando por atendente não dispara", () => {
     const m = [ia("Oi!", 60), entrada("Você ainda está por aí? Preciso agendar", 40), entrada("Quero falar com uma atendente", 20)];
