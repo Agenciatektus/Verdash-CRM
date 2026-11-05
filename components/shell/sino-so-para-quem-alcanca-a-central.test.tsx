@@ -134,7 +134,8 @@ describe("o sino de avisos só aparece para quem alcança a Central (#3163)", ()
 
     // A consulta segue disparada — foi só a porta que passou a ter piso.
     expect(cenario.consultas).toEqual(["open"]);
-    expect(screen.getByTestId("alerts-bell")).toHaveAttribute("href", ENDERECO_DA_CENTRAL);
+    // Fork: o sino abre a Central de Avisos (botão com contador), não é um link para o inbox.
+    expect(screen.getByTestId("alerts-bell")).toBeInTheDocument();
     expect(screen.getByTestId("alerts-bell-count")).toHaveTextContent("7");
   });
 

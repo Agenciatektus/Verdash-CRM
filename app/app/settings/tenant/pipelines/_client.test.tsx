@@ -276,6 +276,7 @@ describe("obrigatoriedade do motivo de perda", () => {
   it("salva false quando o administrador desliga a exigência", async () => {
     vi.mocked(updatePipelineConfig).mockClear();
     render(<PipelinesClient pipelines={[FUNIL]} podeEditarConfig />);
+    abrirEditores();
 
     const controle = screen.getByRole("checkbox", {
       name: /Exigir motivo de perda ao fechar como perdido/i,
