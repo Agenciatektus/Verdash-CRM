@@ -399,9 +399,9 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 17 drenos: 15 pelo rpc (inclui a poda do bus da Tektus, 9021/9057, e o aviso de agendamento, 0753) + a mídia +
-    // a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(17);
+    // 18 drenos: 16 pelo rpc (inclui a poda do bus da Tektus, 9021/9057, o aviso de agendamento, 0753, e a
+    // telemetria, o ritmo, as cópias e os checkpoints do upstream 1.90) + a mídia + a décima poda (o DELETE do admin).
+    expect(r.falhas).toHaveLength(18);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -455,8 +455,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 15 drenos do rpc falham nesta rodada (14 + a poda do bus da Tektus).
-    expect(r.falhas).toHaveLength(15);
+    // Só os 16 drenos do rpc falham nesta rodada (15 + a poda do bus da Tektus).
+    expect(r.falhas).toHaveLength(16);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 });

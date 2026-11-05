@@ -93,7 +93,7 @@ vi.mock("@/lib/channels", async (orig) => {
   const real = await orig<typeof import("@/lib/channels")>();
   return {
     ...real,
-    getAdapter: () => ({
+    getAdapterOpcional: () => ({
       provider: "waha",
       resolvePhoneForIdentity: async () => phoneResolvido,
     }),

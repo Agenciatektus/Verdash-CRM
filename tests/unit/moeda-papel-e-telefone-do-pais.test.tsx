@@ -192,9 +192,11 @@ describe("2. o convite de equipe diz o papel pelo nome", () => {
       expiresAt: new Date("2026-10-28T12:00:00.000Z"),
       marca: MARCA,
     });
-    expect(html).toContain("<strong>Atendente</strong>");
+    // Fork: o convite tem molde próprio ("Ana convidou você como Atendente no Vendas Turbo.").
+    expect(html).toContain("convidou você como Atendente no Vendas Turbo");
     expect(html).not.toContain(">agent<");
-    expect(text.split("\n")[0]).toBe("Você foi convidado para a Clínica Bem Viver como Atendente no Vendas Turbo.");
+    expect(text).toContain("como Atendente no Vendas Turbo");
+    expect(text).not.toContain("agent");
   });
 
   it("papel desconhecido continua aparecendo pelo código: nunca some", () => {
@@ -206,7 +208,7 @@ describe("2. o convite de equipe diz o papel pelo nome", () => {
       expiresAt: new Date("2026-10-28T12:00:00.000Z"),
       marca: MARCA,
     });
-    expect(html).toContain("<strong>papel-novo</strong>");
+    expect(html).toContain("convidou você como papel-novo");
   });
 });
 
