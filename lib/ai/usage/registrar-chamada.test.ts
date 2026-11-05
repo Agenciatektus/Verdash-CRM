@@ -60,6 +60,7 @@ describe("registrarChamadaDeIa", () => {
           status: "ok",
           error_code: null,
           error_message: null,
+          chave_da_instalacao: null,
         },
       },
     ]);

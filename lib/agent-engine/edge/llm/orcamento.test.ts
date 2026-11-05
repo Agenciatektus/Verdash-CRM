@@ -83,7 +83,7 @@ describe("lerTetoDoPlano", () => {
     expect(lido).toEqual({ indisponivel: expect.stringMatching(/^42883: function public\.fn_limite_do_plano/) });
   });
 
-  it("o statement só soma o gasto quando há teto", () => {
-    expect(SQL_TETO_DO_PLANO).toMatch(/case when teto is null then null else public\.fn_gasto_de_ia_do_mes\(\$1\) end/);
+  it("o statement só soma o gasto quando há teto, e só o da chave da instalação (9098)", () => {
+    expect(SQL_TETO_DO_PLANO).toMatch(/case when teto is null then null else public\.fn_gasto_de_ia_da_instalacao_do_mes\(\$1\) end/);
   });
 });
