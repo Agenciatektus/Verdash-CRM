@@ -96,3 +96,26 @@ describe("repeticao", () => {
     expect(normalizarTexto("Olá, 12!")).toBe("ola");
   });
 });
+
+describe("ura", () => {
+  // Salão Fabiana, 04/11: a URA da Light, com a IA respondendo 7 vezes em 5 min.
+  const luz = [
+    msg("inbound", "Olá! Eu sou a *Lia*, a assistente virtual da *Light* ⚡. Estou falando com Fabiana?", 5),
+    msg("outbound", "Este é o WhatsApp do Salão Fabiana Lopes.", 4),
+    msg("inbound", "Hmm... Não entendi o que você digitou. Por favor, digite uma das opções que te apresentei", 3),
+  ];
+  it("duas frases típicas de URA silenciam, mesmo com pouco volume", () => {
+    expect(detectarLacoComRobo(luz, agora)).toEqual({ laco: true, motivo: "ura" });
+  });
+  it("uma frase só não silencia (pode ser citação do cliente)", () => {
+    expect(detectarLacoComRobo(luz.slice(0, 2), agora).laco).toBe(false);
+  });
+  it("cliente de verdade perguntando por atendente não dispara", () => {
+    const m = [msg("inbound", "Você ainda está por aí? Preciso agendar", 2), msg("inbound", "Quero falar com uma atendente", 1)];
+    expect(detectarLacoComRobo(m, agora).laco).toBe(false);
+  });
+  it("sinal fora da janela de 60 min não conta", () => {
+    const velhas = luz.map((m) => ({ ...m, enviadoEm: new Date(agora.getTime() - 120 * 60_000) }));
+    expect(detectarLacoComRobo(velhas, agora).laco).toBe(false);
+  });
+});

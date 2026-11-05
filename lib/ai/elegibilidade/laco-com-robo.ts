@@ -21,6 +21,22 @@ export const TETO_VOLUME_IA = 40;
 export const TETO_VOLUME_CLIENTE = 20;
 /** Quantas entradas de máquina a janela precisa ter para o volume contar como laço. */
 export const LIMITE_ENTRADAS_DE_MAQUINA = 6;
+/**
+ * Frases (já normalizadas) que só uma URA/assistente virtual escreve; cliente de verdade não.
+ * Salão Fabiana, 04/11: a IA respondeu 7 vezes à URA da Light sem passar volume nem repetição.
+ * Frase que humano também diz ("você ainda está por aí?", "vou encerrar o atendimento") fica de fora.
+ */
+export const SINAIS_DE_URA = [
+  "assistente virtual",
+  "atendente virtual",
+  "digite uma das opcoes",
+  "escolha uma das opcoes",
+  "digite o numero da opcao",
+  "nao entendi o que voce digitou",
+  "nao consegui identificar sua resposta",
+] as const;
+/** Entradas com sinal de URA na janela para silenciar (uma sozinha pode ser citação). */
+export const LIMITE_SINAIS_DE_URA = 2;
 
 export interface MensagemDaConversa {
   direcao: "inbound" | "outbound";
@@ -31,7 +47,7 @@ export interface MensagemDaConversa {
 
 export interface DecisaoDeLaco {
   laco: boolean;
-  motivo: "volume" | "repeticao" | null;
+  motivo: "volume" | "repeticao" | "ura" | null;
 }
 
 export function normalizarTexto(t: string): string {
@@ -65,6 +81,14 @@ export function detectarLacoComRobo(
 ): DecisaoDeLaco {
   const desde = agora.getTime() - JANELA_LACO_MS;
   const naJanela = mensagens.filter((m) => m.enviadoEm.getTime() >= desde);
+
+  // URA se denuncia no texto, antes de qualquer volume: cada resposta da IA a ela é lixo e custo.
+  const sinaisDeUra = naJanela.filter((m) => {
+    if (m.direcao !== "inbound") return false;
+    const n = normalizarTexto(m.texto ?? "");
+    return SINAIS_DE_URA.some((f) => n.includes(f));
+  }).length;
+  if (sinaisDeUra >= LIMITE_SINAIS_DE_URA) return { laco: true, motivo: "ura" };
 
   const ia = naJanela.filter((m) => m.direcao === "outbound" && m.enviadaPelaIa).length;
   const cliente = naJanela.filter((m) => m.direcao === "inbound").length;
