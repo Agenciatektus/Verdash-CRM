@@ -18,7 +18,7 @@ const m = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({ redirect: m.redirect }));
-vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-request-id": "req-1" }) }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-request-id": "req-1" }), cookies: async () => ({ set: vi.fn() }) }));
 vi.mock("@/lib/audit", () => ({ audit: m.audit, auditForOrganizations: m.auditForOrganizations }));
 vi.mock("@/lib/logger", () => ({ logger: { warn: m.warn } }));
 vi.mock("@/lib/auth/dispositivo-confiavel", () => ({ esquecerDispositivosConfiaveis: m.esquecer }));

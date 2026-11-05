@@ -210,6 +210,8 @@ vi.mock("@/lib/audit", () => ({
   isServiceRoleConfigured: () => true,
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
+// Fork: a adoção dos demais abertos (service-role) tem teste próprio; aqui só o negócio sincronizado (#3177).
+vi.mock("@/lib/routing/worker", () => ({ adotarLeadsDoContato: vi.fn(async () => {}) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/inbox/atividade-de-comando", () => ({
   registrarTrocaDeComando: vi.fn(async () => {}),

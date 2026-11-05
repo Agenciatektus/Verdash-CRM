@@ -145,7 +145,7 @@ vi.mock("@/lib/auth/require-role", () => ({
   })),
 }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
-vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}) }));
+vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}), isServiceRoleConfigured: () => true }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 vi.mock("@/lib/inbox/atividade-de-comando", () => ({
   registrarTrocaDeComando: vi.fn(async () => {}),
