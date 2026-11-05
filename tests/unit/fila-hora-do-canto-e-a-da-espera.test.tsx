@@ -95,6 +95,13 @@ describe("na Fila, o relógio da linha é o relógio da ordem", () => {
     expect(cantoDaFila()).toHaveTextContent(horaDaCriacao);
   });
 
+  it("a pílula usa a forma CURTA e guarda a longa no title (cabe na lista de 300px do tablet)", () => {
+    pintar(base, 3);
+    const pilula = screen.getByText(/^Aguardando \d+d$/);
+    expect(pilula.getAttribute("title")).toMatch(/^Aguardando .+/);
+    expect(pilula.getAttribute("title")).not.toBe(pilula.textContent);
+  });
+
   it("o rótulo diz o que o número é — o mesmo canto significa outra coisa na Fila", () => {
     pintar(base, 3);
     expect(cantoDaFila()).toBeInTheDocument();
