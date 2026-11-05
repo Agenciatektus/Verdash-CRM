@@ -75,6 +75,7 @@ function montarLinha(conversation: ConversationWithContact) {
     <ConversationListItem
       {...conversaDeExemplo.props}
       conversation={conversation}
+      onAbrirMenu={() => undefined}
       onAlternarExemplo={() => undefined}
     />,
   );

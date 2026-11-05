@@ -122,6 +122,9 @@ const LEAD_GANHO = {
   currency: "BRL",
   closed_at: new Date().toISOString(),
   contact_id: CONTATO,
+  // Fork (9054): a compra sai pela ENTRADA numa etapa com a chave de conversão ligada.
+  stage_id: "etapa-ganho",
+  stage_changed_at: new Date().toISOString(),
 };
 
 /** Uma resposta por tabela, no formato do PostgREST. */
@@ -135,6 +138,7 @@ function resposta(tabela: string): { data: unknown; error: unknown } {
     return inseriu("contacts") ? { data: { id: CONTATO }, error: null } : { data: null, error: null };
   }
   if (tabela === "crm_leads") return { data: LEAD_GANHO, error: null };
+  if (tabela === "crm_stages") return { data: { envia_conversao: true, evento_de_conversao: "Purchase" }, error: null };
   if (tabela === "ad_platform_connections") return { data: CONEXAO_ATIVA, error: null };
   return { data: null, error: null };
 }

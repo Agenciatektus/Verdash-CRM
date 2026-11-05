@@ -44,7 +44,7 @@ vi.mock("@/lib/channels", () => ({
       return session.zernio_account_id;
     return null;
   },
-  getAdapter: (provider: string) => {
+  getAdapterOpcional: (provider: string) => {
     // O adapter social (Instagram/Facebook) não expõe foto de perfil: é o
     // canal que não tem `fetchProfilePictureUrl`.
     if (provider === "zernio_social") return {};
@@ -61,6 +61,13 @@ vi.mock("@/lib/channels", () => ({
   },
 }));
 
+// Fork: o download é cercado (allowlist de host, IP, mime) e tem suíte própria
+// (`foto-de-perfil-download.test.ts`); aqui ele só precisa devolver uma imagem.
+vi.mock("@/lib/channels/contact-avatar", async (real) => ({
+  ...(await real<typeof import("@/lib/channels/contact-avatar")>()),
+  baixarFotoDePerfil: async () => ({ buffer: Buffer.from([1, 2, 3]), mime: "image/jpeg" }),
+}));
+
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: (tabela: string) => ({
@@ -69,11 +76,21 @@ vi.mock("@/lib/supabase/admin", () => ({
         if (tabela === "contacts") {
           dados = [linhaDoContato];
         } else if (tabela === "conversations") {
-          dados = conversaDoContato;
+          // Fork: a rota lê só o id da sessão da conversa e resolve a sessão em outra consulta.
+          dados = conversaDoContato ? { channel_session_id: "sessao-da-conversa" } : null;
         } else {
-          // As conexões de mensagem da empresa. Por padrão, só a social: tem
-          // ref, mas o adapter dela não busca foto.
-          dados = sessoesDaEmpresa;
+          // `channel_sessions` (maybeSingle). Com conversa: a sessão dela, só se WORKING e não
+          // arquivada. Sem conversa: a primeira conexão de mensagem da empresa (a rota filtra
+          // por provider que acha o contato, o que deixa a social de fora). Por padrão só a social.
+          const daConversa = (conversaDoContato as { channel_sessions?: Record<string, unknown> } | null)
+            ?.channel_sessions;
+          const viva = (s: Record<string, unknown> | undefined | null) =>
+            s && s.status === "WORKING" && !s.archived_at ? s : null;
+          dados = conversaDoContato
+            ? viva(daConversa)
+            : ((sessoesDaEmpresa as Record<string, unknown>[]).find(
+                (s) => s.provider !== "zernio_social" && viva(s),
+              ) ?? null);
         }
         const proxy: Record<string, unknown> = new Proxy(
           {},

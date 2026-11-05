@@ -248,6 +248,17 @@ export function ConversationListItem({
                 {t("Grupo")}
               </Badge>
             )}
+            {/* O SELO do exemplo (#3006): quem só lê a lista também vê que a conversa alimenta a IA. */}
+            {exemploMarcado && (
+              <Badge
+                variant="outline"
+                data-testid="selo-exemplo-ia"
+                className="h-4 shrink-0 gap-1 px-1.5 text-[10px] font-normal text-accent"
+              >
+                <Sparkle size={10} weight="fill" aria-hidden />
+                {t("Exemplo para a IA")}
+              </Badge>
+            )}
           </span>
           <IconesPessoais pinned={conversation.pinned} mutedUntil={conversation.muted_until} />
           <span

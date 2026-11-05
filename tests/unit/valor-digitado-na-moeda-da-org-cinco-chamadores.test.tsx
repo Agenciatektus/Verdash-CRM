@@ -35,7 +35,7 @@ const sessao = vi.hoisted(() => ({ moeda: "USD" as string }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 vi.mock("@/hooks/i18n/useLocaleDeData", () => ({
   useTagDeIdioma: () => "pt-BR",
-  useLocaleDeData: () => "pt-BR",
+  useLocaleDeData: () => undefined,
 }));
 // Fora do provider o hook real devolve `null`; aqui ele devolve a moeda do caso.
 vi.mock("@/hooks/auth/AuthProvider", () => ({
@@ -268,7 +268,8 @@ describe("recorrências — o valor do todo-mês é lido na moeda da organizaç�
     );
 
     await usuario.type(screen.getByLabelText("Nome do lançamento"), "Aluguel");
-    await usuario.selectOptions(screen.getByLabelText("Conta"), "conta-1");
+    // Fork: "Conta" é o gatilho do Escolha; o <select> escondido é quem leva o valor.
+    await usuario.selectOptions(document.querySelector<HTMLSelectElement>("select:has(option[value=conta-1])")!, "conta-1");
     await usuario.type(screen.getByLabelText("Valor"), "1,300");
     await usuario.click(screen.getByRole("button", { name: "Adicionar" }));
 
