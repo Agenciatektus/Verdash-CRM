@@ -122,26 +122,15 @@ Botões: `transform: translateY(1px)` no `:active` (pressed feel), 80ms (instant
 
 ### 4. Skeleton shimmer
 
-Loader visual: linear-gradient atravessa o elemento da direita pra esquerda, infinito.
+Loader visual: faixa neutra que atravessa o elemento da direita para a esquerda, infinito, 1,6s linear. Classe `.ds-esqueleto` em `app/globals.css`: gradiente entre `--color-neutral-400` e `--color-neutral-500` (no escuro, o brilho vai a `--color-neutral-300`), sem accent. Fica ativa mesmo com `prefers-reduced-motion`.
 
 ```css
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--ds-surface-elevated) 0%,
-    color-mix(in srgb, var(--ds-surface-elevated) 60%, var(--ds-accent-soft)) 50%,
-    var(--ds-surface-elevated) 100%
-  );
+.ds-esqueleto {
+  --ds-esqueleto-corpo: var(--color-neutral-400);
+  --ds-esqueleto-brilho: var(--color-neutral-500);
+  background-image: linear-gradient(90deg, var(--ds-esqueleto-corpo) 0%, var(--ds-esqueleto-brilho) 50%, var(--ds-esqueleto-corpo) 100%);
   background-size: 200% 100%;
-  animation: ds-shimmer 1.6s linear infinite;
-}
-@keyframes ds-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
+  animation: ds-esqueleto 1.6s linear infinite;
 }
 ```
 

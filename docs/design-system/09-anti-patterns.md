@@ -2,7 +2,7 @@
 
 > **Quando em dúvida, consulte aqui antes de implementar.** Cada item tem o "por quê" curto.
 
-Lista canônica do que **não fazer** no produto. Anti-patterns ficam aqui pra preservar identidade visual e evitar convergência ao padrão SaaS genérico. Os valores de cor, raio e sombra citados vêm de `app/globals.css`; na dúvida, o CSS vence este texto.
+Lista canônica do que **não fazer** no produto. Anti-patterns ficam aqui pra preservar identidade visual e evitar convergência ao padrão SaaS genérico. Os valores de cor, raio e sombra citados vêm de `app/globals.css`; `app/globals.css` vence; este texto descreve.
 
 ---
 

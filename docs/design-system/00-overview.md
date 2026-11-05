@@ -1,6 +1,6 @@
 # 00 — Overview
 
-> **Source of truth:** `app/design/README.md`, `app/design/lib/tokens.ts`
+> **Source of truth:** `app/globals.css`. O CSS vence; este documento descreve. Referência visual: canvas "CRM Inbox v2" (https://claude.ai/artifact/5ietsYc7JmwqE8KjoETHJ4, board DS_V2Verdash).
 
 ## Filosofia
 
@@ -8,11 +8,11 @@ O DeskcommCRM é uma ferramenta operacional para **atendentes que ficam 8 horas 
 
 Por isso a direção é **soft-tech / calmo**:
 
-- **Soft** — neutros greige (warm-gray), nunca slate/zinc; acentos baixos em saturação; sombras em cor neutra, não preto puro.
+- **Soft** — neutros frios e suaves (azul-acinzentados, `#eef1f5` no claro), acento único em baixa saturação; sombras em `rgba(16,24,40)`, não preto puro.
 - **Tech** — tipografia precisa, dados em mono tabular, hierarquia disciplinada, microinterações com propósito.
 - **Calmo** — sem decoração, sem celebração, sem AI-sparkle, sem gradientes. Confiança vem de consistência, não de efeito.
 
-A meta secundária é **não parecer genérico**. 80% dos CRMs SaaS atuais convergem para o mesmo molde (Inter + Lucide + slate + accent indigo + glassmorphism). DeskcommCRM diverge intencionalmente em todas essas escolhas.
+A meta secundária é **não parecer genérico**. 80% dos CRMs SaaS atuais convergem para o mesmo molde (Inter + Lucide + accent indigo + glassmorphism). DeskcommCRM diverge intencionalmente em todas essas escolhas.
 
 ## Princípios canônicos
 
@@ -38,7 +38,7 @@ Leia 00 → 09 sequencial uma vez. Depois consulte por demanda via tabela do `RE
 
 ## Versionamento
 
-- **v1.0 — locked em 2026-04-28.** As 5 escolhas (Sage, Atkinson, Aerada, Phosphor, IBM Plex Mono) estão fechadas até v2.0. PRs que tentem trocar uma delas precisam de RFC.
+- **v1.0 — locked em 2026-04-28; paleta atualizada no DS v2.** As escolhas Atkinson, Aerada, Phosphor e IBM Plex Mono seguem fechadas. A Sage foi trocada pelo Verde Verdash (claro) / azul (escuro) na etapa 2 do DS; vale o `app/globals.css`. PRs que tentem trocar uma delas precisam de RFC.
 - Patches são aceitos para: novos ícones, novos exemplos de microcopy, ajustes de hex em ±2 pontos de luminosidade quando WCAG falhar, novos componentes derivados.
 - Histórico de mudanças vai em `CHANGELOG.md` quando houver primeira mudança.
 
@@ -49,6 +49,6 @@ A linguagem do DeskcommCRM toma emprestado partes específicas (não estética i
 - **Arc browser** — sidebar como "casa", microinterações de hover com propósito espacial, paleta neutra com 1 accent destacado.
 - **Notion** — densidade aerada (row 56 / gap 24), tipografia humanista grande, hierarquia por peso e tamanho mais que por cor.
 - **Things 3** — calma absoluta, ausência de ornamento, ícones com peso próprio, mono para dados (datas, contadores).
-- **Mercury (banking)** — confiança operacional via consistência, paleta greige, números em tabular nums, tom de voz sóbrio em microcopy.
+- **Mercury (banking)** — confiança operacional via consistência, paleta neutra, números em tabular nums, tom de voz sóbrio em microcopy.
 
 O que **não** importamos: o Geist sans da Vercel/Linear (saturação de mercado), o roxo Linear (overuse), o glass do Mercury (mais tarefa que valor), os gradientes do Arc.
