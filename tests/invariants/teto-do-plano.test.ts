@@ -170,7 +170,7 @@ describe("o teto do plano soma só a chave da instalação (9098)", () => {
       gastoUsdCents: gasto,
       origemDaChave: "chave_da_instalacao",
       purpose: "visao_de_imagem",
-      chave: "bloquear",
+      chave: "on",
     }).acao;
 
   beforeAll(() => {
