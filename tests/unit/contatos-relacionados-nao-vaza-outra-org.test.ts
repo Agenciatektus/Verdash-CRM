@@ -32,7 +32,6 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth/require-role";
 import { audit } from "@/lib/audit";
 import { DELETE, GET, POST } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 
@@ -57,7 +56,6 @@ vi.mock("@/lib/auth/require-role", () => ({
 // As duas portas da ESCRITA: a guarda de efeito do suporte e o papel mínimo.
 // Nenhuma das duas é o que este arquivo julga — o que ele julga é a defesa de
 // organização do alvo.
-vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 // A trilha de auditoria: toda escrita bem-sucedida grava uma linha, e só ela.
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}) }));
@@ -233,13 +231,6 @@ async function corpo(resposta: Response) {
 beforeEach(() => {
   vi.mocked(createClient).mockReset();
   vi.mocked(audit).mockClear();
-  // Sessão de escrita com papel `agent` na org A: o que está em julgamento aqui
-  // é a defesa de organização, não o RBAC.
-  vi.mocked(requireRole).mockResolvedValue({
-    ok: true,
-    user: { id: "usuario-1", idioma: "pt-BR" },
-    org: { id: ORG_A },
-  } as never);
 });
 
 describe("GET contatos-relacionados — a F1 da #1506", () => {

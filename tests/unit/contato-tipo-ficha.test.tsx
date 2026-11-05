@@ -55,6 +55,7 @@ vi.mock("@/lib/api/client", () => ({
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   // A ficha lê o país da org; o painel, o papel do usuário (podeCriarTarefa).
   useActiveOrg: () => ({ currency: "BRL", country: null, orgId: "org-1" }),
+  usePermission: () => true,
   useAuth: () => ({ user: { support: null }, activeOrg: null }),
 }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
@@ -211,7 +212,7 @@ describe("painel da conversa — o selo do tipo (issue 3005, fatia 1)", () => {
 
     // O cartão do contato renderizou (o nome está lá) e NÃO há selo de tipo:
     // um selo em toda conversa não informaria nada (a régua do "Pessoal").
-    expect(await screen.findByText("Operadora Sul")).toBeTruthy();
+    expect((await screen.findAllByText("Operadora Sul")).length).toBeGreaterThan(0);
     expect(screen.queryByText("Fornecedor")).toBeNull();
   });
 });

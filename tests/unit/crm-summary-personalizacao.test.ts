@@ -7,6 +7,10 @@ const state = vi.hoisted(() => ({
   chamadasPorTabela: {} as Record<string, number>,
 }));
 
+// Fork: a rota passa por requireRole (papel + sessão de suporte + MFA); o gate tem teste próprio.
+vi.mock("@/lib/auth/require-role", () => ({
+  requireRole: async () => ({ ok: true, org: { orgId: "org-a", role: "agent" } }),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: { id: "user-a" } }, error: null }) },

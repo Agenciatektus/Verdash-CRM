@@ -96,6 +96,7 @@ vi.mock("@/hooks/contacts/useUpdateContact", () => ({
   useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
   useAuth: () => ({ user: authUser, activeOrg: { role: authRole } }),
 }));
 

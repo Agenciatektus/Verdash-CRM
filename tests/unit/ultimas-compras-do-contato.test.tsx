@@ -277,6 +277,7 @@ vi.mock("@/hooks/contacts/useContact", () => ({
   }),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
+  usePermission: () => true,
   useAuth: () => ({
     user: { is_platform_admin: false, support: null },
     activeOrg: { orgId: "org-1", role: "agent", cliente_pela_agenda: false },
