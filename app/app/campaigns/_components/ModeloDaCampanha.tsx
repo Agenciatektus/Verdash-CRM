@@ -27,6 +27,7 @@ import { useT } from "@/hooks/i18n/useT";
 import type { FonteDaCampanha } from "@/lib/campanhas/modelo";
 import { renderTemplatePreview, type PreviaDaMensagem } from "@/lib/channels/meta/render-template";
 import { fonteDeTemplates, telaDeModelos } from "@/lib/channels/templates-fonte";
+import { Escolha } from "@/components/ui/escolha";
 
 export interface EscolhaDoModelo {
   name: string;
@@ -181,11 +182,11 @@ export function ModeloDaCampanha({
       <div className="space-y-2">
         <Label htmlFor="modelo">{t("Modelo aprovado")}</Label>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <Escolha
             id="modelo"
-            className="h-9 min-w-0 flex-1 rounded-md border border-border bg-surface px-2 text-sm"
+            className="min-w-0 flex-1"
             value={valor ? chaveDoModelo(valor) : ""}
-            onChange={(e) => trocarModelo(e.target.value)}
+            onValueChange={trocarModelo}
             disabled={consulta.isLoading}
           >
             <option value="">
@@ -198,7 +199,7 @@ export function ModeloDaCampanha({
                 {m.aprovado ? "" : ` · ${m.status}`}
               </option>
             ))}
-          </select>
+          </Escolha>
           <Button
             type="button"
             variant="outline"
@@ -259,13 +260,11 @@ export function ModeloDaCampanha({
                     </p>
                   ) : (
                     <>
-                      <select
+                      <Escolha
                         aria-label={`${t("Origem")}: ${v.rotulo}`}
-                        className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+                        className="w-full"
                         value={f?.kind ?? ""}
-                        onChange={(e) =>
-                          trocarOrigem(v, e.target.value as FonteDaCampanha["kind"] | "")
-                        }
+                        onValueChange={(valor) => trocarOrigem(v, valor as FonteDaCampanha["kind"] | "")}
                       >
                         <option value="">{t("Escolha a origem")}</option>
                         {v.origens.map((o) => (
@@ -273,7 +272,7 @@ export function ModeloDaCampanha({
                             {t(ROTULO_DA_ORIGEM[o])}
                           </option>
                         ))}
-                      </select>
+                      </Escolha>
                       {f?.kind === "fixed" && (
                         <Input
                           aria-label={`${t("Texto fixo")}: ${v.rotulo}`}

@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
 import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 import { carregarTaskReminderPrefs, updateTaskReminderPrefs } from "@/app/actions/settings/updateTaskReminderPrefs";
+import { Escolha } from "@/components/ui/escolha";
 import {
   ehAntecedenciaValida,
   preferenciaPadraoDeLembrete,
@@ -96,16 +97,16 @@ export function TaskReminderPrefs() {
           <Label htmlFor="lembrete-antecedencia" className="text-sm font-normal text-muted-foreground">
             {t("Antecedência do aviso")}
           </Label>
-          <select
+          <Escolha
             id="lembrete-antecedencia"
-            className="h-9 rounded-md border bg-background px-2 text-sm"
+            className="w-auto"
             value={pref.antecedencia_min}
             disabled={salvando}
-            onChange={(e) => {
-              // O `<select>` só oferece as três antecedências válidas; a guarda
+            onValueChange={(valor) => {
+              // O seletor só oferece as três antecedências válidas; a guarda
               // é do TIPO, não da tela — valor que a régua não aceita não vira
               // chamada nenhuma.
-              const min = Number(e.target.value);
+              const min = Number(valor);
               if (ehAntecedenciaValida(min)) void salvar({ ...pref, antecedencia_min: min });
             }}
             data-testid="lembrete-antecedencia"
@@ -115,7 +116,7 @@ export function TaskReminderPrefs() {
                 {t(a.rotulo)}
               </option>
             ))}
-          </select>
+          </Escolha>
         </div>
       ) : null}
 

@@ -50,6 +50,7 @@ import {
 } from "@/lib/external-db/receitas/modelos-tabela-direta";
 import type { InstanciaDeReceita } from "@/lib/external-db/receitas/tipos";
 import type { DefinicaoDeReceita } from "@/lib/external-db/receitas/tipos";
+import { Escolha } from "@/components/ui/escolha";
 
 interface Props {
   connectionId: string;
@@ -1190,30 +1191,30 @@ export default function ReceitasProntas({ connectionId, motor, canWrite }: Props
                                 <Label htmlFor={idTipo} className="text-xs text-muted-foreground">
                                   {t("Tipo")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idTipo}
                                   value={campo.tipo}
-                                  onChange={(e) =>
-                                    mudarCampo(i, { tipo: e.target.value as TipoDeCampo })
+                                  onValueChange={(v) =>
+                                    mudarCampo(i, { tipo: v as TipoDeCampo })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="texto">{t("Texto")}</option>
                                   <option value="numero">{t("Número")}</option>
                                   <option value="preco">{t("Preço")}</option>
-                                </select>
+                                </Escolha>
                               </div>
                               <div>
                                 <Label htmlFor={idFiltro} className="text-xs text-muted-foreground">
                                   {t("Filtro")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idFiltro}
                                   value={campo.filtro}
-                                  onChange={(e) =>
-                                    mudarCampo(i, { filtro: e.target.value as FiltroDeCampo })
+                                  onValueChange={(v) =>
+                                    mudarCampo(i, { filtro: v as FiltroDeCampo })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="nenhum">{t("Nenhum")}</option>
                                   {/* Sem "Igual": o schema da receita WordPress só aceita
@@ -1227,7 +1228,7 @@ export default function ReceitasProntas({ connectionId, motor, canWrite }: Props
                                       <option value="maximo">{t("Máximo")}</option>
                                     </>
                                   )}
-                                </select>
+                                </Escolha>
                               </div>
                               {mostrandoChaves && (
                                 <div>
@@ -1324,37 +1325,37 @@ export default function ReceitasProntas({ connectionId, motor, canWrite }: Props
                                 <Label htmlFor={idNivel} className="text-xs text-muted-foreground">
                                   {t("Nível")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idNivel}
                                   value={categoria.nivel}
-                                  onChange={(e) =>
+                                  onValueChange={(v) =>
                                     mudarCategoria(i, {
-                                      nivel: e.target.value as NivelDaTaxonomia,
+                                      nivel: v as NivelDaTaxonomia,
                                     })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="qualquer">{t("Qualquer")}</option>
                                   <option value="filho">{t("Tem categoria acima")}</option>
                                   <option value="raiz">{t("Não tem categoria acima")}</option>
-                                </select>
+                                </Escolha>
                               </div>
                               <div>
                                 <Label htmlFor={idFiltro} className="text-xs text-muted-foreground">
                                   {t("Filtro")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idFiltro}
                                   value={categoria.filtro}
-                                  onChange={(e) =>
-                                    mudarCategoria(i, { filtro: e.target.value as FiltroDeCategoria })
+                                  onValueChange={(v) =>
+                                    mudarCategoria(i, { filtro: v as FiltroDeCategoria })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="nenhum">{t("Nenhum")}</option>
                                   <option value="contem">{t("Contém")}</option>
                                   <option value="igual">{t("Igual")}</option>
-                                </select>
+                                </Escolha>
                               </div>
                               {mostrandoChaves && (
                                 <div>
@@ -1612,34 +1613,34 @@ export default function ReceitasProntas({ connectionId, motor, canWrite }: Props
                                 <Label htmlFor={idTipo} className="text-xs text-muted-foreground">
                                   {t("Tipo")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idTipo}
                                   value={campo.tipo}
-                                  onChange={(e) =>
+                                  onValueChange={(v) =>
                                     mudarCampoTabelaDireta(i, {
-                                      tipo: e.target.value as TipoDeCampo,
+                                      tipo: v as TipoDeCampo,
                                     })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="texto">{t("Texto")}</option>
                                   <option value="numero">{t("Número")}</option>
                                   <option value="preco">{t("Preço")}</option>
-                                </select>
+                                </Escolha>
                               </div>
                               <div>
                                 <Label htmlFor={idFiltro} className="text-xs text-muted-foreground">
                                   {t("Filtro")}
                                 </Label>
-                                <select
+                                <Escolha
                                   id={idFiltro}
                                   value={campo.filtro}
-                                  onChange={(e) =>
+                                  onValueChange={(v) =>
                                     mudarCampoTabelaDireta(i, {
-                                      filtro: e.target.value as FiltroDeCampo,
+                                      filtro: v as FiltroDeCampo,
                                     })
                                   }
-                                  className="mt-1 block w-full rounded-md border bg-background p-2 text-sm"
+                                  className="mt-1 w-full"
                                 >
                                   <option value="nenhum">{t("Nenhum")}</option>
                                   {campo.tipo === "texto" && (
@@ -1654,7 +1655,7 @@ export default function ReceitasProntas({ connectionId, motor, canWrite }: Props
                                       <option value="maximo">{t("Máximo")}</option>
                                     </>
                                   )}
-                                </select>
+                                </Escolha>
                               </div>
                               {mostrandoChaves && (
                                 <div>

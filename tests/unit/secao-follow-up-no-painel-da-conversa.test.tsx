@@ -135,7 +135,7 @@ describe("painel do inbox — seção de follow-up", () => {
     const secao = await screen.findByTestId("inbox-followup");
     expect(secao.textContent).toMatch(/follow-up/i);
 
-    await userEvent.selectOptions(screen.getByLabelText("Fluxo de follow-up"), FLUXO.id);
+    await userEvent.selectOptions(screen.getByTestId("escolher-fluxo-followup"), FLUXO.id);
     await userEvent.click(screen.getByTestId("iniciar-followup"));
 
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));

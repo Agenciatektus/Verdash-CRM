@@ -459,12 +459,17 @@ describe("Receitas prontas — o filtro de campo do WordPress", () => {
     });
     const grupo = screen.getByRole("group", { name: "Quartos" });
     await act(async () => {
-      fireEvent.change(within(grupo).getByLabelText("Tipo"), { target: { value: "texto" } });
+      // Escolha: o valor entra pelo <select> nativo escondido ao lado do gatilho.
+      fireEvent.change(within(grupo).getByLabelText("Tipo").parentElement!.querySelector("select")!, {
+        target: { value: "texto" },
+      });
     });
 
     const opcoes = Array.from(
-      (within(grupo).getByLabelText("Filtro") as HTMLSelectElement).options,
-    ).map((o) => o.value);
+      within(grupo).getByLabelText("Filtro").parentElement!.querySelector("select")!.options,
+    )
+      .map((o) => o.value)
+      .filter(Boolean);
     expect(opcoes).toEqual(["nenhum", "contem"]);
   });
 });

@@ -73,8 +73,10 @@ describe("ChannelHistorico", () => {
     post.mockResolvedValue({ data: {} });
     tela();
     const periodo = await screen.findByRole("combobox", { name: "Período: últimos 30, 90, 180 ou 365 dias" });
-    expect([...(periodo as HTMLSelectElement).options].map((o) => o.value)).toEqual(["30", "90", "180", "365"]);
-    fireEvent.change(periodo, { target: { value: "180" } });
+    // O Escolha tem o <select> nativo escondido ao lado do gatilho: é ele que leva as opções e o valor.
+    const nativo = periodo.parentElement!.querySelector("select") as HTMLSelectElement;
+    expect([...nativo.options].map((o) => o.value).filter(Boolean)).toEqual(["30", "90", "180", "365"]);
+    fireEvent.change(nativo, { target: { value: "180" } });
     fireEvent.click(screen.getByRole("button", { name: "Ver prévia" }));
     await waitFor(() => expect(post).toHaveBeenCalled());
     expect(post.mock.calls[0]![1]).toMatchObject({ acao: "previa", dias: 180 });

@@ -8,6 +8,7 @@ import {
   type LembreteDeCasoParado as Lembrete,
 } from "@/app/actions/settings/atualizarLembreteDeCasoParado";
 import { Button } from "@/components/ui/button";
+import { Escolha } from "@/components/ui/escolha";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
@@ -73,33 +74,33 @@ export function LembreteDeCasoParado({ inicial }: { inicial: Lembrete }) {
       <div className="flex flex-wrap gap-3">
         <label className="text-sm max-md:w-full">
           {t("Lembrar a cada")}{" "}
-          <select
-            className="ml-2 rounded-md border bg-background p-2 max-md:mt-1 max-md:ml-0 max-md:block max-md:w-full max-md:min-h-11"
+          <Escolha
+            className="ml-2 w-auto min-w-28 max-md:mt-1 max-md:ml-0 max-md:w-full"
             value={valor.intervaloHoras}
             disabled={!valor.ligado}
-            onChange={(e) => setValor({ ...valor, intervaloHoras: Number(e.target.value) })}
+            onValueChange={(v) => setValor({ ...valor, intervaloHoras: Number(v) })}
           >
             {comOGravado(INTERVALOS_EM_HORAS, valor.intervaloHoras).map((h) => (
               <option key={h} value={h}>
                 {intervaloEmPalavras(h)}
               </option>
             ))}
-          </select>
+          </Escolha>
         </label>
         <label className="text-sm max-md:w-full">
           {t("Avisos por espera")}{" "}
-          <select
-            className="ml-2 rounded-md border bg-background p-2 max-md:mt-1 max-md:ml-0 max-md:block max-md:w-full max-md:min-h-11"
+          <Escolha
+            className="ml-2 w-auto min-w-20 max-md:mt-1 max-md:ml-0 max-md:w-full"
             value={valor.teto}
             disabled={!valor.ligado}
-            onChange={(e) => setValor({ ...valor, teto: Number(e.target.value) })}
+            onValueChange={(v) => setValor({ ...valor, teto: Number(v) })}
           >
             {comOGravado(TETOS, valor.teto).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
-          </select>
+          </Escolha>
         </label>
       </div>
       <Button type="button" size="sm" disabled={isPending} onClick={salvar}>

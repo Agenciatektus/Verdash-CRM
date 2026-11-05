@@ -9,6 +9,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { resumirErroDaImportacao } from "@/lib/channels/historico/resumo-do-erro";
+import { Escolha } from "@/components/ui/escolha";
 
 interface Previa {
   conversas: number;
@@ -206,17 +207,17 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
 
       {podePedirPrevia && (
         <div className="flex items-center gap-2">
-          <select
+          <Escolha
             aria-label={t("Período: últimos 30, 90, 180 ou 365 dias")}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
+            className="h-8 w-auto text-xs"
             value={dias}
             disabled={contando}
-            onChange={(e) => setDias(Number(e.target.value))}
+            onValueChange={(v) => setDias(Number(v))}
           >
             {DIAS.map((d) => (
               <option key={d} value={d}>{t("{dias} dias").replace("{dias}", String(d))}</option>
             ))}
-          </select>
+          </Escolha>
           <Button size="sm" variant="outline" disabled={contando || busy} onClick={() => void pedirPrevia()}>
             {contando ? t("Contando as conversas…") : t("Ver prévia")}
           </Button>

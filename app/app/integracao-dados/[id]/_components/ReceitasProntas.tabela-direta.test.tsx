@@ -270,7 +270,7 @@ describe("Receitas prontas — tabela direta", () => {
       fireEvent.click(screen.getByRole("option", { name: /Texto/ }));
     });
     const filtro = within(grupo).getByLabelText("Filtro");
-    expect(filtro).toHaveValue("nenhum");
+    expect(filtro).toHaveTextContent("Nenhum");
     await act(async () => {
       fireEvent.click(filtro);
     });

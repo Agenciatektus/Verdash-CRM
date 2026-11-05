@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { CampoDeData } from "@/components/ui/campo-de-data";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { useT } from "@/hooks/i18n/useT";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
@@ -34,7 +35,7 @@ export function ReservasColetivas({ today, zone, canWrite }: { today: string; zo
   async function execute(action: () => Promise<unknown>) { setBusy(true); try { await action(); setEditing(null); await query.refetch(); void qc.invalidateQueries({ queryKey: ["agenda"] }); } catch (e) { showApiError(e); } finally { setBusy(false); } }
   return <details className="shrink-0 rounded-md border border-border p-3" open={opened} onToggle={(e) => setOpened(e.currentTarget.open)}>
     <summary className="cursor-pointer font-medium">{t("Turmas e reservas coletivas")}</summary>
-    {opened && <div className="max-h-80 space-y-3 overflow-y-auto pt-3"><label className="block space-y-1">{t("Semana a partir de")} <input className={field} type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)}/></label>
+    {opened && <div className="max-h-80 space-y-3 overflow-y-auto pt-3"><label className="block space-y-1">{t("Semana a partir de")} <CampoDeData tipo="date" className="w-full" value={day} onValorChange={(v) => v && setDay(v)}/></label>
       <p className="text-xs text-text-muted">{t("Cada pessoa tem sua reserva. Remarcar ou cancelar aqui afeta somente a pessoa escolhida.")}</p>
       {query.isError && <div role="alert"><p>{t("Não foi possível ler as reservas coletivas.")}</p><Button variant="outline" onClick={() => void query.refetch()}>{t("Tentar novamente")}</Button></div>}
       {query.isLoading && <p>{t("Carregando…")}</p>}
@@ -48,7 +49,7 @@ export function ReservasColetivas({ today, zone, canWrite }: { today: string; zo
             <Button variant="outline" size="sm" onClick={() => setDetailId(r.id)}>{t("Ver reserva e publicação")}</Button>
             {canWrite && <Button variant="outline" size="sm" onClick={() => setEditing(editing === r.id ? null : r.id)}>{t("Gerenciar esta reserva")}</Button>}</div>
           {editing === r.id && canWrite && <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); const values = new FormData(e.currentTarget); void execute(() => apiClient.patch("/api/v1/agenda/agendamentos", { id: r.id, revision: r.revision, starts_at: instanteCivil(String(values.get("starts_at")), r.fuso).toISOString() })); }}>
-            <label className="block space-y-1">{t("Novo horário")}<input className={field} name="starts_at" required type="datetime-local"/></label><span className="text-xs">{r.fuso}</span><Button type="submit" disabled={busy}>{t("Remarcar esta pessoa")}</Button>
+            <label className="block space-y-1">{t("Novo horário")}<CampoDeData name="starts_at" className="w-full" required tipo="datetime-local"/></label><span className="text-xs">{r.fuso}</span><Button type="submit" disabled={busy}>{t("Remarcar esta pessoa")}</Button>
             {r.situacao === "pending" && <Button type="button" variant="outline" disabled={busy} onClick={() => void execute(() => apiClient.patch("/api/v1/agenda/agendamentos", { id: r.id, revision: r.revision, status: "confirmed" }))}>{t("Confirmar pela equipe")}</Button>}
             <label className="block space-y-1">{t("Motivo do cancelamento")}<input className={field} name="reason" minLength={3}/></label><Button type="button" variant="outline" disabled={busy} onClick={(e) => { const form = e.currentTarget.closest("form"); const reason = String(new FormData(form!).get("reason") ?? "").trim(); if (reason.length < 3) { showApiError(new Error(t("Informe o motivo do cancelamento."))); return; } void execute(() => apiClient.delete("/api/v1/agenda/agendamentos", { id: r.id, revision: r.revision, reason })); }}>{t("Cancelar esta pessoa")}</Button>
           </form>}

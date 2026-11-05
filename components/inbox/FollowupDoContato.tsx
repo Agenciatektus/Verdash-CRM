@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { rotuloDoStatus, tomDoStatus } from "@/lib/followup/eventos-legiveis";
+import { Escolha } from "@/components/ui/escolha";
 
 /**
  * O enrollment vivo, como `ENROLLMENT_LIST_COLUMNS` o devolve.
@@ -201,14 +202,13 @@ export function FollowupDoContato({ contactId, podeEscrever }: Props) {
       )}
       {podeIniciar && (
         <div className="mt-2 space-y-2">
-          {/* Select nativo (o mesmo idioma do "Desfecho da demanda"): o teste o
-              aciona por selectOptions, sem portal. */}
-          <select
+          {/* O Escolha leva o data-testid ao <select> escondido: o teste o aciona por selectOptions, sem portal. */}
+          <Escolha
             aria-label={t("Fluxo de follow-up")}
             data-testid="escolher-fluxo-followup"
-            className="w-full rounded-md border bg-background p-2 text-xs"
+            className="w-full text-xs"
             value={escolhido}
-            onChange={(e) => setEscolhido(e.target.value)}
+            onValueChange={setEscolhido}
           >
             <option value="">{t("Escolha o fluxo")}</option>
             {fluxosAtivos.map((f) => (
@@ -216,7 +216,7 @@ export function FollowupDoContato({ contactId, podeEscrever }: Props) {
                 {f.name}
               </option>
             ))}
-          </select>
+          </Escolha>
           <Button
             size="sm"
             data-testid="iniciar-followup"

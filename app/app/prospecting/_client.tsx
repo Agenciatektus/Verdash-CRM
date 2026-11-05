@@ -1465,16 +1465,16 @@ export function ProspectingClient() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Label htmlFor="prospecting-ordenar">{t("Ordenar")}</Label>
-                        <select
+                        <Escolha
                           id="prospecting-ordenar"
-                          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                          className="w-auto"
                           value={ordenar}
                           disabled={busy}
-                          onChange={(e) => setOrdenar(e.target.value as "" | "score")}
+                          onValueChange={(v) => setOrdenar(v as "" | "score")}
                         >
                           <option value="">{t("Recentes")}</option>
                           <option value="score">{t("Score")}</option>
-                        </select>
+                        </Escolha>
                       </div>
                       {canSelect && (
                         <div className="flex flex-wrap items-center gap-2">
