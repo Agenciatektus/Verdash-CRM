@@ -31,9 +31,10 @@ beforeEach(() => {
 
 describe("corte diário da chave da plataforma", () => {
   it("padrões: alerta 0,50 e 1,00, corte 3,00, 3 dias de saldo; aceita vírgula", () => {
-    expect(limitesDaPlataforma({})).toEqual({ alertasCents: [50, 100], corteCents: 300, diasDeSaldo: 3 });
+    expect(limitesDaPlataforma({})).toEqual({ alertasCents: [50, 100], corteCents: 300, diasDeSaldo: 3, saldoUsdCents: [] });
     expect(limitesDaPlataforma({ AI_PLATAFORMA_ALERTA_USD_DIA: "2|0,75", AI_PLATAFORMA_CORTE_USD_DIA: "lixo" }))
-      .toEqual({ alertasCents: [75, 200], corteCents: 300, diasDeSaldo: 3 });
+      .toEqual({ alertasCents: [75, 200], corteCents: 300, diasDeSaldo: 3, saldoUsdCents: [] });
+    expect(limitesDaPlataforma({ AI_PLATAFORMA_ALERTA_SALDO_USD: "1|0,5" }).saldoUsdCents).toEqual([50, 100]);
   });
 
   it("preview na chave da plataforma acima do corte cai; abaixo, segue", () => {
@@ -101,7 +102,7 @@ describe("corte diário da chave da plataforma", () => {
 });
 
 describe("alerta de gasto e saldo da plataforma", () => {
-  const base = { alertasCents: [50, 100], corteCents: 100, saldoCents: null, mediaDiariaCents: 0, diasDeSaldo: 3 };
+  const base = { alertasCents: [50, 100], corteCents: 100, saldoCents: null, mediaDiariaCents: 0, diasDeSaldo: 3, saldoUsdCents: [] as number[] };
 
   it("níveis escalonados pelo gasto do dia", () => {
     expect(niveisCruzados({ ...base, gastoHojeCents: 40 }).map((n) => n.id)).toEqual([]);
@@ -112,6 +113,15 @@ describe("alerta de gasto e saldo da plataforma", () => {
   it("saldo abaixo de N dias do consumo médio alerta", () => {
     expect(niveisCruzados({ ...base, gastoHojeCents: 0, saldoCents: 100, mediaDiariaCents: 50 }).map((n) => n.id)).toEqual(["saldo_dias"]);
     expect(niveisCruzados({ ...base, gastoHojeCents: 0, saldoCents: 1000, mediaDiariaCents: 50 })).toEqual([]);
+  });
+
+  it("saldo restante em dólares: acima não alerta; igual ou abaixo alerta; vários valores; vazio = nada", () => {
+    const ids = (saldoCents: number, saldoUsdCents: number[]) => niveisCruzados({ ...base, gastoHojeCents: 0, saldoCents, saldoUsdCents }).map((n) => n.id);
+    expect(ids(101, [100])).toEqual([]);
+    expect(ids(100, [100])).toEqual(["saldo_usd_100"]);
+    expect(ids(40, [100, 50])).toEqual(["saldo_usd_100", "saldo_usd_50"]);
+    expect(ids(40, [])).toEqual([]);
+    expect(niveisCruzados({ ...base, gastoHojeCents: 0, saldoCents: null, saldoUsdCents: [100] })).toEqual([]);
   });
 
   it("um envio por nível por dia: o claim repetido não reenvia", async () => {
