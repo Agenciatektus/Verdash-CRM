@@ -30,6 +30,8 @@ describe("connectMercadoPhone", () => {
 
   it("recusa campo vazio", async () => {
     expect(await connectMercadoPhone({ apiToken: "", webhookToken: "w" })).toEqual({ ok: false, error: "invalid_input" });
+    expect(await connectMercadoPhone({ apiToken: "a".repeat(513), webhookToken: "w" })).toEqual({ ok: false, error: "invalid_input" });
+    expect(await connectMercadoPhone({ apiToken: "bom", webhookToken: "w".repeat(513) })).toEqual({ ok: false, error: "invalid_input" });
   });
 
   it("token válido grava provider mercadophone, healthy", async () => {

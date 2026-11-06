@@ -37,7 +37,7 @@ export async function connectMercadoPhone(input: {
 
   const apiToken = String(input?.apiToken ?? "").trim();
   const webhookToken = String(input?.webhookToken ?? "").trim();
-  if (!apiToken || !webhookToken) return { ok: false, error: "invalid_input" };
+  if (!apiToken || !webhookToken || apiToken.length > 512 || webhookToken.length > 512) return { ok: false, error: "invalid_input" };
 
   try {
     await listarEstoque(apiToken, { page: 1, limit: 1 });
