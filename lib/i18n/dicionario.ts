@@ -7385,6 +7385,22 @@ export const DICIONARIO: Traducoes = {
   "para ativar a integração.": { es: "para activar la integración." },
   "Obtenha as credenciais em": { es: "Obtén las credenciales en" },
   "Conectar Nuvemshop": { es: "Conectar Nuvemshop" },
+  "Conecta o PDV da loja: estoque, clientes e vendas.": {
+    es: "Conecta el PDV de la tienda: stock, clientes y ventas.",
+  },
+  "Conectar MercadoPhone": { es: "Conectar MercadoPhone" },
+  "Cole os dois tokens gerados no MercadoPhone e registre a URL do webhook lá.": {
+    es: "Pega los dos tokens generados en MercadoPhone y registra allí la URL del webhook.",
+  },
+  "MercadoPhone desconectado.": { es: "MercadoPhone desconectado." },
+  "MercadoPhone conectado.": { es: "MercadoPhone conectado." },
+  "Token da API": { es: "Token de la API" },
+  "Token de segurança do webhook": { es: "Token de seguridad del webhook" },
+  "URL do webhook (cole no MercadoPhone)": { es: "URL del webhook (pega en MercadoPhone)" },
+  MercadoPhone: { es: "MercadoPhone" },
+  "Conecte o PDV da loja para trazer estoque, clientes e vendas para o CRM.": {
+    es: "Conecta el PDV de la tienda para traer stock, clientes y ventas al CRM.",
+  },
   "Você será redirecionado para autorizar o app na sua loja.": {
     es: "Te redirigiremos para que autorices la app en tu tienda.",
   },

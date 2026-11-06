@@ -1040,6 +1040,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "FORNECEDOR",
     motivo: "endpoint da API da Nuvemshop/Tiendanube (ordens e catálogo do e-commerce do cliente).",
   },
+  "app.mercadophone.tech": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "endpoint da API do PDV MercadoPhone (`lib/mercadophone/api-client.ts`): é o destino do request com o token do lojista. Trocar pelo domínio do revendedor faria a consulta de estoque não chegar a lugar nenhum.",
+  },
   "api.stripe.com": {
     categoria: "FORNECEDOR",
     motivo:
