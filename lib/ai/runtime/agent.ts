@@ -430,7 +430,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     if (version.provider === PROVEDOR_POR_ASSINATURA) {
       // A ASSINATURA NÃO É CHAVE: o par de tokens mora na linha de login da
       // empresa e é lido pelo leitor próprio, que ainda renova antes de
-      // devolver (janela de 8 dias, `userId: null`). `loadCredential` recusa
+      // devolver (5 minutos antes de vencer, `userId: null`). `loadCredential` recusa
       // este provider de propósito — mandaria o JSON dos tokens como chave.
       //
       // Sem linha utilizável → a RESERVA, e sem ela o `failRun` de sempre:

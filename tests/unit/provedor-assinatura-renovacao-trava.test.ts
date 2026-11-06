@@ -13,8 +13,9 @@
  *     um token sabidamente revogado — e o motivo vira decisão de queda pelas
  *     funções que já existem em `reserva-da-assinatura.ts` (reserva se há,
  *     humano se não há).
- *  3. A janela de renovação continua sendo de 8 dias, e `expires_at` nulo
- *     nunca decide sozinho: renovar sem precisar troca um token bom por nada.
+ *  3. A janela de renovação é de 5 minutos (o access_token do Codex vive 1
+ *     hora, medido em produção em 05/11/2026; a de 8 dias renovava em TODA
+ *     leitura), e `expires_at` nulo nunca decide sozinho.
  *
  * Sabotagem que confirma a guarda: recolar `const rotacoesEmCurso = new Map()`
  * em `lib/ai/pontos/renovacao-da-assinatura.ts` deixa o caso 1 vermelho —
@@ -56,12 +57,20 @@ describe("a trava em memória não existe mais — ninguém a usa por engano", (
   });
 });
 
-describe("a janela de renovação continua sendo a mesma", () => {
-  it("8 dias — e a folga contada inteira ainda não é hora de renovar", () => {
-    expect(JANELA_DE_RENOVACAO_MS).toBe(8 * 24 * 60 * 60 * 1000);
+describe("a janela de renovação cabe na vida do token", () => {
+  it("5 minutos — e a folga contada inteira ainda não é hora de renovar", () => {
+    expect(JANELA_DE_RENOVACAO_MS).toBe(5 * 60 * 1000);
     const agora = 1_700_000_000_000;
     expect(renovacaoProxima(agora + JANELA_DE_RENOVACAO_MS, agora)).toBe(true);
     expect(renovacaoProxima(agora + JANELA_DE_RENOVACAO_MS + 1, agora)).toBe(false);
+  });
+
+  it("um token recém-emitido (1 hora de vida) NÃO pede renovação", () => {
+    // A janela de 8 dias era maior que a vida do token: toda leitura renovava.
+    const agora = 1_700_000_000_000;
+    expect(renovacaoProxima(agora + 60 * 60 * 1000, agora)).toBe(false);
+    expect(renovacaoProxima(agora + 4 * 60 * 1000, agora)).toBe(true);
+    expect(renovacaoProxima(agora - 1, agora), "vencido também renova").toBe(true);
   });
 
   it("`expires_at` nulo nunca decide sozinho", () => {
@@ -73,7 +82,7 @@ describe("a janela de renovação continua sendo a mesma", () => {
     expect(await renovarSeProxima({ expiraEm: null, renovar })).toBe(false);
     expect(renovar).not.toHaveBeenCalled();
 
-    expect(await renovarSeProxima({ expiraEm: Date.now() + 60 * 60 * 1000, renovar })).toBe(true);
+    expect(await renovarSeProxima({ expiraEm: Date.now() + 60_000, renovar })).toBe(true);
     expect(renovar).toHaveBeenCalledTimes(1);
   });
 });
