@@ -402,6 +402,8 @@
   "Razão social": "公司法定名称",
   "DPO email": "DPO 邮箱",
   "Retenção de mídia (dias)": "媒体保留（天）",
+  "Retenção de mídia de grupos (dias)": "群组媒体保留（天）",
+  "Grupos recebem muita mídia. Fotos, vídeos e áudios de grupo são apagados depois deste prazo; o texto fica.": "群组会收到大量媒体。群组中的照片、视频和音频在此期限后删除；文字会保留。",
   "URL política de privacidade": "隐私政策 URL",
   "Informações pessoais. Email só pode ser trocado em breve.": "个人信息。邮箱即将支持更换。",
   "Dados da empresa, retenção de mídia, DPO. Admin only.": "公司数据、媒体保留、DPO。仅管理员。",

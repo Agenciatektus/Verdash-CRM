@@ -290,6 +290,14 @@ export function AgendaClient({
     // A largura só existe no cliente, e decidir antes divergiria da hidratação.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisao(visaoPadraoDaLargura((consulta) => window.matchMedia(consulta).matches));
+    // Estreitar até o celular esconde 3 dias/Semana/Mês (`mb:hidden`): sem isto o
+    // seletor ficava sem botão ativo, numa visão que a tela nem oferece ali.
+    const celular = window.matchMedia("(max-width: 759px)");
+    const aoMudar = (e: MediaQueryListEvent) => {
+      if (e.matches) setVisao("dia");
+    };
+    celular.addEventListener("change", aoMudar);
+    return () => celular.removeEventListener("change", aoMudar);
   }, []);
   const [isolada, setIsolada] = React.useState<string | null>(null);
   /**

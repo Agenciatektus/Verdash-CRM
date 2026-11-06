@@ -11772,6 +11772,7 @@ export type Database = {
           mcp_externo_chave_last4: string | null;
           mcp_externo_chave_tag: string | null;
           media_retention_days: number;
+          group_media_retention_days: number;
           media_retention_enforced: boolean;
           meta_lead_birth_enabled_at: string | null;
           onboarded_at: string | null;
@@ -11809,6 +11810,7 @@ export type Database = {
           mcp_externo_chave_last4?: string | null;
           mcp_externo_chave_tag?: string | null;
           media_retention_days?: number;
+          group_media_retention_days?: number;
           media_retention_enforced?: boolean;
           meta_lead_birth_enabled_at?: string | null;
           onboarded_at?: string | null;
@@ -11845,6 +11847,7 @@ export type Database = {
           mcp_externo_chave_last4?: string | null;
           mcp_externo_chave_tag?: string | null;
           media_retention_days?: number;
+          group_media_retention_days?: number;
           media_retention_enforced?: boolean;
           meta_lead_birth_enabled_at?: string | null;
           onboarded_at?: string | null;

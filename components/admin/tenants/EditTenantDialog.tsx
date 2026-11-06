@@ -30,6 +30,7 @@ function valoresIniciais(o: TenantOrganization): TenantInput {
     locale: (o.locale ?? "pt-BR") as TenantInput["locale"],
     currency: (o.currency ?? "BRL") as TenantInput["currency"],
     media_retention_days: o.media_retention_days ?? 180,
+    group_media_retention_days: o.group_media_retention_days ?? 30,
     // `true` é o padrão do banco (0557): ligado salvo quem desligou.
     media_retention_enforced: o.media_retention_enforced ?? true,
     dpo_email: o.dpo_email,
