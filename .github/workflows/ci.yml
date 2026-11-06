@@ -612,9 +612,9 @@ jobs:
     # medido — não há Docker onde esta matriz foi escrita —, e existe para o
     # vermelho continuar falando de schema: mantido em 20, a perna morreria por
     # relógio no meio da segunda passada.
+    timeout-minutes: 40
     # Fork, subida 1.99: medido na PR 548, a perna do PG 17 passou de 30 min
     # duas vezes seguidas (30m13s, cancelada pelo teto) com a suíte verde até ali.
-    timeout-minutes: 40
     # Executor próprio para trabalho nosso quando EXECUTOR_PROPRIO=ligado; o
     # porquê e a guarda contra fork: comentário do e2e-parte no e2e.yml.
     runs-on: ${{ vars.EXECUTOR_PROPRIO == 'ligado' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'deskcomm-proprio' || 'ubuntu-latest' }}
