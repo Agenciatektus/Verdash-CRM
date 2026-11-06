@@ -18853,6 +18853,7 @@ export const DICIONARIO: Traducoes = {
   "Áudios e imagens antigos que o WhatsApp não guarda mais aparecem como indisponíveis.": { es: "Los audios e imágenes antiguos que WhatsApp ya no guarda aparecen como no disponibles." },
   "Importando: {feitas} de {conversas} conversas": { es: "Importando: {feitas} de {conversas} conversaciones" },
   "Importação concluída": { es: "Importación concluida" },
+  "{n} conversas do Instagram não foram importadas.": { es: "{n} conversaciones de Instagram no se importaron." },
   "{gravadas} mensagens trazidas; {indisponiveis} áudios ou imagens não estavam mais disponíveis.": { es: "{gravadas} mensajes traídos; {indisponiveis} audios o imágenes ya no estaban disponibles." },
   "Ligue 'Guardar o histórico' e conecte o número de novo": { es: "Activa 'Guardar el historial' y conecta el número de nuevo" },
   "Ver prévia": { es: "Ver vista previa" },

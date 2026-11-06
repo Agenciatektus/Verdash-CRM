@@ -168,6 +168,10 @@ export async function POST(req: NextRequest, { params }: Context): Promise<Respo
       credencial = await encryptWebhookSecret(admin, pedido.token!);
       if (!credencial) return fail("internal_error", "Não foi possível guardar o token com segurança.", 500, { requestId });
     }
+    // Prévia nova substitui as anteriores: o token delas não fica guardado à toa.
+    if (doIzzy) {
+      await admin.from(TABELA).update({ credencial_cifrada: null } as never).eq("channel_session_id", id).eq("status", "previa");
+    }
     const { data, error } = await admin
       .from(TABELA)
       .insert({

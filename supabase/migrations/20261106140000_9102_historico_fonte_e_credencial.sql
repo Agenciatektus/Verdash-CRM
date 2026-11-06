@@ -4,6 +4,7 @@
 -- O select por coluna abaixo tira o grant de tabela inteira e devolve tudo MENOS `credencial_cifrada`.
 -- Reverter: alter table public.importacoes_de_historico drop column if exists credencial_cifrada;
 --           alter table public.importacoes_de_historico drop column if exists fonte;
+--           grant select on public.importacoes_de_historico to authenticated;
 
 alter table public.importacoes_de_historico add column if not exists fonte text not null default 'waha';
 alter table public.importacoes_de_historico add column if not exists credencial_cifrada text;

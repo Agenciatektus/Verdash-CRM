@@ -34,6 +34,7 @@ interface Importacao {
   midias_indisponiveis?: number;
   erro?: string | null;
   fonte?: string | null;
+  cursor?: { semTelefone?: { n: number } } | null;
 }
 
 interface Historico {
@@ -229,6 +230,11 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
               .replace("{gravadas}", String(imp.mensagens_gravadas ?? 0))
               .replace("{indisponiveis}", String(imp.midias_indisponiveis ?? 0))}
           </p>
+          {!!imp.cursor?.semTelefone?.n && (
+            <p className="text-[11px] text-muted-foreground">
+              {t("{n} conversas do Instagram não foram importadas.").replace("{n}", String(imp.cursor.semTelefone.n))}
+            </p>
+          )}
         </>
       )}
 
