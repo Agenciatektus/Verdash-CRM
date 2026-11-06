@@ -21,7 +21,7 @@ describe("mapearVenda", () => {
 
   it("payload sem custo, lucro nem dado pessoal", () => {
     const j = JSON.stringify(mapearVenda(venda()).payload);
-    expect(j).not.toMatch(/valorCusto|lucro|cpf|email|telefone|nome\"|rua/i);
+    expect(j).not.toMatch(/valorCusto|lucro|cpf|email|telefone|\"nome\"|rua/i);
     expect(j).toContain("REDMI PAD 2");
   });
 

@@ -12,7 +12,8 @@ const texto = (v: unknown) => (typeof v === "string" && v ? v : null);
 
 /** Reais (número ou texto) -> centavos, arredondando para fugir do float (1739.9 * 100). */
 function centavos(v: unknown): number {
-  const n = typeof v === "number" ? v : Number(String(v ?? "").replace(",", "."));
+  // Ausente não vira 0: venda sem total é campo com nome errado, não venda grátis.
+  const n = typeof v === "number" ? v : v == null || v === "" ? NaN : Number(String(v).replace(",", "."));
   if (!Number.isFinite(n) || n < 0) throw new PedidoInvalidoError("total_invalido");
   return Math.round(n * 100);
 }
