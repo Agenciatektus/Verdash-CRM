@@ -160,6 +160,32 @@ describe("formulários de conversão", () => {
     });
     expect(enviadas[2]).toMatchObject({ enabled: false });
   });
+  it("com grupos recolhidos, o recomendado abre quem ganhou etapa e salvar envia as etapas de TODOS os grupos", async () => {
+    const id = (n: number) => `${n}${n}${n}${n}${n}${n}${n}${n}-${n}${n}${n}${n}-4${n}${n}${n}-8${n}${n}${n}-${String(n).repeat(12)}`;
+    const { container } = render(
+      <RegrasDeConversaoGoogle
+        etapas={[
+          { id: id(1), nome: "Novo", funil: "Tráfego", primeira: true },
+          { id: id(2), nome: "Qualificado", funil: "Tráfego", primeira: false },
+          { id: id(3), nome: "Novo", funil: "Disparo", primeira: true },
+        ]}
+        regras={[]}
+        idioma="pt-BR"
+        podeCriarAcao={false}
+      />,
+    );
+    const grupos = () => [...container.querySelectorAll("details")];
+    expect(grupos().map((g) => g.open)).toEqual([false, false]);
+    fireEvent.click(screen.getByRole("button", { name: "Usar o recomendado" }));
+    expect(grupos().map((g) => g.open)).toEqual([true, true]);
+    // Recolhe um grupo (com etapa ligada dentro) e salva: nada some do envio.
+    grupos()[0]!.open = false;
+    fireEvent.click(screen.getByRole("button", { name: "Salvar regras" }));
+    await waitFor(() => expect(mock.salvarRegras).toHaveBeenCalledOnce());
+    const enviadas = mock.salvarRegras.mock.calls[0]![0] as Array<Record<string, unknown>>;
+    expect(enviadas.map((e) => e.stage_id)).toEqual([id(1), id(2), id(3)]);
+    expect(enviadas.filter((e) => e.enabled)).toHaveLength(3);
+  });
 });
 
 it("só gera o script com captura ativa salva, sem credenciais", () => {

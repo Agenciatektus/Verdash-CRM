@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CaretDown } from "@/lib/ui/icons";
 import { Switch } from "@/components/ui/switch";
 import { Escolha } from "@/components/ui/escolha";
 import {
@@ -121,6 +122,8 @@ export function RegrasDeConversaoGoogle({
     for (const e of etapas) grupos.set(e.funil, [...(grupos.get(e.funil) ?? []), e]);
     return [...grupos.entries()];
   }, [etapas]);
+  // Grupos que a pessoa abriu/fechou; sem escolha, abre quem já tinha etapa ligada.
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const ligadas = etapas.filter((e) => rascunhos[e.id]?.enabled).length;
 
   function mudar(id: string, parcial: Partial<Rascunho>) {
@@ -143,6 +146,8 @@ export function RegrasDeConversaoGoogle({
       }
       return novo;
     });
+    // O recomendado liga etapas em grupos que podiam estar fechados: abre todos para a pessoa ver o que mudou.
+    setAbertos(Object.fromEntries(funis.map(([funil]) => [funil, true])));
     toast.message(
       t("Etapas recomendadas ligadas. Informe ou crie a ação de conversão de cada uma e salve."),
     );
@@ -206,15 +211,20 @@ export function RegrasDeConversaoGoogle({
         {funis.map(([funil, doFunil]) => (
           <details
             key={funil}
-            open={doFunil.some((e) => inicial[e.id]?.enabled)}
-            className="rounded-md border"
+            open={abertos[funil] ?? doFunil.some((e) => inicial[e.id]?.enabled)}
+            className="group rounded-md border"
             data-testid="grupo-do-funil"
+            onToggle={(ev) => {
+              const aberto = ev.currentTarget.open;
+              setAbertos((a) => (a[funil] === aberto ? a : { ...a, [funil]: aberto }));
+            }}
           >
             <summary className="flex cursor-pointer items-center justify-between gap-3 p-4 font-medium">
-              <span className="min-w-0 truncate">{funil}</span>
+              <span className="min-w-0 flex-1 truncate">{funil}</span>
               <span className="text-sm font-normal text-muted-foreground">
                 {doFunil.filter((e) => rascunhos[e.id]?.enabled).length} {t("de")} {doFunil.length}
               </span>
+              <CaretDown size={16} aria-hidden className="shrink-0 transition-transform group-open:rotate-180" />
             </summary>
             <ul className="flex flex-col gap-3 p-4 pt-0">
               {doFunil.map((e) => {
