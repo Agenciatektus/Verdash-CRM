@@ -70,7 +70,7 @@ describe("o vocabulário padrão do funil é neutro (9080)", () => {
   });
 
   it("a migration 9080 grava o mesmo default, se descreve e não reescreve linha nenhuma", () => {
-    const nome = readdirSync(join(RAIZ, "supabase/migrations")).find((f) => /^\d{14}_9080_/.test(f));
+    const nome = readdirSync(join(RAIZ, "supabase/migrations")).find((f) => /^\d{14}_9080_vocabulario/.test(f)); // fork: há também a nossa 9080_cobranca_compras
     expect(nome, "migration 9080 ausente").toBeTruthy();
     const migration = ler(`supabase/migrations/${nome}`);
     expect(migration).toMatch(/^-- manifest:\s*\S/m);

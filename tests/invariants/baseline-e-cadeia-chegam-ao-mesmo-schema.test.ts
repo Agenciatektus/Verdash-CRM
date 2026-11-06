@@ -105,6 +105,9 @@ const MIGRATIONS_QUE_NAO_RODAM: Record<string, string> = {
     "cannot drop column needs_google_push of table calendar_appointments because other objects depend on it",
   "20260914170000_0243_chamada_de_api_tem_prazo_de_trava.sql":
     'role "authenticator" does not exist',
+  // Fork: a 9033 cria a trigger sem guarda; o baseline já a cria (bloco idempotente da 9033).
+  "20261004210000_9033_miniatura_da_imagem.sql":
+    'trigger "trg_miniatura_sai_com_a_original_upd" for relation "messages" already exists',
 };
 
 /**
@@ -511,7 +514,7 @@ function formata(lista: { linha: string; lado: "cadeia" | "espelho" }[]): string
 }
 
 describe("baseline e cadeia de migrations chegam ao mesmo schema", () => {
-  it("a cadeia inteira aplica sobre o estado de instalação, menos as 8 declaradas", () => {
+  it("a cadeia inteira aplica sobre o estado de instalação, menos as declaradas", () => {
     const medidas = resultado.falhas.map((f) => f.arquivo).sort();
     const declaradas = Object.keys(MIGRATIONS_QUE_NAO_RODAM).sort();
 

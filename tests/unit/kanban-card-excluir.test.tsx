@@ -255,7 +255,7 @@ describe("menu do card — Excluir", () => {
     adiar.mockClear();
     ganhar.mockClear();
     renderMenu();
-    await user.click(screen.getByRole("button", { name: "Ações do lead" }));
+    await user.click(screen.getByRole("button", { name: "Ações do negócio" }));
     await user.click(await screen.findByRole("menuitem", { name: "Marcar como ganho" }));
     expect(ganhar).not.toHaveBeenCalled();
     expect(adiar).toHaveBeenCalledTimes(1);
@@ -269,7 +269,7 @@ describe("menu do card — Excluir", () => {
     pendente.ganho = true;
     try {
       renderMenu();
-      await user.click(screen.getByRole("button", { name: "Ações do lead" }));
+      await user.click(screen.getByRole("button", { name: "Ações do negócio" }));
       const item = await screen.findByRole("menuitem", { name: "Marcar como ganho" });
       expect(item).toHaveAttribute("data-disabled");
     } finally {

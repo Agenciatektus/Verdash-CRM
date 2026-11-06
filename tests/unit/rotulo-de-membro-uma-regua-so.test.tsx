@@ -124,10 +124,10 @@ describe("a régua do rótulo de membro (#3023)", () => {
 describe("as telas da issue mostram o rótulo do helper", () => {
   it("carteira do contato: o seletor de dono lista o membro sem uuid", () => {
     render(<CartaoDaCarteira contactId="c1" papelDoUsuario="manager" />);
+    // Fork: `Escolha` do DS (Radix); as opções fechadas moram no <select> escondido ao lado do gatilho.
     const seletor = screen.getByTestId("carteira-seletor");
-    const opcoes = within(seletor as HTMLElement)
-      .getAllByRole("option")
-      .map((o) => o.textContent ?? "");
+    const nativo = (seletor.closest("div")?.querySelector("select") ?? seletor) as HTMLElement;
+    const opcoes = Array.from(nativo.querySelectorAll("option")).map((o) => o.textContent ?? "");
     expect(opcoes).toContain("Ana Lima");
     expect(opcoes).toContain(`Atendente ${sufixoDoMembro(UUID)}`);
     for (const opcao of opcoes) expect(opcao).not.toContain("4fa3917a");

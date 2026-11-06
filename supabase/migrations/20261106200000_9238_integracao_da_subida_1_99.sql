@@ -385,3 +385,98 @@ begin
   revoke select on public.importacoes_de_historico from authenticated;
   execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
 end $grants_importacoes$;
+
+-- fn_mesclar_contatos: a 9049 do upstream (30/10, subida 1.95) recriou a função
+-- inteira e apagou o remendo por âncora da nossa 9010 (herança do IGSID e do @ do
+-- Instagram na fusão). O baseline aplica a 9010 depois e não perdia; a cadeia, e
+-- a produção, perdiam. Mesmo bloco da 9010, de novo: ele pula quando já herda.
+do $mig$
+declare
+  v_def text;
+  v_ancora text;
+begin
+  select pg_get_functiondef(p.oid) into v_def
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = 'fn_mesclar_contatos';
+
+  if v_def is null then
+    raise notice '9010: fn_mesclar_contatos nao existe nesta instalacao — heranca fica para quem a tiver';
+    return;
+  end if;
+
+  if position('v_igsid' in v_def) > 0 then
+    raise notice '9010: a fusao ja herda o IGSID — nada a fazer';
+    return;
+  end if;
+
+  v_ancora := '  v_lid text;';
+  perform public.fn_9010_ancora_unica(v_def, v_ancora, 'declaracao de v_lid em fn_mesclar_contatos');
+
+  v_def := replace(
+    v_def,
+    v_ancora,
+    v_ancora || chr(10) || '  v_igsid text;' || chr(10) || '  v_username text;'
+  );
+
+  -- Colhe do perdedor mais antigo, como os outros campos fazem, e reusa a
+  -- guarda de unicidade: a lápide já soltou o IGSID do índice, então o que
+  -- sobrar aqui é conflito com um TERCEIRO contato vivo — e nesse caso o
+  -- vencedor simplesmente não herda, em vez de a fusão inteira falhar.
+  v_ancora := '  select coalesce(array_agg(distinct t)';
+  perform public.fn_9010_ancora_unica(v_def, v_ancora, 'bloco de tags em fn_mesclar_contatos');
+
+  v_def := replace(
+    v_def,
+    v_ancora,
+    '  select c.instagram_igsid into v_igsid from public.contacts c' || chr(10) ||
+    '   where c.id = any(p_contatos_secundarios) and c.instagram_igsid is not null' || chr(10) ||
+    '   order by c.created_at, c.id limit 1;' || chr(10) ||
+    '  select c.instagram_username into v_username from public.contacts c' || chr(10) ||
+    '   where c.id = any(p_contatos_secundarios) and c.instagram_username is not null' || chr(10) ||
+    '   order by c.created_at, c.id limit 1;' || chr(10) ||
+    '  if v_igsid is not null and exists (' || chr(10) ||
+    '    select 1 from public.contacts o' || chr(10) ||
+    '     where o.organization_id = p_organization_id and o.is_merged_into is null' || chr(10) ||
+    '       and o.id <> p_contato_principal and o.instagram_igsid = v_igsid' || chr(10) ||
+    '  ) then v_igsid := null; end if;' || chr(10) ||
+    '  -- Abre a escotilha da trigger de identidade para ESTA transacao. Sem' || chr(10) ||
+    '  -- isto a heranca logo abaixo levanta 42501 e a fusao inteira aborta:' || chr(10) ||
+    '  -- SECURITY DEFINER troca o papel e NAO troca auth.uid().' || chr(10) ||
+    '  perform set_config(''deskcomm.identidade_de_instagram'', ''on'', true);' || chr(10) ||
+    v_ancora
+  );
+
+  -- Escreve no vencedor. `coalesce` porque o principal MANDA: ele herda só o
+  -- que não tinha, nunca sobrescreve o que o atendente digitou.
+  v_ancora := '    phone_number = coalesce(phone_number, v_telefone),';
+  perform public.fn_9010_ancora_unica(v_def, v_ancora, 'update do vencedor em fn_mesclar_contatos');
+
+  v_def := replace(
+    v_def,
+    v_ancora,
+    v_ancora || chr(10) ||
+    '    instagram_igsid = coalesce(instagram_igsid, v_igsid),' || chr(10) ||
+    '    instagram_username = coalesce(instagram_username, v_username),'
+  );
+
+  -- FECHA a escotilha logo depois do uso.
+  --
+  -- `set_config(..., true)` e TRANSACAO-local, nao statement-local. Deixada
+  -- aberta, ela vale pelo resto da transacao — e qualquer escrita posterior no
+  -- mesmo request passaria pela trava. Medido no ensaio: sem este reset, um
+  -- `update contacts set instagram_igsid` logo apos a fusao era ACEITO.
+  --
+  -- A janela certa e a menor possivel: abre antes do update do vencedor, fecha
+  -- depois dele.
+  v_ancora := '  -- 7 · A fusão aparece na timeline';
+  perform public.fn_9010_ancora_unica(v_def, v_ancora, 'inicio do passo 7 em fn_mesclar_contatos');
+
+  v_def := replace(
+    v_def,
+    v_ancora,
+    '  perform set_config(''deskcomm.identidade_de_instagram'', ''off'', true);' || chr(10) ||
+    v_ancora
+  );
+
+  execute v_def;
+end $mig$;

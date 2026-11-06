@@ -6,7 +6,7 @@ import { definirNomeInformado } from '@/app/actions/settings/definirNomeInformad
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { traduzir } from '@/lib/i18n/dicionario';
+import { traduzir } from "@/lib/i18n/traducao";
 import type { Idioma } from '@/lib/i18n/idiomas';
 
 export function NomeInformado({ ligada, podeMudar, idioma }: { ligada: boolean; podeMudar: boolean; idioma: Idioma }) {

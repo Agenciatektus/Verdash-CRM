@@ -9641,17 +9641,13 @@ alter table public.channel_sessions
 
 alter table public.channel_sessions
   add constraint channel_sessions_provider_ref_check check (
-    (provider = 'waha'       and waha_session_name    is not null) or
+    (provider = 'waha' and waha_session_name is not null) or
     (provider = 'meta_cloud' and meta_phone_number_id is not null) or
-    -- 'zernio_social' (migration 0368) endereça pelo MESMO `zernio_account_id`:
-    -- é o mesmo intermediário, com outra superfície de canal.
     (provider in ('zernio', 'zernio_social') and zernio_account_id is not null) or
-    (provider = 'wacalls'    and wacalls_session_id    is not null) or
-    (provider = 'verdash'    and verdash_instance_name is not null) or
-    -- Instagram usa a MESMA coluna de endereçamento: o transporte passa pela Verdash, o
-    -- que muda é o canal, não o caminho.
-    (provider = 'instagram'  and verdash_instance_name is not null) or
-    (provider = 'datafy'     and datafy_phone_number_id is not null)
+    (provider = 'wacalls' and wacalls_session_id is not null) or
+    (provider = 'datafy' and datafy_phone_number_id is not null) or
+    -- Os dois canais do fork endereçam pela mesma coluna (como na 9006).
+    (provider in ('verdash', 'instagram') and verdash_instance_name is not null)
   );
 
 comment on column public.channel_sessions.zernio_account_id is

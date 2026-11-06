@@ -34,9 +34,13 @@ select count(*) from crm_leads l
 |---|---|---|---|
 | `fn_enfileirar_midia_vencida` | 9050 (#3756: a nota que perdeu o anexo grava `media_expired_at`/`media_retention_days` no passo 2c) | 9222 (prazo de mídia de grupo) | a 9222 letra a letra + o passo 2c da 9050; repete as duas colunas (`add column if not exists`) |
 | grant por coluna de `importacoes_de_historico` | 9033 (colunas da queda: escopo, origem, desde, ate) | 9102 da dev (grant por coluna, sem `credencial_cifrada`) | o bloco da 9102 de novo, depois das duas: onde a 9102 rodou antes da 9033, as colunas novas ficariam sem leitura para `authenticated` |
+| `fn_mesclar_contatos` | 9049 (1.95, #3721) recria a função inteira | 9010 (remendo por âncora: a fusão herda o IGSID e o @ do Instagram) | o bloco da 9010 de novo (pula quando já herda). **Na produção o remendo se perdeu quando a 9049 rodou (subida 1.95)**: a fusão de contatos não herda a identidade do Instagram até a 9238 rodar |
 | `agent_inbox_items_kind_check` | 9027/9033 | 9099 | sem integração: a lista da 9033 já contém todos os kinds da 9099 (+ `assinatura_desconectada`, `recuperacao_da_queda`, `cliente_sem_resposta_na_queda`) |
 
 ### baseline.sql
+A constraint `channel_sessions_provider_ref_check` do baseline passou a ter a escrita da 9023 (mesma regra; a cerca
+nova do upstream `baseline-e-cadeia-chegam-ao-mesmo-schema` compara o texto do catálogo). A 9033 (miniatura) entrou em
+`MIGRATIONS_QUE_NAO_RODAM` daquela cerca: cria a trigger sem guarda e o baseline já a tem.
 Montado com `git merge-file --diff3`. Grant de `fn_validate_lost_reason_required`: o nosso (`revoke ... from public, anon`).
 Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndice Tektus segue no fim). Bloco
 "SUBIDA 1.99 (migration 9238)" logo antes da VARREDURA anon.

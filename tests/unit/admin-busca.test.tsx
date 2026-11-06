@@ -26,6 +26,8 @@ import { destinosDoAdmin } from "@/lib/admin/navegacao";
 import { ThemeProvider } from "@/lib/theme";
 
 const push = vi.fn();
+// Fork: o rodapé do painel mostra a versão (useQuery); fora do escopo desta busca.
+vi.mock("@/components/shell/VersionFooter", () => ({ VersionFooter: () => null }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   usePathname: () => "/admin/inbox",
