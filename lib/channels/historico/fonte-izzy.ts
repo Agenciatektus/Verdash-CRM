@@ -3,11 +3,9 @@
  * mesmo formato que o cliente do WAHA, então a rodada, o mapeador, a trava de
  * apagamento e a gravação não mudam.
  *
- * Campos do Izzy ASSUMIDOS (o OpenAPI público só descreve id/contact_id/status
- * da conversa e id/body/direction da mensagem; conferir com dado real):
- *   conversa: `last_message_at` (ISO), `last_message_preview`, `contact` embutido
- *     (`phone_e164`, `name`) ou, na falta, GET /contacts/{contact_id};
- *   mensagem: `created_at` (ISO), `type`, `direction` in/out, `metadata.coex|echo`.
+ * Campos conferidos com dado real (06/11): conversa `last_message_at` (ISO), `last_message_preview`,
+ *   `contact` embutido (`id`, `name`, `phone`) ou, na falta, GET /contacts/{contact_id};
+ *   mensagem `created_at` (ISO), `message_type`, `content`, `direction` inbound|outbound, `metadata.coex|echo`.
  *
  * O token NUNCA entra em mensagem de erro, log ou resposta.
  */
@@ -74,8 +72,8 @@ export function criarFonteIzzy(token: string, opts: OpcoesDaFonteIzzy = {}): Fon
 
   const contatoDe = async (c: Obj) => {
     const embutido = c.contact as Obj | undefined;
-    if (embutido && soDigitos(embutido.phone_e164)) {
-      return { phone: soDigitos(embutido.phone_e164), nome: texto(embutido.name) };
+    if (embutido && soDigitos(embutido.phone)) {
+      return { phone: soDigitos(embutido.phone), nome: texto(embutido.name) };
     }
     const id = texto(c.contact_id);
     if (!id) return { phone: null, nome: null };
@@ -83,7 +81,7 @@ export function criarFonteIzzy(token: string, opts: OpcoesDaFonteIzzy = {}): Fon
     if (cache) return cache;
     const r = await pedir(token, `/v1/contacts/${encodeURIComponent(id)}`, {}, f);
     const o = (r.data ?? {}) as Obj;
-    const achado = { phone: soDigitos(o.phone_e164), nome: texto(o.name) };
+    const achado = { phone: soDigitos(o.phone), nome: texto(o.name) };
     contatos.set(id, achado);
     return achado;
   };
@@ -124,10 +122,10 @@ export function criarFonteIzzy(token: string, opts: OpcoesDaFonteIzzy = {}): Fon
         const timestamp = segundos(m.created_at ?? m.sent_at);
         if (!id || timestamp === null || timestamp < desde) continue;
         const meta = (m.metadata ?? {}) as Obj;
-        const fromMe = m.direction === "out" || !!meta.coex || !!meta.echo;
-        const tipo = texto(m.type)?.toLowerCase() ?? "text";
-        const corpo = texto(m.body);
-        // shortcut: sem mídia nesta versão, vira texto com o marcador do tipo; baixar o arquivo quando o Izzy expuser URL estável.
+        const fromMe = m.direction === "outbound" || !!meta.coex || !!meta.echo;
+        const tipo = texto(m.message_type)?.toLowerCase() ?? "text";
+        const corpo = texto(m.content);
+        // shortcut: sem mídia nesta versão, vira texto com o marcador do tipo; a mensagem traz `media_url` público e `media_mime_type`, baixar quando for preciso.
         const body = tipo === "text" || tipo === "chat" ? corpo : `[${tipo}]${corpo ? ` ${corpo}` : ""}`;
         mensagens.push({
           id: `${fromMe}_${chatId}_izzy-${id.replace(/_/g, "-")}`,

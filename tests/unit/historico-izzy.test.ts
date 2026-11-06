@@ -19,7 +19,7 @@ function fetchDe(respostas: Resp[]) {
   return { f: f as unknown as typeof fetch, chamadas };
 }
 const sem = async () => {};
-const conversaComPrevia = { id: "c1", contact: { phone_e164: "+5511900000001", name: "Ana" }, last_message_preview: "oi" };
+const conversaComPrevia = { id: "c1", contact: { phone: "5511900000001", name: "Ana" }, last_message_preview: "oi" };
 
 describe("fonte Izzy", () => {
   it("lista conversas com Bearer, paginação e telefone do contato embutido", async () => {
@@ -27,8 +27,8 @@ describe("fonte Izzy", () => {
       {
         corpo: {
           data: [
-            { id: "c1", contact: { phone_e164: "+55 11 90000-0001", name: "Ana" }, last_message_at: iso(agora - 100) },
-            { id: "c2", contact: { phone_e164: null } },
+            { id: "c1", contact: { phone: "5511900000001", name: "Ana" }, last_message_at: iso(agora - 100) },
+            { id: "c2", contact: { phone: null } },
           ],
           meta: { total: 2 },
         },
@@ -45,31 +45,34 @@ describe("fonte Izzy", () => {
   it("busca o contato quando a conversa não o traz", async () => {
     const { f, chamadas } = fetchDe([
       { corpo: { data: [{ id: "c1", contact_id: "k1" }] } },
-      { corpo: { data: { phone_e164: "+5511900000002", name: "Bia" } } },
+      { corpo: { data: { phone: "5511900000002", name: "Bia" } } },
     ]);
     const r = await criarFonteIzzy(TOKEN, { fetch: f }).paginaDeConversas("x", { limit: 50, offset: 0 });
     expect(r.conversas[0]!.chatId).toBe("5511900000002@s.whatsapp.net");
     expect(chamadas[1]!.url).toContain("/v1/contacts/k1");
   });
 
-  it("mensagens: echo/coex/out viram fromMe, mídia vira marcador, anterior à janela cai", async () => {
+  it("mensagens no formato real: direção, coex/echo, texto, áudio com marcador, janela", async () => {
     const msgs = {
       corpo: {
         data: [
-          { id: "m1", body: "oi", direction: "in", created_at: iso(agora - 50) },
-          { id: "m2", body: "resposta", direction: "in", created_at: iso(agora - 40), metadata: { coex: true } },
-          { id: "m3", body: "eco", direction: "in", created_at: iso(agora - 30), metadata: { echo: true } },
-          { id: "m4", body: "legenda", type: "image", direction: "out", created_at: iso(agora - 20) },
-          { id: "m5", body: "antiga", direction: "in", created_at: iso(agora - 99999) },
+          { id: "m1", content: "Quanto o iPhone 14?", message_type: "text", direction: "inbound", media_url: null, metadata: {}, created_at: iso(agora - 50) },
+          { id: "m2", content: "", message_type: "audio", direction: "outbound", media_url: "https://x/x.ogg", media_mime_type: "audio/ogg", metadata: { coex: true }, created_at: iso(agora - 40) },
+          { id: "m3", content: "eco", message_type: "text", direction: "inbound", metadata: { echo: true }, created_at: iso(agora - 30) },
+          { id: "m4", content: "legenda", message_type: "image", direction: "outbound", metadata: {}, created_at: iso(agora - 20) },
+          { id: "m5", content: "antiga", message_type: "text", direction: "inbound", created_at: iso(agora - 99999) },
         ],
       },
     };
     const { f, chamadas } = fetchDe([{ corpo: { data: [conversaComPrevia] } }, msgs]);
     const fonte = criarFonteIzzy(TOKEN, { fetch: f });
     const { conversas } = await fonte.paginaDeConversas("x", { limit: 50, offset: 0 });
+    expect(conversas).toHaveLength(1); // telefone presente
     const r = await fonte.paginaDeMensagens("x", conversas[0]!.chatId, { limit: 100, offset: 0, desde: agora - 1000 });
     expect(r.lidas).toBe(5);
     expect(r.mensagens.map((m) => m.fromMe)).toEqual([false, true, true, true]);
+    expect(r.mensagens[0]!.body).toBe("Quanto o iPhone 14?");
+    expect(r.mensagens[1]!.body).toBe("[audio]");
     expect(r.mensagens[3]!.body).toBe("[image] legenda");
     expect(r.mensagens[0]!.id).toBe("false_5511900000001@s.whatsapp.net_izzy-m1");
     expect(chamadas[1]!.url).toContain("/v1/messages?conversation_id=c1&limit=100&offset=0");
@@ -77,7 +80,7 @@ describe("fonte Izzy", () => {
 
   it("vazio sob carga: repete até 2x e recupera", async () => {
     const vazio = { corpo: { data: [] } };
-    const cheio = { corpo: { data: [{ id: "m1", body: "oi", direction: "in", created_at: iso(agora - 5) }] } };
+    const cheio = { corpo: { data: [{ id: "m1", content: "oi", message_type: "text", direction: "inbound", created_at: iso(agora - 5) }] } };
     const { f } = fetchDe([{ corpo: { data: [conversaComPrevia] } }, vazio, vazio, cheio]);
     const fonte = criarFonteIzzy(TOKEN, { fetch: f, dormir: sem });
     const { conversas } = await fonte.paginaDeConversas("x", { limit: 50, offset: 0 });
@@ -92,7 +95,7 @@ describe("fonte Izzy", () => {
     const { conversas } = await a.paginaDeConversas("x", { limit: 50, offset: 0 });
     await expect(a.paginaDeMensagens("x", conversas[0]!.chatId, { limit: 100, offset: 0, desde: 0 })).rejects.toBeInstanceOf(FonteAdiada);
 
-    const semPrevia = fetchDe([{ corpo: { data: [{ id: "c1", contact: { phone_e164: "+5511900000001" } }] } }, vazio]);
+    const semPrevia = fetchDe([{ corpo: { data: [{ id: "c1", contact: { phone: "5511900000001" } }] } }, vazio]);
     const b = criarFonteIzzy(TOKEN, { fetch: semPrevia.f, dormir: sem });
     const c = await b.paginaDeConversas("x", { limit: 50, offset: 0 });
     expect((await b.paginaDeMensagens("x", c.conversas[0]!.chatId, { limit: 100, offset: 0, desde: 0 })).lidas).toBe(0);
