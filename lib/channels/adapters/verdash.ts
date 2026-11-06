@@ -49,6 +49,7 @@ import {
   verdashEnviar,
   verdashStatusPareado,
   fotoDoContatoPareado,
+  verdashListarGrupos,
 } from "../verdash/client";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { DETALHE_NUMERO_EM_CONFLITO, DETALHE_QR_RESCAN_NATIVO } from "../health";
@@ -549,6 +550,25 @@ export const verdashAdapter: ChannelAdapter = {
       if (t === "conflito") return { reachable: true, status: "WORKING", detail: DETALHE_NUMERO_EM_CONFLITO };
     }
     return { reachable: true, status: "WORKING", detail: null };
+  },
+
+  /** Grupos do número, para Conexões › Grupos. Sem credencial = canal não conectado. */
+  async listGroups(input: ChannelTenantScope & { sessionRef: string }) {
+    const creds = await resolveVerdashCreds(createAdminClient(), {
+      organizationId: input.organizationId,
+      instanceName: input.sessionRef,
+    });
+    if (!creds) throw new Error("verdash_sem_credencial");
+    return verdashListarGrupos(creds);
+  },
+
+  /**
+   * Aqui não há filtro a trocar: o webhook do FZAP já entrega toda mensagem de grupo, e quem
+   * escolhe o que entra é `lib/grupos/ingest.ts` (grupo desligado é descartado). O filtro da
+   * instância é da Verdash, que também lê grupos; mexer nele quebraria o tracker de lá.
+   */
+  async setGroupIntake() {
+    return true;
   },
 
   /**

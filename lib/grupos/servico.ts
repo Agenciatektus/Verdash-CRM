@@ -95,7 +95,7 @@ export interface GruposDb {
 
 export interface DepsDeGrupos {
   db: GruposDb;
-  listGroups(provider: ChannelProvider, sessionRef: string): Promise<ChannelGroup[]>;
+  listGroups(provider: ChannelProvider, sessionRef: string, organizationId: string): Promise<ChannelGroup[]>;
   /**
    * PODE LANÇAR (timeout/rede) mesmo declarando `Promise<boolean>` — o contrato
    * é "eu tento" e a exceção é um resultado, não um bug de tipo. Quem chama
@@ -127,7 +127,7 @@ export async function listarGruposDoNumero(
 ): Promise<GrupoDoNumero[]> {
   const s = await sessaoComGrupos(deps, e.organizationId, e.channelSessionId);
   const [doCanal, gravados] = await Promise.all([
-    deps.listGroups(s.provider, s.sessionRef),
+    deps.listGroups(s.provider, s.sessionRef, e.organizationId),
     deps.db.listarLinhas(e.organizationId, e.channelSessionId),
   ]);
   const porId = new Map(gravados.map((l) => [l.group_chat_id, l]));
@@ -418,10 +418,10 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
         return data as { id: string } | null;
       },
     },
-    async listGroups(provider, sessionRef) {
+    async listGroups(provider, sessionRef, organizationId) {
       const adapter = getAdapter(provider);
       if (!adapter.listGroups) throw new GrupoError("canal_sem_grupos");
-      return adapter.listGroups({ sessionRef });
+      return adapter.listGroups({ sessionRef, organizationId });
     },
     async setGroupIntake(provider, sessionRef, receive) {
       const adapter = getAdapter(provider);

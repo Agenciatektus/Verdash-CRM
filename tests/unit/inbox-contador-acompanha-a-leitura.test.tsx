@@ -45,7 +45,9 @@ const servidor = {
   consultas: [] as string[],
 };
 
-const URL_DA_CONTAGEM = "/api/v1/conversations/counts";
+const BASE_DA_CONTAGEM = "/api/v1/conversations/counts";
+// Desde 06/11/2026 a contagem sempre diz se quer grupo: sem o filtro, `is_group=false`.
+const URL_DA_CONTAGEM = `${BASE_DA_CONTAGEM}?is_group=false`;
 
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useAuth: () => ({ user: { id: "u-1", support: null }, activeOrg: orgRef.current }),
@@ -194,7 +196,7 @@ describe("#998 (irmão do par) — retomar a IA também move o número do bucket
       });
       await waitFor(() => expect(contagem.result.current.data).toBeTruthy());
 
-      const pergunta = `${URL_DA_CONTAGEM}?unread=true`;
+      const pergunta = `${BASE_DA_CONTAGEM}?unread=true&is_group=false`;
       expect(perguntasDe(pergunta)).toHaveLength(1);
 
       const retomada = renderHook(() => useResumeAiAttendance(), { wrapper });

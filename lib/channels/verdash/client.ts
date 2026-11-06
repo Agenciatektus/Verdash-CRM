@@ -598,3 +598,60 @@ export async function fotoDoContatoPareado(
   }
   return typeof json.data?.url === "string" && json.data.url ? json.data.url : null;
 }
+
+const JID_DE_GRUPO = /^[\d-]+@g\.us$/;
+
+/**
+ * Lê a lista de `/group/list` do FZAP (direto) ou de `crm-listar-grupos` da Verdash (pareado).
+ * O FZAP muda o envelope entre versões (`data: [...]`, `data.Groups`, `data.groups`) e o nome
+ * entre `Name`/`name`; o que não for JID de grupo fica de fora.
+ */
+export function gruposDaLista(data: unknown): Array<{ chatId: string; subject: string | null }> {
+  const d = data as Record<string, unknown> | unknown[] | null;
+  const lista = Array.isArray(d)
+    ? d
+    : Array.isArray(d?.groups)
+      ? (d.groups as unknown[])
+      : Array.isArray(d?.Groups)
+        ? (d.Groups as unknown[])
+        : [];
+  const out: Array<{ chatId: string; subject: string | null }> = [];
+  for (const item of lista) {
+    const g = (item ?? {}) as Record<string, unknown>;
+    const chatId = String(g.chatId ?? g.JID ?? g.jid ?? "");
+    if (!JID_DE_GRUPO.test(chatId)) continue;
+    const nome = String(g.subject ?? g.Name ?? g.name ?? "").trim().slice(0, 200);
+    out.push({ chatId, subject: nome || null });
+  }
+  return out;
+}
+
+/** Grupos do número. Pareado pergunta à Verdash (o token daqui não vale no FZAP); direto, ao FZAP. */
+export async function verdashListarGrupos(
+  creds: VerdashCredentials,
+): Promise<Array<{ chatId: string; subject: string | null }>> {
+  // 35 s: o `/group/list` traz todos os participantes (vários MB num número comercial).
+  if (!creds.vinculoId) return gruposDaLista(await fzapRequest(creds, "/group/list", { method: "GET", timeoutMs: 35_000 }));
+
+  const url = `${verdashFunctionsUrl().replace(/\/+$/, "")}/crm-listar-grupos`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: { "x-crm-token": creds.token },
+      signal: AbortSignal.timeout(35_000),
+    });
+  } catch (err) {
+    const detalhe = err instanceof Error ? err.message : "erro_desconhecido";
+    throw new Error(`verdash_unreachable: ${detalhe.slice(0, 200)}`);
+  }
+  const json = (await res.json().catch(() => null)) as {
+    success?: boolean;
+    error?: string;
+    data?: { groups?: unknown };
+  } | null;
+  if (!res.ok || json?.success !== true) {
+    throw new Error(`verdash_request_failed: ${res.status} ${json?.error ?? ""}`.trim());
+  }
+  return gruposDaLista(json.data?.groups);
+}

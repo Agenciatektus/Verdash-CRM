@@ -109,8 +109,8 @@ export function PopoverDeFiltros({
               onCheckedChange={(on) => onChange({ ...value, semPasso: on })}
             />
           </label>
-          {/* "Só grupos" manda `is_group=true` na listagem; desligado, a aba
-              mostra individual e grupo misturados, como sempre. */}
+          {/* "Só grupos" manda `is_group=true`; desligado manda `false`: grupo
+              nunca aparece misturado às conversas de atendimento. */}
           <label className="flex h-9 cursor-pointer items-center justify-between gap-3 rounded-md px-2 text-sm hover:bg-surface-elevated">
             {t("Só grupos")}
             <Switch

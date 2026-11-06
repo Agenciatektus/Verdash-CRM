@@ -22,7 +22,7 @@ beforeEach(() => {
 describe("adapter: grupos", () => {
   it("lista grupos pela sessão", async () => {
     listarGrupos.mockResolvedValue([{ chatId: "1@g.us", subject: "A" }]);
-    await expect(wahaAdapter.listGroups!({ sessionRef: "s1" })).resolves.toEqual([
+    await expect(wahaAdapter.listGroups!({ sessionRef: "s1", organizationId: "org-1" })).resolves.toEqual([
       { chatId: "1@g.us", subject: "A" },
     ]);
     expect(listarGrupos).toHaveBeenCalledWith("s1");
