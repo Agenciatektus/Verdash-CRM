@@ -125,13 +125,17 @@ vi.mock("@/lib/messaging/media/derive", () => ({
 // e cada caso a escolhe aqui; o padrão é a credencial da própria organização.
 const credencial = vi.hoisted(() => ({
   origemDaChave: "credencial_da_organizacao" as "credencial_da_organizacao" | "chave_da_instalacao",
+  // Provedor da CONVERSA. OpenRouter com credencial própria cai no degrau A0
+  // (#3382); os casos dos knobs do .env (degraus B e C) usam um provedor sem
+  // A0 nem capacidade audio.
+  provedorDaConversa: "openrouter",
 }));
 vi.mock("@/lib/agent-engine/edge/llm/credentials", () => ({
   resolveOrgLlmConfig: vi.fn(async (_db: unknown, _cfg: unknown, _org: unknown, override?: { provider?: string }) => {
     // Com o serviço da instalação configurado, o caso é "sem credencial OpenAI própria".
     if (override?.provider === "openai" && transcricaoDoEnv.apiKey) throw new Error("sem credencial openai");
     return {
-    provider: "openrouter",
+    provider: override?.provider ? "openrouter" : credencial.provedorDaConversa,
     apiKey: "chave-do-binding",
     origemDaChave: credencial.origemDaChave,
     defaultModel: "gpt-5",
@@ -151,6 +155,10 @@ vi.mock("@/lib/agent-engine/edge/llm/providers", () => ({
     anthropic: factoryMock,
     google: factoryMock,
   }),
+  // A escada lê estes dois para o degrau OpenRouter (#3382); o mock tem de
+  // exportá-los, senão o import do worker morre antes de qualquer caso.
+  OPENROUTER_ENDPOINT: "https://openrouter.ai/api/v1",
+  cabecalhosDeAtribuicaoOpenRouter: () => undefined,
 }));
 
 // Num roteador `visaoEmVigor` consultaria o catálogo no banco; aqui a pergunta
@@ -276,6 +284,7 @@ beforeEach(() => {
   dns.erro = null;
   dns.resposta = [{ address: "93.184.216.34", family: 4 }];
   credencial.origemDaChave = "credencial_da_organizacao";
+  credencial.provedorDaConversa = "openrouter";
   bindingDaVez = BINDING_COM_ENDPOINT;
   linhaDaMensagem = {
     id: "msg1",
@@ -322,6 +331,7 @@ describe("worker de mídia: base_url do binding de visão (#855)", () => {
   });
 
   it("usa o serviço de transcrição do .env, quando ele está configurado", async () => {
+    credencial.provedorDaConversa = "anthropic";
     comTranscricaoNoEnv({
       apiKey: "chave-do-servico",
       baseUrl: "https://api.groq.com/openai/v1",
@@ -348,6 +358,7 @@ describe("worker de mídia: base_url do binding de visão (#855)", () => {
   // copiar a chave da organização para o `.env`: modelo e idioma do ambiente
   // valem também no caminho de sempre (sem TRANSCRIPTION_API_KEY).
   it("sem serviço próprio, modelo e idioma do .env vão para a transcrição com a chave da organização", async () => {
+    credencial.provedorDaConversa = "anthropic";
     comTranscricaoNoEnv({ model: "gpt-transcribe", languages: "es" });
     linhaDaMensagem = {
       ...linhaDaMensagem,
@@ -370,6 +381,7 @@ describe("worker de mídia: base_url do binding de visão (#855)", () => {
   // whisper-1 pela OpenAI. O update não pode passar a pedir `whisper-large-v3`
   // à OpenAI: o modelo do `.env` só vale nesse caminho sem BASE_URL.
   it("modelo e BASE_URL de outro serviço sem a chave própria: segue whisper-1 na OpenAI", async () => {
+    credencial.provedorDaConversa = "anthropic";
     comTranscricaoNoEnv({ model: "whisper-large-v3", baseUrl: "https://api.groq.com/openai/v1" });
     linhaDaMensagem = {
       ...linhaDaMensagem,
@@ -387,6 +399,7 @@ describe("worker de mídia: base_url do binding de visão (#855)", () => {
   });
 
   it("sem nada no .env, a transcrição segue com whisper-1 e sem idioma — o comportamento de sempre", async () => {
+    credencial.provedorDaConversa = "anthropic";
     comTranscricaoNoEnv();
     linhaDaMensagem = {
       ...linhaDaMensagem,

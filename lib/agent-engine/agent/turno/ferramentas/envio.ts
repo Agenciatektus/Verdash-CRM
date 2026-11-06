@@ -17,6 +17,7 @@ import type { EstadoDoTurno } from '../estado-do-turno';
 import { executarCadeiaDoEnvio, type DependenciasDoEnvio } from './guardrails-do-envio';
 // Valor lido só dentro das funções (nunca na carga do módulo): o ciclo de import é seguro.
 import { AGENT_TOOL_DEFS, claimsCurrentInboundIsEmpty, MAX_VETOS_DE_FALSO_VAZIO } from '../../inbound-turn';
+import { semConteudoVisivel } from '../../conteudo-visivel';
 
 export function criarSendMessage(c: ContextoDoTurno, r: DependenciasDoEnvio, estado: EstadoDoTurno) {
   const { deps, job, pool, input, preview, tenantId, leadId, runLog, liveJob } = c;
@@ -36,7 +37,8 @@ export function criarSendMessage(c: ContextoDoTurno, r: DependenciasDoEnvio, est
       // min(1) no argumento, mas um `\n`/espaço passa e vira vazio depois do
       // trim/gates. Recusar aqui devolve ao modelo para reescrever — nunca
       // manda bolha em branco.
-      if (body.trim() === '') {
+      // "Em branco" inclui o que o `trim()` não tira: formatação invisível (U+200E e afins).
+      if (semConteudoVisivel(body)) {
         return {
           ok: false,
           error: {

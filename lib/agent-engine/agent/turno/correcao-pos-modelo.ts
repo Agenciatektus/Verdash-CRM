@@ -12,7 +12,7 @@ import { runBeforeSend } from '../../guardrails/before-send';
 import { hasOpenCaseForContact, openCase } from '../human-cases';
 import { eTurnoDeResposta } from '../inbound-turn';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from '../roteiro-no-turno';
-import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from '../turno-mudo';
+import { CORRECAO_DO_TURNO_MUDO, PASSOS_DA_CORRECAO, turnoMudoPedeCorrecao } from '../turno-mudo';
 import { previaPedeCorrecaoDoTurnoMudo, tetoDePassosAtingido } from '../desfecho-da-previa';
 import type { chamarOModelo } from './chamada-do-modelo';
 import type { carregarContextoDoTurno } from './contexto';
@@ -87,6 +87,7 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
         liveJob().kind === 'inbound_turn' &&
         turnoMudoPedeCorrecao({
           tentativasDeEnvio: estado.tentativasDeEnvio,
+          vetoIrrevogavel: estado.vetoIrrevogavel,
           enviadas: estado.outcomes.length,
           turnoDescartado: estado.turnoDescartado,
           passouParaAEquipe: estado.passouParaAEquipe,
@@ -112,7 +113,7 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
         system,
         messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
         tools,
-        maxSteps: Math.min(maxSteps, 3),
+        maxSteps: Math.min(maxSteps, PASSOS_DA_CORRECAO),
         ...(agentConfig !== null
           ? {
               model: agentConfig.model,
@@ -130,7 +131,7 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
     correcaoTruncou = correcao.result.finishReason === 'length';
     tetoNaCorrecao = tetoDePassosAtingido({
       passosUsados: correcao.result.steps?.length ?? 0,
-      maxSteps: Math.min(maxSteps, 3),
+      maxSteps: Math.min(maxSteps, PASSOS_DA_CORRECAO),
       finishReason: correcao.result.finishReason,
     });
     mensagensDoTurno = [...mensagensDoTurno, pedidoDeCorrecao, ...correcao.result.responseMessages];

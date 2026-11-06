@@ -58,6 +58,10 @@ import { AbaGoogle } from "./_abaGoogle";
 import { AbaMeta } from "./_abaMeta";
 import { AbaSite } from "./_abaSite";
 import { AbaVisaoGeral } from "./_abaVisaoGeral";
+import { HistoricoDeCliques } from "./_historicoCliques";
+import { lerHistoricoDeCliques } from "@/lib/conversoes/historico-de-cliques";
+import { LeadSubmittedCausal } from "./_leadSubmittedCausal";
+import { ativacaoLeadMeta } from "@/lib/conversoes/ativacao-lead-meta";
 import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { identidadeDaMeta } from "@/lib/plataformas-de-anuncio/meta/identidade";
 import type { EtapaAberta } from "./_regrasGoogle";
@@ -110,7 +114,11 @@ export default async function ConversoesPage({
     // aqui não pode derrubar a tela inteira: sem sugestão, a pessoa digita.
     listSelectableChannels(admin, activeOrg.orgId).catch(() => []),
     // O `slug` é o `[org]` da rota pública, e não está no `ActiveOrg`.
-    admin.from("organizations").select("slug, settings").eq("id", activeOrg.orgId).maybeSingle(),
+    admin
+      .from("organizations")
+      .select("slug, settings, meta_lead_birth_enabled_at")
+      .eq("id", activeOrg.orgId)
+      .maybeSingle(),
     lerEstadoDaCaptura(admin, "google_ads_landing_pages", activeOrg.orgId),
     admin
       .from("crm_stages")
@@ -133,7 +141,11 @@ export default async function ConversoesPage({
       label: `${rotuloDoEventoDaMeta(r.metaEvent)} (Meta)`,
     })),
   ];
-  const linhaDaOrganizacao = organizacao.data as { slug: string | null; settings?: unknown } | null;
+  const linhaDaOrganizacao = organizacao.data as unknown as {
+    slug: string | null;
+    settings?: unknown;
+    meta_lead_birth_enabled_at?: unknown;
+  } | null;
   const slug = linhaDaOrganizacao?.slug ?? null;
   // Página / WABA gravadas pela tela (#2098) — a MESMA leitura que a credencial
   // faz no caminho do envio, para a tela e o envio nunca divergirem.
@@ -173,6 +185,11 @@ export default async function ConversoesPage({
     aba === "historico"
       ? await lerHistorico(admin, activeOrg.orgId, filtrosDoHistorico).catch(() => null)
       : null;
+  // Cliques rastreados (1.95, upstream #3600): só na aba Histórico.
+  const historicoCliques =
+    aba === "historico"
+      ? await lerHistoricoDeCliques(admin, activeOrg.orgId).catch(() => null)
+      : null;
   const diagnostico =
     aba === "diagnostico"
       ? await lerDiagnosticoGoogle(admin, activeOrg.orgId, {
@@ -185,8 +202,7 @@ export default async function ConversoesPage({
         }).catch(() => null)
       : null;
 
-  const links =
-    aba === "site" ? await listarLinks(admin, activeOrg.orgId).catch(() => null) : null;
+  const links = aba === "site" ? await listarLinks(admin, activeOrg.orgId).catch(() => null) : null;
   const metricas =
     aba === "site" ? await metricasLinks(admin, activeOrg.orgId).catch(() => null) : null;
 
@@ -274,7 +290,9 @@ export default async function ConversoesPage({
                       }
                     : null,
               },
-              site: { capturaLigada: Boolean(estadoDaCaptura?.habilitada || capturaGoogle?.habilitada) },
+              site: {
+                capturaLigada: Boolean(estadoDaCaptura?.habilitada || capturaGoogle?.habilitada),
+              },
             }}
             pendencias={pendencias}
             enviadas={enviadas}
@@ -282,16 +300,31 @@ export default async function ConversoesPage({
             idioma={idioma}
           />
         ) : aba === "meta" ? (
-          <AbaMeta
-            estado={estado}
-            idioma={idioma}
-            leituraConectada={leituraMeta.conectada}
-            vendaPeloCanal={vendaPeloCanal}
-            identidade={identidadeMeta}
-            etapasAbertas={etapasAbertas}
-            podeListarEtapas={etapasLegiveis}
-            regrasMeta={regrasMeta}
-          />
+          <>
+            <AbaMeta
+              estado={estado}
+              idioma={idioma}
+              leituraConectada={leituraMeta.conectada}
+              vendaPeloCanal={vendaPeloCanal}
+              identidade={identidadeMeta}
+              etapasAbertas={etapasAbertas}
+              podeListarEtapas={etapasLegiveis}
+              regrasMeta={regrasMeta}
+            />
+            {organizacao.error || !linhaDaOrganizacao ? (
+              <p role="alert" className="rounded-md border border-destructive/40 p-4 text-sm">
+                {t(
+                  "Não foi possível ler a ativação de LeadSubmitted. Atualize a página para tentar novamente.",
+                )}
+              </p>
+            ) : (
+              <LeadSubmittedCausal
+                key={`${activeOrg.orgId}:${ativacaoLeadMeta(linhaDaOrganizacao.meta_lead_birth_enabled_at) !== null}`}
+                ligado={ativacaoLeadMeta(linhaDaOrganizacao.meta_lead_birth_enabled_at) !== null}
+                idioma={idioma}
+              />
+            )}
+          </>
         ) : aba === "google" ? (
           <AbaGoogle
             estado={estadoGoogle}
@@ -314,19 +347,30 @@ export default async function ConversoesPage({
             metricas={metricas}
           />
         ) : aba === "historico" ? (
-          historico ? (
-            <HistoricoDeEnvios
-              linhas={historico.linhas}
-              total={historico.total}
-              filtros={filtrosDoHistorico}
-              regras={rotulosDeEtapa}
-              idioma={idioma}
-            />
-          ) : (
-            <p className="rounded-md border p-4 text-sm">
-              {t("Não consegui ler o histórico agora. Atualize a página em instantes.")}
-            </p>
-          )
+          <div className="flex flex-col gap-8">
+            {historico ? (
+              <HistoricoDeEnvios
+                linhas={historico.linhas}
+                total={historico.total}
+                filtros={filtrosDoHistorico}
+                regras={rotulosDeEtapa}
+                idioma={idioma}
+              />
+            ) : (
+              <p className="rounded-md border p-4 text-sm">
+                {t("Não consegui ler o histórico agora. Atualize a página em instantes.")}
+              </p>
+            )}
+            {historicoCliques ? (
+              <HistoricoDeCliques linhas={historicoCliques} idioma={idioma} />
+            ) : (
+              <p role="alert" className="rounded-md border p-4 text-sm">
+                {t(
+                  "Não consegui ler o histórico de cliques agora. Atualize a página em instantes.",
+                )}
+              </p>
+            )}
+          </div>
         ) : diagnostico ? (
           <DiagnosticoGoogle itens={diagnostico} idioma={idioma} />
         ) : (

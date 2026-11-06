@@ -94,7 +94,7 @@ const credencial = vi.hoisted(() => ({
   /**
    * `null` = a conversa é a Anthropic de sempre e há chave OpenAI (degrau 2).
    * Preenchido = a conversa é este modelo Google, que declara `audio`, e não há
-   * chave OpenAI nenhuma — a escada desce ao degrau 3.
+   * chave OpenAI nenhuma — a escada desce ao degrau 4.
    */
   conversaGoogle: null as string | null,
   /** Provedor+modelo da conversa quando não é Google nem a Anthropic de sempre. */
@@ -130,6 +130,11 @@ vi.mock("@/lib/agent-engine/edge/llm/providers", () => ({
     openrouter: factoryMock,
     google: factoryMock,
   }),
+  // A escada lê estes dois para o degrau OpenRouter (#3382); o mock tem de
+  // exportá-los, senão o import do worker morre antes de qualquer caso.
+  OPENROUTER_ENDPOINT: "https://openrouter.ai/api/v1",
+  cabecalhosDeAtribuicaoOpenRouter: () => undefined,
+  fetchDoProvedor: () => globalThis.fetch,
 }));
 
 vi.mock("@/lib/ai/pontos/capacidade-em-vigor", () => ({
@@ -329,7 +334,10 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
     expect(llmCallsInsertMock.mock.calls[0]![0]).toMatchObject({ origem_da_escolha: "padrao_openai_compativel" });
   });
 
-  it("transcrição pelo modelo da organização (degrau 3) grava tokens e o custo da tabela de preços", async () => {
+  // Os casos do degrau OpenRouter do upstream (#3382, `transcribeMedindo`) saíram: aqui o A0
+  // usa o mesmo `apiTranscriptionProvider` dos outros degraus, com custo por `transcribeComCusto`.
+
+  it("transcrição pelo modelo da organização (degrau 4) grava tokens e o custo da tabela de preços", async () => {
     comAudio();
     credencial.conversaGoogle = "gemini-2.5-flash";
     bindingDaVez = null;
@@ -356,7 +364,7 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
     expect(linha.cost_cents).toBeCloseTo(((1200 * 0.3 + 40 * 2.5) / 1_000_000) * 100, 10);
   });
 
-  it("degrau 3 com modelo fora da tabela de preços grava os tokens e custo null — nunca 0", async () => {
+  it("degrau 4 com modelo fora da tabela de preços grava os tokens e custo null — nunca 0", async () => {
     comAudio();
     credencial.conversaGoogle = "gemini-modelo-que-ninguem-precificou";
     bindingDaVez = null;
@@ -427,7 +435,9 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
 describe("custo da transcrição pelo serviço e da assinatura (21/10/2026)", () => {
   it("⭐ degrau 2 com custo na resposta grava esse custo na linha da organização da mensagem", async () => {
     comAudio();
-    linhaDaMensagem = { ...linhaDaMensagem, organization_id: "org2" };
+    // O caminho do objeto tem de ser da org da mensagem: o worker recusa
+    // `invalid_media_path` antes de derivar (upstream 1.95).
+    linhaDaMensagem = { ...linhaDaMensagem, organization_id: "org2", media_storage_path: "org2/conv1/msg1.ogg" };
     servico.custo = 0.12;
 
     await deriveMessageMedia(eventRow("org2"));

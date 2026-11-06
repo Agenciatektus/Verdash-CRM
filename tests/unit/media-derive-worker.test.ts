@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const downloadMock = vi.fn();
+const storageFromMock = vi.fn(() => ({ download: downloadMock }));
 const updateEqMock = vi.fn();
+const updateFilterMock = vi.fn();
+let updateError: { message: string } | null = null;
+let updateRejection: Error | null = null;
 const messageRow = {
   id: "msg1",
   organization_id: "org1",
@@ -70,11 +74,16 @@ vi.mock("@/lib/supabase/admin", () => ({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const chain: any = new Proxy(
             {
-              eq: () => chain,
+              eq: (coluna: string, valor: unknown) => {
+                updateFilterMock(coluna, valor);
+                return chain;
+              },
               neq: () => chain,
               select: () => chain,
               then: (onFulfilled: (v: unknown) => void, onRejected?: (e: unknown) => void) => {
-                const p = Promise.resolve({ data: [messageRow], error: null });
+                const p = updateRejection
+                  ? Promise.reject(updateRejection)
+                  : Promise.resolve({ data: [messageRow], error: updateError });
                 return p.then(onFulfilled, onRejected);
               },
             },
@@ -92,7 +101,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       });
       return chain;
     },
-    storage: { from: () => ({ download: downloadMock }) },
+    storage: { from: storageFromMock },
   }),
 }));
 
@@ -126,6 +135,7 @@ import { deriveMessageMedia, MARCADOR_NAO_LIDA } from "@/workers/media-derive-wo
 import { deriveMediaText } from "@/lib/messaging/media/derive";
 import { DETALHE_TECNICO } from "@/lib/event-log/aviso-de-evento-morto";
 import { resolveOrgLlmConfig, type OrgLlmConfig } from "@/lib/agent-engine/edge/llm/credentials";
+import { logger } from "@/lib/logger";
 
 function configResolvida(over: Partial<OrgLlmConfig> = {}): OrgLlmConfig {
   return {
@@ -161,7 +171,11 @@ function eventRow(attempts = 0) {
 describe("deriveMessageMedia", () => {
   beforeEach(() => {
     downloadMock.mockReset().mockResolvedValue({ data: new Blob([new Uint8Array([1, 2, 3])]), error: null });
+    storageFromMock.mockClear();
     updateEqMock.mockReset();
+    updateFilterMock.mockReset();
+    updateError = null;
+    updateRejection = null;
     inboxInsertMock.mockReset();
     messageRow.media_derived_status = null;
     messageRow.type = "audio";

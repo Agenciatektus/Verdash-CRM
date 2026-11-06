@@ -80,9 +80,13 @@ test.describe("QA — o selo de autoria com o funil já vivido", () => {
     await page.goto(`${APP_URL}/app/settings/tenant/pipelines`);
     await page.waitForLoadState("networkidle");
     // O selo mora nos detalhes de cada etapa, fechados de início: abre todas.
-    for (const botao of await page.locator('[data-testid^="abrir-etapa-"][aria-expanded="false"]').all()) {
-      await botao.click();
+    // Sempre o PRIMEIRO fechado: o `.all()` congela índices de um seletor que
+    // encolhe a cada clique (aria-expanded vira "true"), e o 5º índice some.
+    const fechados = page.locator('[data-testid^="abrir-etapa-"][aria-expanded="false"]');
+    for (let i = 0; i < 50 && (await fechados.count()) > 0; i++) {
+      await fechados.first().click();
     }
+    await expect(fechados).toHaveCount(0);
 
     const doAgente = page.locator('[data-autoria="ai"]');
     const doHumano = page.locator('[data-autoria="user"]');

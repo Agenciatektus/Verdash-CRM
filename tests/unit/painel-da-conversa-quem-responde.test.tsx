@@ -29,6 +29,11 @@ vi.mock("@/hooks/auth/AuthProvider", () => ({
   }),
 }));
 
+// Atendimento conjunto (#2848): sem participante, o painel decide só pela permissão.
+vi.mock("@/hooks/inbox/useParticipantesDaConversa", () => ({
+  useParticipantesDaConversa: () => ({ data: [] }),
+}));
+
 const traduzir = Object.assign((texto: string) => texto, { t: (texto: string) => texto });
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => traduzir }));
 
