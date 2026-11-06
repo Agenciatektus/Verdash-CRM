@@ -359,6 +359,9 @@ describe("0292 — fn_definir_aviso_de_caso é a única porta, e ela confere o p
       // Remetente e destino na MESMA conexão: recusado mesmo com a flag.
       expect(erroDe(definir(SESSAO_A, "+5522981356551"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
       expect(erroDe(definir(OUTRA, "+5521977357727"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
+      // Remetente sem número conhecido: a exceção não vale.
+      sql(`update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';`);
+      expect(erroDe(definir(SESSAO_A, "+5521977357727"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
     } finally {
       sql(`update public.organizations set aviso_para_conexao_propria = false where id = '${ORG_A}';
         update public.config_aviso_de_caso set channel_session_id = '${SESSAO_A}', telefone_destino = '+5531998966398' where organization_id = '${ORG_A}';

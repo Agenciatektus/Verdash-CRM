@@ -329,6 +329,21 @@ export async function ehContatoDoNumeroInterno(
   return ehOChatDoAviso(chat, cfg) || ehOChatDoAvisoDeAgendamento(chat, daAgenda);
 }
 
+/**
+ * Só a metade 9224 do corte: quem fala é uma conexão ativa da própria org, com a
+ * exceção da plataforma ligada. Para o ingestor nativo (Verdash/FZAP), que não
+ * passa pelo corte inteiro; sem a flag a lista é vazia e nada muda.
+ */
+export async function ehConexaoDaPropriaOrg(
+  db: SupabaseClient,
+  organizationId: string,
+  telefone: string | null,
+): Promise<boolean> {
+  if (!telefone) return false;
+  const { conexoesDaPropriaOrg } = await lerNumeroInternoDeAviso(db, organizationId);
+  return (conexoesDaPropriaOrg ?? []).some((n) => phoneLookupVariants(n).includes(telefone));
+}
+
 /** A pergunta que os ingestores fazem, com a leitura já resolvida. */
 export async function ehNumeroInternoDeAviso(
   db: SupabaseClient,

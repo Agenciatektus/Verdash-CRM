@@ -77760,6 +77760,9 @@ begin
           -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
           -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
           and (p_channel is null or s.id = p_channel
+               -- remetente sem número conhecido: não dá para provar que não é o destino.
+               or not exists (select 1 from public.channel_sessions r
+                               where r.id = p_channel and r.organization_id = p_org and r.phone_number is not null)
                or not coalesce((select o.aviso_para_conexao_propria from public.organizations o
                                  where o.id = p_org), false))) then
     raise exception 'aviso_de_caso_numero_da_propria_org' using errcode = '22023';
@@ -77893,6 +77896,9 @@ begin
             -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
             -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
             and (v_channel is null or s.id = v_channel
+                 -- remetente sem número conhecido: não dá para provar que não é o destino.
+                 or not exists (select 1 from public.channel_sessions r
+                                 where r.id = v_channel and r.organization_id = p_org and r.phone_number is not null)
                  or not coalesce((select o.aviso_para_conexao_propria from public.organizations o
                                    where o.id = p_org), false))) then
       raise exception 'aviso_de_agendamento_numero_da_propria_org' using errcode = '22023';
