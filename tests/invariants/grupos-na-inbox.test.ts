@@ -141,6 +141,28 @@ describe("channel_session_groups", () => {
   });
 });
 
+describe("diretório de grupos", () => {
+  const RECUSA = /permission denied|row-level security/i;
+  async function como(role: string, text: string, args: unknown[] = []) {
+    const c = await pool.connect();
+    try {
+      await c.query("begin"); await c.query(`set local role ${role}`);
+      const r = await c.query(text, args); await c.query("commit"); return r;
+    } catch (e) { await c.query("rollback"); throw e; } finally { c.release(); }
+  }
+  it("membro só lê a própria organização; só o service_role escreve", async () => {
+    await q("delete from channel_session_group_directory where organization_id in ($1,$2)", [org, OUTRA_ORG]);
+    await como("service_role", "insert into channel_session_group_directory(organization_id,channel_session_id,group_chat_id,subject) values($1,$2,$3,'Meu')", [org, sessao, GRUPO]);
+    await q("insert into channel_session_group_directory(organization_id,channel_session_id,group_chat_id,subject) values($1,$2,$3,'Outro')", [OUTRA_ORG, OUTRA_SESSAO, GRUPO_DA_OUTRA]);
+    const meu = await comoUsuario(manager, "select count(*)::int n from channel_session_group_directory where organization_id=$1", [org]);
+    const outro = await comoUsuario(manager, "select count(*)::int n from channel_session_group_directory where organization_id=$1", [OUTRA_ORG]);
+    expect([meu.rows[0].n, outro.rows[0].n]).toEqual([1, 0]);
+    await expect(comoUsuario(manager, "update channel_session_group_directory set archived=true where organization_id=$1", [org])).rejects.toThrow(RECUSA);
+    await expect(comoUsuario(manager, "delete from channel_session_group_directory where organization_id=$1", [org])).rejects.toThrow(RECUSA);
+    await expect(como("anon", "insert into channel_session_group_directory(organization_id,channel_session_id,group_chat_id) values($1,$2,'9@g.us')", [org, sessao])).rejects.toThrow(RECUSA);
+  });
+});
+
 describe("conversa de grupo no banco", () => {
   async function conversaDeGrupo() {
     const c = await q(
