@@ -119,7 +119,7 @@ function DetalheDaFonte({
       </label>
 
       {colunaDoCliente !== null && tabelaSemColunaDoCliente(tabela, colunaDoCliente) && (
-        <p className="rounded-md border border-warning-fg/30 bg-warning-bg p-2 text-xs">
+        <p className="rounded-md border border-warning-line bg-warning-bg p-2 text-xs">
           {t("Esta tabela não tem a coluna que identifica o cliente:")} <code>{colunaDoCliente}</code>.{" "}
           {t("Nas conversas, o assistente não consegue consultá-la.")}
         </p>
@@ -148,7 +148,7 @@ function DetalheDaFonte({
           <span>{t("Todas, inclusive as que forem criadas depois")}</span>
         </label>
         {todasEFuturas ? (
-          <p className="rounded-md border border-warning-fg/30 bg-warning-bg p-2 text-xs">
+          <p className="rounded-md border border-warning-line bg-warning-bg p-2 text-xs">
             {t("Uma coluna nova (por exemplo, uma senha) passaria a ser lida sem ninguém marcar.")}
           </p>
         ) : (
@@ -303,7 +303,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
               </fieldset>
 
               {atual.modo === "all" && (
-                <div className="rounded-md border border-warning-fg/30 bg-warning-bg p-3 text-sm">
+                <div className="rounded-md border border-warning-line bg-warning-bg p-3 text-sm">
                   <p className="font-medium">
                     {t("O assistente enxerga todas as tabelas que o usuário do banco enxerga.")}
                   </p>
@@ -314,7 +314,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
               )}
 
               {atual.modo === "list" && guardado !== null && guardado.modo === "list" && guardado.fontes.length === 0 && (
-                <div className="rounded-md border border-warning-fg/30 bg-warning-bg p-3 text-sm">
+                <div className="rounded-md border border-warning-line bg-warning-bg p-3 text-sm">
                   {t("Falta escolher o que o assistente pode ler. Até lá, ele não enxerga nada deste banco.")}
                 </div>
               )}
@@ -437,7 +437,7 @@ export function PainelDeFontes({ connectionId, canWrite, colunaDoCliente, aberto
                   </div>
 
                   {sumidas.length > 0 && (
-                    <div className="space-y-2 rounded-md border border-warning-fg/30 bg-warning-bg p-3">
+                    <div className="space-y-2 rounded-md border border-warning-line bg-warning-bg p-3">
                       <p className="text-sm font-medium">{t("Marcadas, mas não encontradas no banco")}</p>
                       <ul className="space-y-1">
                         {sumidas.map((f) => (

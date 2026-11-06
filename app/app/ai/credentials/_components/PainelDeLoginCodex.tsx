@@ -166,7 +166,7 @@ export function PainelDeLoginCodex({
         </div>
 
         <div
-          className="space-y-2 rounded-lg border border-warning-fg/30 bg-warning-bg p-4 text-sm"
+          className="space-y-2 rounded-lg border border-warning-line bg-warning-bg p-4 text-sm"
           data-testid="aviso-login-codex"
         >
           <p className="font-medium">{t("Antes de ligar")}</p>
