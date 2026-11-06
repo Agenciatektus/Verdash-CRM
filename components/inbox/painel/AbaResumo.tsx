@@ -2,11 +2,17 @@
 
 import type { Dispatch, RefObject, SetStateAction } from "react";
 
+import { CartaoDaCarteira } from "@/components/contacts/CartaoDaCarteira";
+import { UltimasComprasDoContato } from "@/components/contacts/UltimasCompras";
 import { RoteirosDoContato } from "@/components/contacts/RoteirosDoContato";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/auth/AuthProvider";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
+import { roleAtLeast } from "@/lib/auth/types";
 
+import { AnuncioDoContato } from "../AnuncioDoContato";
 import { ConversationTagsEditor } from "../ConversationTagsEditor";
+import { FollowupDoContato } from "../FollowupDoContato";
 import { TarefasDaDemanda } from "../TarefasDaDemanda";
 import { Demandas } from "./Demandas";
 import { DetalhesDoContato } from "./DetalhesDoContato";
@@ -45,6 +51,11 @@ export function AbaResumo({
   desfechoDraft, setDesfechoDraft, refProximoPasso, refDetalhes, refObservacoes,
 }: Props) {
   const contact = conversation.contacts ?? null;
+  const { user, activeOrg } = useAuth();
+  // Carteira (#2591): o GET da rota cobra `agent`+; `viewer` não vê o bloco em vez de levar 403.
+  const podeVerCarteira = (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
+  // Iniciar/parar follow-up é `manager`+ no servidor (#3178); `leitura` cobre o suporte só leitura.
+  const podeFollowup = !leitura && ((user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "manager"));
   return (
     <div className="flex flex-col gap-4">
       <ProximoPasso
@@ -65,6 +76,14 @@ export function AbaResumo({
         leitura={leitura}
       />
       <Separator />
+      {resumo.contactId && podeVerCarteira && (
+        <section data-testid="inbox-bloco-carteira">
+          <CartaoDaCarteira contactId={resumo.contactId} papelDoUsuario={activeOrg?.role ?? null} />
+        </section>
+      )}
+      {resumo.contactId && resumo.summaryContactId === resumo.contactId && !resumo.erro && (
+        <AnuncioDoContato contactId={resumo.contactId} origem={resumo.anuncios.origem} recente={resumo.anuncios.recente} />
+      )}
       <OrigemNoPainel contactId={resumo.contactId} />
       <ObservacoesDoContato
         ref={refObservacoes}
@@ -97,6 +116,10 @@ export function AbaResumo({
         leadId={leadEmFocoId}
         podeEditar={!leitura}
       />
+      {/* Follow-up na conversa (#3178): auto-oculta sem enrollment vivo nem fluxo ativo. */}
+      {resumo.contactId && !contact?.is_anonymized && (
+        <FollowupDoContato contactId={resumo.contactId} podeEscrever={podeFollowup} />
+      )}
       <Separator />
       <MemoriaDoContato fatos={resumo.fatos} historico={resumo.historico} carregando={resumo.carregando} />
       {/* O que os roteiros de atendimento coletaram (módulo opcional; desligado
@@ -104,6 +127,8 @@ export function AbaResumo({
       {resumo.contactId && !contact?.is_anonymized && (
         <RoteirosDoContato contactId={resumo.contactId} variante="painel" />
       )}
+      {/* Últimas compras (#3179): negócios ganhos em todos os funis. */}
+      {resumo.contactId && !contact?.is_anonymized && <UltimasComprasDoContato contactId={resumo.contactId} />}
       {!leitura && (
         <>
           <Separator />

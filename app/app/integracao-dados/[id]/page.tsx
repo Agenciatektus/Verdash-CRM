@@ -19,6 +19,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { ExploradorDeDados } from "./_components/ExploradorDeDados";
 import { PainelDeFontes } from "./_components/PainelDeFontes";
+import ReceitasProntas from "./_components/ReceitasProntas";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -43,7 +44,9 @@ export default async function ConexaoExternaPage({
   const supabase = await createClient();
   const { data } = await supabase
     .from("external_db_connections_safe")
-    .select("id, label, host, port, database_name, username, ssl_mode, enabled, source_mode, sources_count, customer_key_column")
+    .select(
+      "id, label, host, port, database_name, username, ssl_mode, enabled, source_mode, sources_count, db_type, customer_key_column",
+    )
     .eq("organization_id", activeOrg.orgId)
     .eq("id", id)
     .maybeSingle();
@@ -61,6 +64,7 @@ export default async function ConexaoExternaPage({
     enabled: boolean;
     source_mode: "all" | "list";
     sources_count: number;
+    db_type: "postgres" | "mysql";
     customer_key_column: string | null;
   };
 
@@ -89,6 +93,12 @@ export default async function ConexaoExternaPage({
         canWrite={canWrite}
         colunaDoCliente={conexao.customer_key_column}
         abertoInicial={abertoInicial}
+      />
+
+      <ReceitasProntas
+        connectionId={conexao.id}
+        motor={conexao.db_type}
+        canWrite={canWrite}
       />
 
       <div className="flex min-h-[520px] flex-1 flex-col">

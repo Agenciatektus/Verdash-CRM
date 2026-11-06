@@ -30,6 +30,8 @@ export interface DependenciasDoEnvio {
   lgpd: SaidaDosDesvios['lgpd'];
   mensagemDoJob: SaidaDosDesvios['mensagemDoJob'];
   camadas: SaidaDosPortoes['camadas'];
+  restricaoComercial: SaidaDosPortoes['restricaoComercial'];
+  passarComercialParaEquipe: SaidaDosDesvios['passarComercialParaEquipe'];
   maxSendsPerTurn: number;
   promiseTable: Parameters<typeof decidePromise>[0]['table'] | null;
   semanticClassifier: NonNullable<Parameters<typeof runBeforeSend>[0]['classifyPromiseSemantic']> | undefined;
@@ -52,7 +54,7 @@ export async function executarCadeiaDoEnvio(
   envio: { body: string; produto_codigo?: string; fotosDoProduto: FotoParaEnvio[]; fotosQueFaltaram: number },
 ) {
   const { pool, input, tenantId, runLog } = c;
-  const { agentConfig, buildCaseContextSnapshot, moverParaHandoffBestEffort, noteRunError } = r;
+  const { agentConfig, buildCaseContextSnapshot, moverParaHandoffBestEffort, noteRunError, passarComercialParaEquipe } = r;
   const { body, produto_codigo, fotosDoProduto, fotosQueFaltaram } = envio;
   // Cadeia de guardrails (F2-13): stop/opt-out → anti-ban → spinning rodam
   // AQUI, entre a decisão do modelo e o adapter. Se um gate veta, o
@@ -114,6 +116,10 @@ export async function executarCadeiaDoEnvio(
         hasOpenCase: true,
         openedCaseThisTurn: true,
       });
+    }
+    // Valores e negociação só com a equipe (#2877): avisa o cliente e passa a conversa.
+    if (chain.status === 'vetoed' && chain.code === 'commercial_requires_human') {
+      return passarComercialParaEquipe(chain.code);
     }
     if (chain.status === 'vetoed' && chain.code === 'clinical_claim') {
       // Fail-safe do gate de afirmação clínica. Ao contrário do vocabulário interno,

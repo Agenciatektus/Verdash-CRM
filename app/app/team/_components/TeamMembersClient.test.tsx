@@ -146,3 +146,9 @@ describe("TeamMembersClient — seletor de papel (G2-02)", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * No celular a tabela vira cartão só por classes `max-md:` (ADR-0006, F4). O
+ * jsdom não aplica media query: o que se mede aqui é o contrato das classes, e
+ * a geometria a 390px fica com `tests/e2e/equipe-no-celular.spec.ts`.
+ */

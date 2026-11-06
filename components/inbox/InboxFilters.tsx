@@ -252,7 +252,7 @@ export function InboxFilters({ value, onChange }: Props) {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           placeholder={t("Nome, telefone ou última mensagem")}
-          className="h-full min-w-0 flex-1 bg-transparent text-sm text-text outline-hidden placeholder:text-text-subtle"
+          className="h-full min-w-0 flex-1 bg-transparent text-sm mb:text-[16px] text-text outline-hidden placeholder:text-text-subtle"
           aria-label={t("Buscar conversas")}
         />
         {filtros()}

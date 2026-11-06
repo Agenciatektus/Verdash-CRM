@@ -25,7 +25,11 @@
  *     chama o `apiClient` direto, num `setTimeout`. A paleta da casca não abre
  *     ao mesmo tempo (as duas são modais).
  *
- * Leitura que não cai em 2 a 4 passa direto: a casca continua lendo do servidor.
+ *  5. A lista de fluxos de follow-up (`/api/v1/ai/followup-flows`, sem id): o painel do
+ *     contato a lê por `apiClient` direto num efeito (fora do React Query) e a URL não
+ *     leva id de amostra. A casca não lê esta rota, então nada de verdade se perde.
+ *
+ * Leitura que não cai em 2 a 5 passa direto: a casca continua lendo do servidor.
  */
 import { QueryClient } from "@tanstack/react-query";
 
@@ -57,6 +61,7 @@ function enderecoDe(entrada: RequestInfo | URL): string {
 }
 
 const BUSCA_DA_PALETA = /\/api\/v1\/(conversations|contacts|leads)\?/;
+const LISTA_DE_FLUXOS = /\/api\/v1\/ai\/followup-flows(\?|$)/;
 const ESCRITA = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /** `/api/...` relativo ou na mesma origem da página. */
@@ -76,6 +81,7 @@ export function ehChamadaDaVitrine(endereco: string, metodo = "GET", corpo: unkn
   if (profundidade > 0) return true;
   if (ehDaVitrine(endereco)) return true;
   if (typeof corpo === "string" && ehDaVitrine(corpo)) return true;
+  if (metodo.toUpperCase() === "GET" && LISTA_DE_FLUXOS.test(endereco)) return true;
   return buscaAberta && BUSCA_DA_PALETA.test(endereco);
 }
 

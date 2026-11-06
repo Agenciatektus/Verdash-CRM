@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useT } from "@/hooks/i18n/useT";
+import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
 import {
   MENSAGEM_DA_RECUSA_DE_ESCRITA,
   ehRecusaDeEscrita,
@@ -101,6 +102,7 @@ export function PainelDeLoginCodex({
         setCodigo("");
         return;
       }
+      if (r.error === "mfa_required") return irAoDesafioDeMfa();
       setErro(
         t(
           ehRecusaDeEscrita(r.error)
@@ -119,6 +121,7 @@ export function PainelDeLoginCodex({
         setConectouAgora(false);
         return;
       }
+      if (r.error === "mfa_required") return irAoDesafioDeMfa();
       setErro(t(NOSSAS_MENSAGENS[r.error] ?? "Não deu para desconectar. Tente de novo em instantes."));
     });
   }

@@ -21,6 +21,7 @@ import { audit, isServiceRoleConfigured } from "@/lib/audit";
 import { adotarLeadsDoContato } from "@/lib/routing/worker";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
+import { sincronizarNegocioAbertoDoContato } from "@/lib/inbox/negocio-aberto-do-contato";
 import { ApiError } from "@/lib/api/types";
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
@@ -83,10 +84,22 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
 
   const conv = row as unknown as Conversation;
 
-  // Assumir vira dono: os leads abertos do contato passam a quem assumiu, mesmo com
-  // outro dono (o rodízio, ao contrário, só adota lead sem dono). Sem isto, assumir
-  // à mão deixava o funil sem responsável (medido no Dr. Paulo em 30/09: 0 de 200
-  // leads com dono em 10 dias).
+  // #3177: assumir a conversa dá dono ao negócio ABERTO do contato só quando
+  // ele NÃO tem responsável (decisão do mantenedor no #3216): esta rota também
+  // atende "Iniciar conversa" e "Continuar por outro número", e nenhum desses
+  // cliques tira o card de um colega. O card sem dono é visível a quem assume
+  // em `all` e `own_and_unassigned`. Em `own`, o `agent` não o enxerga
+  // (fn_can_view_lead), e a sincronia devolve `sem_negocio_aberto`.
+  // manager/admin enxergam sempre. Mesma doutrina da transferência: o cliente
+  // é o da SESSÃO, a conversa já é dele, e o motivo da recusa não derruba nada.
+  const sincronia = await sincronizarNegocioAbertoDoContato(supabase, {
+    organizationId: conv.organization_id,
+    contactId: conv.contact_id,
+    toUserId: user.id,
+    soSemResponsavel: true,
+  });
+  // Fork Tektus: depois da sincronia do upstream, assumir/transferir à mão também troca o dono dos
+  // demais leads abertos (substitui humano ou agente). Convive com o motivo da auditoria acima.
   if (isServiceRoleConfigured()) {
     await adotarLeadsDoContato(createAdminClient(), authz.org.orgId, conv.contact_id, user.id, {
       substituir: true,
@@ -100,6 +113,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resourceType: "conversation",
     resourceId: conv.id,
     requestId,
+    metadata: {
+      negocio_aberto: sincronia.motivo,
+      ...(sincronia.leadId ? { negocio_id: sincronia.leadId } : {}),
+    },
   });
 
   await supabase

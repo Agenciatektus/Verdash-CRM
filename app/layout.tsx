@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { coresDaBarraDoNavegador } from "@/lib/branding/barra-do-navegador";
 import { MarcaDaInstalacaoProvider } from "@/lib/branding/contexto";
 import { cssDaMarca } from "@/lib/branding/css";
-import { iconeDaAba } from "@/lib/branding/icone";
+import { iconeDaAba, sufixoDoIcone } from "@/lib/branding/icone";
 import { folhaPersonalizadaDaInstalacao } from "@/lib/branding/folha-personalizada";
 import { CABECALHO_SEM_CSS } from "@/lib/branding/sem-css-personalizado";
 import {
@@ -123,7 +123,7 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: iconeDaAba(linha?.favicon_path),
       // O ícone da tela de início do iPhone (180px, com fundo: o iOS não recorta
       // transparência). Mesma marca da instalação dos ícones do manifesto.
-      apple: `/app-icon/180${linha?.favicon_path ? `?v=${encodeURIComponent(linha.favicon_path)}` : ""}`,
+      apple: `/app-icon/180${sufixoDoIcone(linha?.favicon_path)}`,
     },
     // App instalado no iOS: abre sem a barra do Safari, com o nome da instalação, e a
     // barra de status padrão (não translúcida, o conteúdo começa abaixo dela).

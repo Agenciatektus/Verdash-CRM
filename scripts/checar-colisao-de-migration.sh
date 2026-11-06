@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# checar-colisao-de-migration.sh — o número que o PR acrescenta não pode já estar tomado.
+# checar-colisao-de-migration.sh — o timestamp que o PR acrescenta não pode já estar tomado
+# (o NNNN repetido só avisa desde a subida 1.90: o upstream também usa a faixa 9xxx).
 #
 # ## A classe de defeito (issue #285)
 #
@@ -380,13 +381,12 @@ while IFS= read -r nome; do
 
   colisao_n="$(grep -E "^[0-9]{14}_${nnnn}_.+\.sql$" <<<"$base_arvore" || true)"
   colisao_t="$(grep -E "^${ts}_[0-9]{4}_.+\.sql$" <<<"$base_arvore" || true)"
+  # NNNN repetido AVISA, não reprova (subida 1.90): o upstream passou a usar a faixa 9xxx
+  # do fork, e o Supabase identifica a migration pelo TIMESTAMP (abaixo, que reprova).
   if [ -n "$colisao_n" ]; then
     lista="$(tr '\n' ' ' <<<"$colisao_n" | sed 's/ *$//')"
-    echo "::error file=$caminho::NNNN=$nnnn já existe em '$BASE': $lista"
-    echo "CI REPROVADO: NNNN=$nnnn de '$nome' já existe em '$BASE': $lista"
+    echo "::warning file=$caminho::NNNN=$nnnn já existe em '$BASE': $lista — não reprova (o timestamp é a identidade); prefira um NNNN livre."
     escopo_do_proximo_livre | sed 's/^/  /'
-    echo "  Troque o TIMESTAMP junto (date -u +%Y%m%d%H%M%S) — renumerar só o NNNN é o que fabrica colisão de timestamp."
-    falhou=1
   fi
   if [ -n "$colisao_t" ]; then
     lista="$(tr '\n' ' ' <<<"$colisao_t" | sed 's/ *$//')"
@@ -422,10 +422,8 @@ while IFS= read -r nome; do
   gemeas_n="$(grep -cE "^[0-9]{14}_${nnnn}_.+\.sql$" <<<"$adicionadas_nomes" || true)"
   if [ "${gemeas_n:-0}" -gt 1 ]; then
     lista="$(grep -E "^[0-9]{14}_${nnnn}_.+\.sql$" <<<"$adicionadas_nomes" | tr '\n' ' ' | sed 's/ *$//')"
-    echo "::error file=$caminho::NNNN=$nnnn repetido entre os arquivos deste PR: $lista"
-    echo "CI REPROVADO: NNNN=$nnnn aparece em $gemeas_n arquivos deste PR: $lista"
+    echo "::warning file=$caminho::NNNN=$nnnn aparece em $gemeas_n arquivos deste PR: $lista — não reprova (o timestamp é a identidade)."
     escopo_do_proximo_livre | sed 's/^/  /'
-    falhou=1
   fi
   gemeas_t="$(grep -cE "^${ts}_[0-9]{4}_.+\.sql$" <<<"$adicionadas_nomes" || true)"
   if [ "${gemeas_t:-0}" -gt 1 ]; then

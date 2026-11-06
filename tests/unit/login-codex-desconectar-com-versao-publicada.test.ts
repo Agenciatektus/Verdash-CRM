@@ -45,6 +45,7 @@ vi.mock("@/lib/instalacao/modulos", async (orig) => ({
   moduloLigado: vi.fn(async () => true),
 }));
 vi.mock("@/lib/auth/server", () => ({
+  mfaEmDivida: vi.fn(async () => false),
   loadAuthUser: vi.fn(async () => ({ id: USER, support: null })),
   resolveActiveOrg: vi.fn(async () => ({ orgId: ORG, role: "admin" })),
 }));

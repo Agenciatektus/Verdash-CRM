@@ -45,7 +45,7 @@ export function MediaRenderer({ message }: { message: Message }) {
     case "sticker":
       return <StickerMedia messageId={message.id} src={src} srcReserva={srcReserva} />;
     case "audio":
-      return <AudioPlayer messageId={message.id} isOutbound={isOutbound} src={src} srcReserva={srcReserva} />;
+      return <AudioPlayer messageId={message.id} isOutbound={isOutbound} src={src} srcReserva={srcReserva} mime={message.media_mime} />;
     case "video":
       return <VideoMedia messageId={message.id} src={src} srcReserva={srcReserva} />;
     case "contact":

@@ -103,8 +103,10 @@ describe("a citação de uma mensagem APAGADA não devolve o texto", () => {
  */
 /** O que o navegador aplica abaixo de 760px: as variantes com prefixo não valem. */
 function visivelNoCelular(classes: string): boolean {
-  const semPrefixo = classes.split(/\s+/).filter((c) => !c.includes(":"));
-  return semPrefixo.includes("flex") && !semPrefixo.includes("hidden");
+  const abaixoDoMd = classes
+    .split(/\s+/)
+    .flatMap((c) => (c.startsWith("max-md:") ? [c.slice("max-md:".length)] : c.includes(":") ? [] : [c]));
+  return abaixoDoMd.includes("flex") && !abaixoDoMd.includes("hidden") && !abaixoDoMd.includes("invisible");
 }
 
 describe("no celular sempre há exatamente UMA coluna na tela", () => {

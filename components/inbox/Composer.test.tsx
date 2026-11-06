@@ -14,7 +14,7 @@
  *   - o que NÃO MEXE (chave desconhecida segue literal; contato sem nome segue
  *     barrado pela faixa do #2844).
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -74,6 +74,16 @@ vi.mock("@/hooks/inbox/useUploadMedia", () => ({
   useUploadMedia: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+// A consulta do rascunho assistido (issue #3027) mora num hook próprio, e este
+// arquivo não monta `QueryClientProvider`: mockar aqui é o mesmo tratamento que
+// outros hooks do compositor recebem. O bloco passa a ser decidido por
+// `sugestao` (o mesmo sinal do painel), e quem prova a decisão é
+// `Composer.sugestao.test.tsx`, com o painel REAL montado sobre uma consulta
+// de verdade.
+vi.mock("@/hooks/inbox/useRascunhoAssistido", () => ({
+  useRascunhoAssistido: () => ({ sugestao: undefined, invalidar: () => {} }),
+}));
+
 vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
   useAssignableMembers: () => ({ data: [] }),
 }));
@@ -109,6 +119,14 @@ vi.mock("@/components/inbox/composer/useSugestaoDeResposta", () => ({
 }));
 vi.mock("@/components/inbox/composer/ReplyReviewPanel", () => ({
   ReplyReviewPanel: () => null,
+}));
+// Os dois lados da assistência viram placeholders aqui: este arquivo mede o
+// corpo que SAI do `handleSubmit`, e o `DraftReplyButton` real traria uma
+// `useMutation` (e o `QueryClient` que este arquivo não monta) para dentro da
+// medição. A decisão de qual dos dois aparece — com o painel e o botão REAIS —
+// é medida em `Composer.sugestao.test.tsx`.
+vi.mock("@/components/inbox/composer/DraftReplyButton", () => ({
+  DraftReplyButton: () => null,
 }));
 vi.mock("@/components/inbox/composer/TemplateMenu", () => ({
   resolveSlash: (text: string) => {
@@ -312,5 +330,56 @@ describe("o que o conserto NÃO muda (preservado, medido)", () => {
 
     expect(sendMutate).toHaveBeenCalledTimes(1);
     expect(sendMutate.mock.calls[0]![0]).toMatchObject({ conversation_id: "conv-2", body: "Oi Ana" });
+  });
+});
+
+/**
+ * No celular a tecla de retorno do teclado virtual é a de QUEBRAR LINHA — é o
+ * que o próprio WhatsApp faz, e o atendente que escreve "Oi!⏎Tudo bem?" não
+ * espera ver meia mensagem sair. Quem envia, no toque, é o botão.
+ *
+ * O ponteiro é lido NO KEYDOWN (e não no render), para o servidor e o
+ * navegador desenharem a mesma coisa. jsdom não tem `matchMedia`: o dublê
+ * abaixo é a única forma de o caso existir.
+ */
+describe("Enter no toque quebra linha; quem envia é o botão (F2)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function ponteiro(grosso: boolean) {
+    vi.stubGlobal(
+      "matchMedia",
+      (q: string) => ({ matches: grosso && q.includes("coarse"), media: q, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList,
+    );
+  }
+
+  it("ponteiro grosso: Enter NÃO envia e não é cancelado (o navegador quebra a linha)", () => {
+    ponteiro(true);
+    renderComposer({ contactName: "Rafael Melgaço" });
+    const campo = screen.getByRole("textbox");
+    fireEvent.change(campo, { target: { value: "linha 1" } });
+    const naoCancelado = fireEvent.keyDown(campo, { key: "Enter" });
+    expect(naoCancelado).toBe(true);
+    expect(sendMutate).not.toHaveBeenCalled();
+  });
+
+  it("ponteiro grosso + Ctrl+Enter ou Cmd+Enter envia", () => {
+    ponteiro(true);
+    renderComposer({ contactName: "Rafael Melgaço" });
+    const campo = screen.getByRole("textbox");
+    fireEvent.change(campo, { target: { value: "oi" } });
+    fireEvent.keyDown(campo, { key: "Enter", ctrlKey: true });
+    fireEvent.change(campo, { target: { value: "de novo" } });
+    fireEvent.keyDown(campo, { key: "Enter", metaKey: true });
+    expect(sendMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it("ponteiro fino: Enter continua enviando, como sempre", () => {
+    ponteiro(false);
+    renderComposer({ contactName: "Rafael Melgaço" });
+    const campo = screen.getByRole("textbox");
+    fireEvent.change(campo, { target: { value: "oi" } });
+    const naoCancelado = fireEvent.keyDown(campo, { key: "Enter" });
+    expect(naoCancelado).toBe(false);
+    expect(sendMutate).toHaveBeenCalledTimes(1);
   });
 });

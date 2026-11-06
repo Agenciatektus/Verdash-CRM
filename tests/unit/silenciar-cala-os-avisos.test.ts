@@ -37,8 +37,8 @@ import { aplicarEstadoNoCache, silenciadaNoCache } from "@/hooks/inbox/estadoNoC
 import { enviarPushDaOrg } from "@/lib/notifications/web_push";
 
 const inscricoes = [
-  { id: "1", endpoint: "https://push/eu", p256dh: "p", auth: "a", user_id: "eu" },
-  { id: "2", endpoint: "https://push/colega", p256dh: "p", auth: "a", user_id: "colega" },
+  { id: "1", endpoint: "https://fcm.googleapis.com/fcm/send/eu", p256dh: "p", auth: "a", user_id: "eu" },
+  { id: "2", endpoint: "https://fcm.googleapis.com/fcm/send/colega", p256dh: "p", auth: "a", user_id: "colega" },
 ];
 /** O client injetado: inscrições e, na mesma instância, o silêncio. */
 const store = {
@@ -50,6 +50,14 @@ const store = {
         gt: (k: string, v: unknown) => ((filtrosDoSilencio[`gt:${k}`] = v), Promise.resolve({ data: silenciaram, error: null })),
       };
       return q;
+    }
+    // Fork: o funil confere o vínculo ativo na organização e lê a política da tela bloqueada.
+    if (tabela === "user_organizations") {
+      const membros = [{ user_id: "eu", role: "agent" }, { user_id: "colega", role: "agent" }];
+      return { select: () => ({ eq: () => ({ is: async () => ({ data: membros, error: null }) }) }) };
+    }
+    if (tabela === "organizations") {
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { settings: {}, locale: "pt-BR" }, error: null }) }) }) };
     }
     return {
       select: () => ({ eq: async () => ({ data: inscricoes, error: null }) }),
@@ -68,8 +76,8 @@ beforeEach(() => {
 describe("push do servidor", () => {
   it("quem silenciou a conversa não recebe; o colega recebe", async () => {
     silenciaram = [{ user_id: "eu" }];
-    const r = await enviarPushDaOrg("org-1", payload, store as never, { conversationId: "c1" });
-    expect(enviados).toEqual(["https://push/colega"]);
+    const r = await enviarPushDaOrg("org-1", payload, { conversationId: "c1" }, store as never);
+    expect(enviados).toEqual(["https://fcm.googleapis.com/fcm/send/colega"]);
     expect(r.sent).toBe(1);
     // A leitura do silêncio é da conversa, na organização, e só o que vale AGORA.
     expect(filtrosDoSilencio).toMatchObject({ organization_id: "org-1", conversation_id: "c1" });
@@ -81,14 +89,14 @@ describe("push do servidor", () => {
     const quebrado = {
       from: (t: string) => (t === "conversation_user_state" ? (() => { throw new Error("boom"); })() : store.from(t)),
     };
-    await enviarPushDaOrg("org-1", payload, quebrado as never, { conversationId: "c1" });
-    expect(enviados.sort()).toEqual(["https://push/colega", "https://push/eu"]);
+    await enviarPushDaOrg("org-1", payload, { conversationId: "c1" }, quebrado as never);
+    expect(enviados.sort()).toEqual(["https://fcm.googleapis.com/fcm/send/colega", "https://fcm.googleapis.com/fcm/send/eu"]);
   });
 
   it("CONTROLE: sem conversa (aviso que não é de mensagem), todo mundo recebe e o silêncio nem é lido", async () => {
     silenciaram = [{ user_id: "eu" }];
-    await enviarPushDaOrg("org-1", payload, store as never);
-    expect(enviados.sort()).toEqual(["https://push/colega", "https://push/eu"]);
+    await enviarPushDaOrg("org-1", payload, {}, store as never);
+    expect(enviados.sort()).toEqual(["https://fcm.googleapis.com/fcm/send/colega", "https://fcm.googleapis.com/fcm/send/eu"]);
     expect(filtrosDoSilencio).toEqual({});
   });
 });

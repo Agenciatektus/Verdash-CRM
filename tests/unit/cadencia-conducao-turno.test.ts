@@ -29,7 +29,8 @@ vi.mock('@/lib/atendimento/fronteira-server', () => ({
 vi.mock('@/lib/agent-engine/agent/human-handoff', async importOriginal => ({
   ...await importOriginal<Record<string, unknown>>(), isLeadInHandoff: mocks.handoff,
 }));
-vi.mock('@/lib/agent-engine/guardrails/camadas-da-org', () => ({
+vi.mock('@/lib/agent-engine/guardrails/camadas-da-org', async (importOriginal) => ({
+  ...await importOriginal<Record<string, unknown>>(),
   lerCamadasDaOrg: vi.fn(async () => ({})), camadaLigada: vi.fn(() => false),
 }));
 vi.mock('@/lib/agent-engine/agent/fuso-da-org', () => ({ fusoDaOrganizacao: vi.fn(async () => 'UTC') }));
@@ -46,6 +47,23 @@ vi.mock('@/lib/cadencia/conducao/turno', async importOriginal => ({
   encerrarConducaoEPassarParaHumano: mocks.encerrar,
   avisarEquipeDoRascunho: mocks.avisarEquipe,
   nomeDaEtapa: vi.fn(async () => 'Qualificado'),
+}));
+
+// v1.90: o teto da condução é contado em `entrada-do-agente`, DEPOIS do contexto; o contexto (playbook
+// por ponteiro) não é o assunto deste arquivo, então entra como dublê mínimo.
+vi.mock('@/lib/agent-engine/agent/turno/contexto', () => ({
+  carregarContextoDoTurno: vi.fn(async () => ({
+    maxSteps: 1, argsAux: {}, turnContextKnobs: {}, skills: [], currentInboundText: 'oi',
+    currentInboundSender: null, previous: [], leadState: null, system: '', openingContext: {},
+  })),
+}));
+
+vi.mock('@/lib/agent-engine/agent/turno/desvios-deterministicos', () => ({
+  tratarDesviosDeterministicos: vi.fn(async () => ({
+    seguir: true,
+    valor: { channel: null, liveChannel: null, optedOutThisTurn: false, lgpd: null, avisoDaEscalacao: null,
+      mensagemDoJob: null, inboundsPendentes: [], passarComercialParaEquipe: false },
+  })),
 }));
 
 import { createInboundTurnHandler, type InboundTurnDeps } from '@/lib/agent-engine/agent/inbound-turn';

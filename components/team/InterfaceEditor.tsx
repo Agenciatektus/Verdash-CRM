@@ -49,7 +49,7 @@ export function InterfaceEditor({
         <p role="status" className="text-sm">{t("A seleção contém áreas antigas. Confira e salve novamente.")}</p>
       )}
       <details>
-        <summary className="cursor-pointer text-sm font-medium">
+        <summary className="cursor-pointer text-sm font-medium max-md:py-3">
           {t("Personalizar áreas visíveis")}{value.destinos ? t(" (personalizada)") : ""}
         </summary>
         <div className="mt-3 max-h-64 space-y-4 overflow-y-auto">
@@ -62,7 +62,7 @@ export function InterfaceEditor({
                   {t(group.label)}
                 </legend>
                 {items.map((d) => (
-                  <label key={d.href} className="flex items-start gap-2 text-sm">
+                  <label key={d.href} className="flex items-start gap-2 text-sm max-md:min-h-11 max-md:items-center">
                     <input
                       type="checkbox"
                       checked={selected.has(d.href)}
@@ -79,7 +79,7 @@ export function InterfaceEditor({
                           destinos: [...next] as NavDestinationId[],
                         });
                       }}
-                      className="mt-1"
+                      className="md:mt-1"
                     />
                     {t(d.label)}
                   </label>

@@ -7,7 +7,9 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > assistido: vira rascunho, n
   "llm:agent_preview",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#82dda22a",
   "tool:send_message ok #7c8ee28b",
+  "db:insert agent_turn_traces",
   "db:update ai_reply_drafts",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -18,6 +20,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > chamada: saída truncada co
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -30,6 +33,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > chamada: saída truncada co
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -52,6 +56,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > correção: saída truncada
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -72,6 +77,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > desvio: pedido de humano de
   "db:insert agent_inbox_items",
   "db:insert event_log",
   "log:warn handoff: atividade não roteada para um negócio",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -92,6 +98,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > desvio: suspeita de opt-out
   "db:insert agent_inbox_items",
   "db:insert event_log",
   "log:warn handoff: atividade não roteada para um negócio",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -110,6 +117,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: afirmação clínica
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -138,6 +146,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: janela fechada acion
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -156,6 +165,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: vocabulário interno
   "db:insert before_send_traces",
   "log:warn fail-safe do gate de vocabulário interno: envio liberado após vetos seguidos",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Não consegui: resume_requires_person."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -167,6 +177,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > envio: vocabulário interno
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -176,6 +187,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > erro do modelo: provedor fo
   "db:update agent_inbox_items status='resolved'",
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
+  "db:insert agent_turn_traces",
   "fim:lançou upstream 503",
 ]
 `;
@@ -186,6 +198,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > fechamento: checkpoint inv�
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -200,6 +213,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > fechamento: checkpoint inv�
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -211,6 +225,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: lê o contexto 
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "tool:get_lead_context ok #ebdd3b14",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Vi aqui seu histórico, já te respondo."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -222,6 +237,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: lê o contexto 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -235,6 +251,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: nota do lead e 
   "db:insert lead_notes",
   "tool:save_lead_note ok #30dd1e35",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Anotado, vou te oferecer horários de manhã."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -246,6 +263,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramenta: nota do lead e 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -261,7 +279,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramentas de caso: abre e
   "tool:provide_case_update recusou invalid_payload",
   "log:warn turno terminou sem mensagem ao cliente — pedindo UMA correção",
   "llm:agent_turn",
-  "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#edc5ae20",
+  "chamada: ferramentas=get_lead_context,get_lead_note,open_human_case,provide_case_update,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#853e0678",
   "db:insert agent_cases",
   "db:insert agent_case_events",
   "log:warn breaker: warn (exact_failure)",
@@ -269,10 +287,11 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramentas de caso: abre e
   "log:warn breaker: warn (exact_failure)",
   "tool:provide_case_update recusou invalid_payload",
   "llm:checkpoint",
-  "checkpoint: msgs=7 #305c10fe",
+  "checkpoint: msgs=7 #ce841b7e",
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -285,6 +304,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramentas de leitura: not
   "tool:get_lead_note recusou note_not_found",
   "tool:search_knowledge recusou o sistema não respondeu a tempo",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Já te passo o valor."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -296,6 +316,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > ferramentas de leitura: not
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -309,6 +330,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > montagem: classificadores d
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#a363844d",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -320,6 +342,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > montagem: classificadores d
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -348,6 +371,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > passa para humano: ferramen
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -360,14 +384,15 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > passa para humano: payload 
   "tool:request_human_handoff recusou invalid_payload",
   "log:warn turno terminou sem mensagem ao cliente — pedindo UMA correção",
   "llm:agent_turn",
-  "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#de9e30b",
+  "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#e8b6479c",
   "log:warn breaker: warn (exact_failure)",
   "tool:request_human_handoff recusou invalid_payload",
   "llm:checkpoint",
-  "checkpoint: msgs=5 #43ee197e",
+  "checkpoint: msgs=5 #8d46ed3e",
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -375,6 +400,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > passa para humano: payload 
 exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: agente pausado 1`] = `
 [
   "db:update agent_inbox_items status='resolved'",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -382,6 +408,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: agente pausado 1`]
 exports[`rastro de efeitos do turno (ADR-0006, S0) > portão: lead em handoff humano 1`] = `
 [
   "log:info turno pulado — lead em handoff humano (bot silenciado)",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -396,6 +423,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > preparo: compactação com 
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Anotado, te mando o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -407,6 +435,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > preparo: compactação com 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -426,6 +455,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > preparo: contato bloqueado 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -442,6 +472,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > pós-turno: tentativa do Op
   "db:insert agent_inbox_items",
   "tool:update_lead_state ok #b43b9994",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Amanhã te mando o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -456,6 +487,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > pós-turno: tentativa do Op
   "db:insert crm_lead_activities",
   "db:insert golden_candidates",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -466,6 +498,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de 
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Mensagem número 1 com conteúdo distinto xxxxxxx"",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -473,6 +506,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de 
   "db:insert before_send_traces",
   "tool:send_message ok #6cfce56a",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Mensagem número 2 com conteúdo distinto xxxxxxxxxxxxxx"",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -480,6 +514,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de 
   "db:insert before_send_traces",
   "tool:send_message ok #6cfce0e9",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Mensagem número 3 com conteúdo distinto xxxxxxxxxxxxxxxxxxxxx"",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -492,6 +527,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: acima do teto de 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -507,6 +543,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: corpo vazio 1`] =
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -517,6 +554,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: duas mensagens di
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Tudo bem?"",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -524,6 +562,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: duas mensagens di
   "db:insert before_send_traces",
   "tool:send_message ok #6cfce56a",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "O horário de amanhã às 10h está livre."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -535,6 +574,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: duas mensagens di
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -545,6 +585,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: mesmo corpo duas 
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -559,6 +600,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: mesmo corpo duas 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -569,6 +611,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: uma mensagem 1`] 
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -580,6 +623,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > responde: uma mensagem 1`] 
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -589,6 +633,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: condução ence
   "db:update agent_inbox_items status='resolved'",
   "db:update cadencia_conducoes",
   "log:info condução da cadência encerrada no meio-tempo — turno não executado",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -599,6 +644,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: fora do horári
   "log:info aviso de fora do horário não enviado",
   "job:update job_queue",
   "log:info turno adiado — fora do horário de funcionamento configurado na versão publicada",
+  "db:insert agent_turn_traces",
   "fim:lançou fora do horário de funcionamento — job reagendado para a abertura da janela",
 ]
 `;
@@ -613,6 +659,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: roteador decide
   "llm:agent_turn",
   "chamada: ferramentas=get_lead_context,get_lead_note,request_human_handoff,save_lead_note,send_message,update_lead_state abertura=#baa55cf8",
   "db:begin",
+  "db:update prospecting_candidates",
   "send:text "Oi! Posso te ajudar com o orçamento."",
   "db:insert pacing_ledger",
   "db:insert outbound_copies",
@@ -624,6 +671,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > roteamento: roteador decide
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;
@@ -641,6 +689,7 @@ exports[`rastro de efeitos do turno (ADR-0006, S0) > turno mudo: modelo não cha
   "db:insert lead_checkpoints",
   "log:info turno do operador não enfileirado",
   "log:info turno do agente concluído",
+  "db:insert agent_turn_traces",
   "fim:ok",
 ]
 `;

@@ -45,6 +45,8 @@ describe("send_message leva a foto do produto", () => {
 
   it("a foto sai de DENTRO do `send` do guardrail, com o corpo que a cadeia aprovou", () => {
     const send = corpoDoSend.slice(corpoDoSend.indexOf("send: (finalBody: string) =>"));
-    expect(send).toContain("enviarComFotos(finalBody, fotosDoProduto,");
+    // Fork: o corpo aprovado passa pela saída configurável (`corpoComSaida` = `finalBody` + rodapé) antes das fotos.
+    expect(send).toContain("enviarComSaidaConfiguravel(saida, finalBody,");
+    expect(send).toContain("enviarComFotos(corpoComSaida, fotosDoProduto,");
   });
 });

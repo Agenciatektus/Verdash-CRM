@@ -191,6 +191,11 @@ export async function processarConversao(
   const { plataforma, cliqueDeOrigem, telefone } = leitura.atribuicao;
   const dadosDoCliente =
     "dadosDoCliente" in leitura.atribuicao ? leitura.atribuicao.dadosDoCliente : undefined;
+  // Presente só na captura de PÁGINA (formulário): o ramo do protocolo
+  // pendente monta a atribuição sem identidade de navegador, e o `in` cobre o
+  // tipo sem inventar campo.
+  const identidadeDoNavegador =
+    "identidadeDoNavegador" in leitura.atribuicao ? leitura.atribuicao.identidadeDoNavegador : undefined;
   const identificadoresGoogle =
     "identificadoresGoogle" in leitura.atribuicao
       ? leitura.atribuicao.identificadoresGoogle
@@ -466,6 +471,7 @@ export async function processarConversao(
         : (lead.closed_at ?? row.created_at ?? Date.now()),
     ),
     cliqueDeOrigem,
+    identidadeDoNavegador,
     identificadoresGoogle,
     telefone,
     dadosDoCliente,

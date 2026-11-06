@@ -114,7 +114,8 @@ function banco() {
       return q;
     };
     const resposta = () => {
-      if (tabela === "channel_sessions") return { data: { id: CANAL }, error: null };
+      // `provider` decide o modo da campanha (texto livre no QR): sem ele o canal «não envia campanhas».
+      if (tabela === "channel_sessions") return { data: { id: CANAL, provider: "waha" }, error: null };
       if (tabela === "campaigns") {
         if (verbo === "insert") return { data: { ...linha(), ...valores, id: CAMP }, error: null };
         if (verbo === "update") return { data: { ...linha(), ...valores, id: CAMP }, error: null };

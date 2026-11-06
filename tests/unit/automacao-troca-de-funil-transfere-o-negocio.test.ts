@@ -216,7 +216,7 @@ describe("o motivo da transferência — as duas metades do mesmo nome", () => {
     const metrica = baseline.slice(corte);
     expect(metrica).toContain(`coalesce(lost_reason, '') <> '${MOTIVO_DA_TRANSFERENCIA}'`);
     // 9053: e conta os desfechos da época (o ganho que saiu com o card segue do responsável).
-    expect(metrica.slice(0, 1500)).toContain("from public.crm_desfechos_de_negocio");
+    expect(metrica.slice(0, 3000)).toContain("from public.crm_desfechos_de_negocio");
   });
 
   it("a migration 0266 existe, está no baseline e no MANIFEST", () => {

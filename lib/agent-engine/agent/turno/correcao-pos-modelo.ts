@@ -13,6 +13,7 @@ import { hasOpenCaseForContact, openCase } from '../human-cases';
 import { eTurnoDeResposta } from '../inbound-turn';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from '../roteiro-no-turno';
 import { CORRECAO_DO_TURNO_MUDO, turnoMudoPedeCorrecao } from '../turno-mudo';
+import { previaPedeCorrecaoDoTurnoMudo, tetoDePassosAtingido } from '../desfecho-da-previa';
 import type { chamarOModelo } from './chamada-do-modelo';
 import type { carregarContextoDoTurno } from './contexto';
 import type { SaidaDosDesvios } from './desvios-deterministicos';
@@ -65,20 +66,38 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
   // Erro da chamada de correção propaga e o job falha na fila (retry /
   // dead-letter visível). As condições são as do próprio pedido
   // (turno-mudo.ts): razões legítimas de silêncio nem chegam a corrigir.
+  //
+  // #3093 — a PRÉVIA DO RASCUNHO (assistido) pede a MESMA correção quando o
+  // modelo deixou TEXTO SOLTO (escreveu fora do `send_message` e encerrou), UMA
+  // vez, com a mesma conversa e as mesmas ferramentas. A prévia de TESTE
+  // (sandbox) não: ela mostra o que o agente produziu, e uma segunda chamada
+  // esconderia o defeito que ela existe para revelar.
   let correcaoTruncou = false;
+  // A correção também pode gastar o teto dela (3 passos) só em consultas: na
+  // prévia isso é a mesma falha do teto da primeira chamada, não decisão.
+  let tetoNaCorrecao = false;
   const correcaoDoTurnoMudoPedida =
-    !preview &&
-    liveJob().kind === 'inbound_turn' &&
-    turnoMudoPedeCorrecao({
-      tentativasDeEnvio: estado.tentativasDeEnvio,
-      enviadas: estado.outcomes.length,
-      turnoDescartado: estado.turnoDescartado,
-      passouParaAEquipe: estado.passouParaAEquipe,
-      capDeEnvio: capDeEnvioAtingido(),
-    });
+    preview?.kind === 'assisted'
+      ? previaPedeCorrecaoDoTurnoMudo({
+          textoEscrito: turn.result.text,
+          candidatos: preview.result.candidates.length,
+          tentativasDeEnvio: estado.tentativasDeEnvio,
+        })
+      : !preview &&
+        liveJob().kind === 'inbound_turn' &&
+        turnoMudoPedeCorrecao({
+          tentativasDeEnvio: estado.tentativasDeEnvio,
+          enviadas: estado.outcomes.length,
+          turnoDescartado: estado.turnoDescartado,
+          passouParaAEquipe: estado.passouParaAEquipe,
+          capDeEnvio: capDeEnvioAtingido(),
+        });
   if (correcaoDoTurnoMudoPedida) {
     runLog.warn('turno terminou sem mensagem ao cliente — pedindo UMA correção', {
-      job_id: liveJob().id,
+      // `liveJob()` LANÇA na prévia (`preview_operational_job_forbidden`, #2996):
+      // o rascunho vai sem id de job, e o log segue honesto.
+      job_id: job?.id ?? null,
+      previa: preview?.kind ?? null,
     });
     const pedidoDeCorrecao: ModelMessage = { role: 'user', content: CORRECAO_DO_TURNO_MUDO };
     const correcao = await runModelCall(
@@ -89,7 +108,7 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
         leadId: leadId || null,
         jobId: job?.id,
         agentId: agentConfig?.agentId ?? null,
-        purpose: 'agent_turn',
+        purpose: preview ? 'agent_preview' : 'agent_turn',
         system,
         messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
         tools,
@@ -109,6 +128,11 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
     // Sinal de FALHA da correção: terminou no teto de tokens. Silêncio com
     // finishReason normal (stop/tool-calls) é resposta escolhida, não defeito.
     correcaoTruncou = correcao.result.finishReason === 'length';
+    tetoNaCorrecao = tetoDePassosAtingido({
+      passosUsados: correcao.result.steps?.length ?? 0,
+      maxSteps: Math.min(maxSteps, 3),
+      finishReason: correcao.result.finishReason,
+    });
     mensagensDoTurno = [...mensagensDoTurno, pedidoDeCorrecao, ...correcao.result.responseMessages];
     if (estado.runError !== null) throw estado.runError;
     if (estado.outcomes.some((o) => o.kind === 'failed')) {
@@ -267,5 +291,5 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
     );
   }
 
-  return { mensagensDoTurno };
+  return { mensagensDoTurno, correcaoTruncou, tetoNaCorrecao };
 }

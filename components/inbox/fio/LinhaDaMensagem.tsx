@@ -3,6 +3,7 @@
 import { memo } from "react";
 
 import { MessageBubble } from "@/components/inbox/MessageBubble";
+import type { ReacaoNoBalao } from "@/lib/inbox/reacoes-no-fio";
 import type { Message } from "@/lib/types/messaging";
 
 /**
@@ -14,6 +15,7 @@ import type { Message } from "@/lib/types/messaging";
  */
 export interface AcoesDoFio {
   responder: (m: Message) => void;
+  encaminhar: (m: Message) => void;
   editar: (id: string, text: string) => Promise<void>;
   apagar: (id: string) => Promise<void>;
   ocultar: (id: string) => Promise<void>;
@@ -34,6 +36,10 @@ interface Props {
   citada: Message | null;
   viewerUserId: string;
   temResponder: boolean;
+  /** Encaminhar a mensagem a outra conversa (#2835). */
+  temEncaminhar?: boolean;
+  /** Reações que apontam para este balão (#2815). */
+  reacoes?: ReacaoNoBalao[];
   /** Canal altera enviada E quem lê é o autor (editar/apagar). */
   podeAlterar: boolean;
   /** Manager+ numa mensagem recebida (ocultar/restaurar). */
@@ -62,6 +68,8 @@ export const LinhaDaMensagem = memo(function LinhaDaMensagem({
   citada,
   viewerUserId,
   temResponder,
+  temEncaminhar = false,
+  reacoes,
   podeAlterar,
   podeModerar,
   inicioDoBloco,
@@ -76,6 +84,8 @@ export const LinhaDaMensagem = memo(function LinhaDaMensagem({
       searchMatch={searchMatch}
       debugCitations={debugCitations}
       onResponder={temResponder ? acoes.responder : undefined}
+      onEncaminhar={temEncaminhar ? acoes.encaminhar : undefined}
+      reacoes={reacoes}
       citada={citada}
       viewerUserId={viewerUserId}
       onEditar={podeAlterar ? (text) => acoes.editar(id, text) : undefined}
