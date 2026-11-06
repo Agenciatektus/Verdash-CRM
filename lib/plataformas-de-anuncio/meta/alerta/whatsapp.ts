@@ -33,7 +33,7 @@ export type DesfechoDoWhatsApp = "enviado" | "ignorado" | `falhou:${string}`;
 export type EnviarWhatsApp = (orgId: string, texto: string) => Promise<DesfechoDoWhatsApp>;
 
 export interface OpcoesDoWhatsApp {
-  /** Pula só o guarda de laço robô com robô. O dono pediu: o destino é o número pessoal dele, que também é canal. */
+  /** Pula só o guarda de laço robô com robô. O dono pediu: o destino do alerta é o canal Comercial da própria org. */
   permiteDestinoDaPropriaOrganizacao?: boolean;
 }
 
