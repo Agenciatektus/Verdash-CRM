@@ -36,5 +36,5 @@ export function recorteDaGrade(visao: VisaoDaAgenda, ancora: Date): { de: Date; 
     return { de, ate: addDays(de, SEMANAS_NA_VISAO_DE_MES * 7) };
   }
   const de = visao === "semana" ? startOfWeek(ancora, { weekStartsOn: 0 }) : startOfDay(ancora);
-  return { de, ate: addDays(de, visao === "semana" ? 7 : 1) };
+  return { de, ate: addDays(de, visao === "semana" ? 7 : visao === "tres" ? 3 : 1) };
 }

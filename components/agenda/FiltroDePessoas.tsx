@@ -2,6 +2,7 @@
 
 import { useT } from "@/hooks/i18n/useT";
 
+import { Chip } from "@/components/ui/chip";
 import { cn } from "@/lib/utils";
 
 import { AvatarDaPessoa } from "./AvatarDaPessoa";
@@ -10,14 +11,10 @@ import type { Pessoa } from "./tipos";
 /**
  * Quem aparece na grade.
  *
- * Avatares empilhados, e clicar num deles ISOLA a agenda daquela pessoa —
- * pedido explícito do dono do produto. Não é multisseleção: numa equipe de
- * clínica a pergunta real é "o que a Ana tem hoje?", e uma caixinha por pessoa
- * transformaria isso em três cliques.
- *
- * O empilhamento com sobreposição (`-space-x-2`) é o que permite oito pessoas
- * caberem ao lado do título sem virar uma barra de rolagem horizontal — e o
- * anel na cor da superfície é o que mantém cada uma legível por cima da outra.
+ * Um chip por pessoa (avatar + nome), e clicar num ISOLA a agenda daquela
+ * pessoa — pedido explícito do dono do produto. Não é multisseleção: numa equipe
+ * de clínica a pergunta real é "o que a Ana tem hoje?". "Todos" desfaz.
+ * No celular a fila rola na horizontal em vez de quebrar.
  */
 export function FiltroDePessoas({
   pessoas,
@@ -41,47 +38,29 @@ export function FiltroDePessoas({
     <div
       data-testid="filtro-de-pessoas"
       data-isolada={isolada ?? "todos"}
-      className={cn("flex items-center gap-2", className)}
+      className={cn("flex flex-wrap items-center gap-2 mb:flex-nowrap mb:overflow-x-auto", className)}
     >
-      <div className="flex -space-x-2">
-        {pessoas.map((p) => {
-          const ativo = isolada === null || isolada === p.id;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              data-testid={`botao-pessoa-${p.id}`}
-              aria-pressed={isolada === p.id}
-              aria-label={
-                isolada === p.id
-                  ? `${t("Mostrar todos (agora só")} ${p.nome})`
-                  : `${t("Ver só a agenda de")} ${p.nome}`
-              }
-              onClick={() => onIsolar(isolada === p.id ? null : p.id)}
-              className={cn(
-                "rounded-full transition-transform duration-fast ease-out",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
-                // Sobe 2px em vez de crescer: escala mudaria a sobreposição e
-                // faria os vizinhos parecerem se mexer junto.
-                isolada === p.id ? "-translate-y-0.5" : "hover:-translate-y-0.5",
-              )}
-            >
-              <AvatarDaPessoa pessoa={p} ativo={ativo} />
-            </button>
-          );
-        })}
-      </div>
-
-      {isolada !== null && (
-        <button
-          type="button"
-          data-testid="botao-todos"
-          onClick={() => onIsolar(null)}
-          className="rounded-sm px-2 py-1 text-xs text-text-muted transition-colors duration-fast hover:bg-surface-elevated hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+      {/* Profissional com avatar na MESMA cor do evento na grade (trilha da pessoa). */}
+      <Chip data-testid="botao-todos" ligado={isolada === null} onClick={() => onIsolar(null)}>
+        {t("Todos")}
+      </Chip>
+      {pessoas.map((p) => (
+        <Chip
+          key={p.id}
+          data-testid={`botao-pessoa-${p.id}`}
+          ligado={isolada === p.id}
+          aria-label={
+            isolada === p.id
+              ? `${t("Mostrar todos (agora só")} ${p.nome})`
+              : `${t("Ver só a agenda de")} ${p.nome}`
+          }
+          onClick={() => onIsolar(isolada === p.id ? null : p.id)}
+          className="pl-1"
         >
-          {t("Todos")}
-        </button>
-      )}
+          <AvatarDaPessoa pessoa={p} tamanho="sm" ativo={isolada === null || isolada === p.id} />
+          {p.nome.split(" ")[0]}
+        </Chip>
+      ))}
     </div>
   );
 }

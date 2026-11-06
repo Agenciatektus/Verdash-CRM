@@ -228,7 +228,7 @@ test.describe("a Agenda como o dono do produto a usa", () => {
     const cartoes = () => page.getByTestId("grade-da-agenda").getByRole("button", { name: /\d{2}:\d{2} às \d{2}:\d{2}/ });
     const todos = await cartoes().count();
 
-    const primeira = filtro.getByRole("button").first();
+    const primeira = filtro.locator('[data-testid^="botao-pessoa-"]').first();
     await primeira.click();
     const isolado = await cartoes().count();
     expect(

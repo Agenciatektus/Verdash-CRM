@@ -3,6 +3,7 @@
  * Inbox, do Funil e das Tarefas. Ver `Pagina.tsx`.
  */
 export { Pagina, CabecalhoDaPagina, SecaoDaPagina } from "./Pagina";
+export { PaginaCheia } from "./PaginaCheia";
 export { LinkDeVolta } from "./LinkDeVolta";
 export { BarraDeFiltros, CampoDeBuscaDaPagina, type BuscaDaPagina } from "./BarraDeFiltros";
 export { EstadoDaLista, TabelaOuCartoes, CartaoEmpilhado, type CampoDoCartao } from "./ListaDaPagina";

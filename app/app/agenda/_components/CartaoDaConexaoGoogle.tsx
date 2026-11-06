@@ -2,7 +2,9 @@
 
 import { useT } from "@/hooks/i18n/useT";
 
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
+import { useDispensado } from "@/hooks/useDispensado";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
@@ -48,14 +50,12 @@ export function CartaoDaConexaoGoogle({
   const t = useT();
   const router = useRouter();
   const [desconectando, setDesconectando] = React.useState(false);
+  const [dispensado, dispensar] = useDispensado("agenda:aviso-google-dispensado");
 
   if (!configurado) {
     return (
-      <div
-        data-testid="google-nao-configurado"
-        className="rounded-lg border border-border bg-surface-elevated/50 p-3"
-      >
-        <p className="text-sm font-medium text-text">{t("Sincronizar com o Google ainda não está disponível")}</p>
+      <div data-testid="google-nao-configurado">
+      <Aviso tom="info" titulo={t("Sincronizar com o Google ainda não está disponível")}>
         {/*
           DUAS FRASES, porque são duas pessoas.
           
@@ -114,57 +114,70 @@ export function CartaoDaConexaoGoogle({
         <p className="mt-2 text-xs leading-4 text-text-muted">
           {t("Até lá a agenda funciona normalmente, só não troca compromissos com o Google.")}
         </p>
+      </Aviso>
       </div>
     );
   }
 
   if (contaConectada) {
     return (
-      <div
-        data-testid="google-conectado"
-        className="flex items-center gap-2 rounded-lg border border-border bg-surface p-3"
-      >
-        <GoogleLogo size={16} weight="bold" className="shrink-0 text-text-muted" aria-hidden />
-        <p className="min-w-0 flex-1 truncate text-sm">
-          <span className="text-text-muted">{t("Agenda conectada:")} </span>
-          <span className="font-medium">{contaConectada}</span>
-        </p>
-        <a href="/app/settings/tenant/agenda" className="text-xs underline">{t("Configurar suas agendas")}</a>
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="desconectar-google"
-          disabled={desconectando}
-          onClick={() => {
-            setDesconectando(true);
-            void fetch("/api/v1/agenda/google/desconectar", { method: "DELETE" })
-              .then(async (r) => {
-                if (!r.ok) throw new Error(await r.text());
-                // `refresh` e não estado local: quem sabe se a conexão saiu é o
-                // servidor. Trocar o cartão no cliente repetiria o "Marcado ✓"
-                // que esta mesma entrega acabou de pagar.
-                router.refresh();
-              })
-              .catch(() => setDesconectando(false));
-          }}
+      <div data-testid="google-conectado">
+        <Aviso
+          tom="ok"
+          acao={
+            <>
+              <a href="/app/settings/tenant/agenda" className="text-xs underline">
+                {t("Configurar suas agendas")}
+              </a>
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="desconectar-google"
+                disabled={desconectando}
+                onClick={() => {
+                  setDesconectando(true);
+                  void fetch("/api/v1/agenda/google/desconectar", { method: "DELETE" })
+                    .then(async (r) => {
+                      if (!r.ok) throw new Error(await r.text());
+                      // `refresh` e não estado local: quem sabe se a conexão saiu é o
+                      // servidor. Trocar o cartão no cliente repetiria o "Marcado ✓"
+                      // que esta mesma entrega acabou de pagar.
+                      router.refresh();
+                    })
+                    .catch(() => setDesconectando(false));
+                }}
+              >
+                {desconectando ? t("Desconectando…") : t("Desconectar")}
+              </Button>
+            </>
+          }
         >
-          {desconectando ? t("Desconectando…") : t("Desconectar")}
-        </Button>
+          <span className="truncate">
+            <span>{t("Agenda conectada:")} </span>
+            <span className="font-medium text-foreground">{contaConectada}</span>
+          </span>
+        </Aviso>
       </div>
     );
   }
 
+  // Faixa fina e dispensável: quem não usa o Google não precisa dela para sempre.
+  if (dispensado) return null;
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface p-3">
-      <p className="min-w-0 flex-1 text-sm text-text-muted">
-        {t("Conecte sua agenda do Google para ver aqui o que já está marcado lá — e enviar para lá o que for marcado aqui.")}
-      </p>
-      <Button variant="outline" size="sm" data-testid="conectar-google" asChild>
-        <a href="/api/v1/agenda/google/connect">
-          <GoogleLogo size={16} weight="bold" aria-hidden />
-          <span>{t("Conectar Google")}</span>
-        </a>
-      </Button>
-    </div>
+    <Aviso
+      tom="info"
+      onDispensar={dispensar}
+      rotuloDispensar={t("Dispensar")}
+      acao={
+        <Button variant="outline" size="sm" data-testid="conectar-google" asChild>
+          <a href="/api/v1/agenda/google/connect">
+            <GoogleLogo size={16} weight="bold" aria-hidden />
+            <span>{t("Conectar")}</span>
+          </a>
+        </Button>
+      }
+    >
+      {t("Conecte sua agenda do Google para ver aqui o que já está marcado lá — e enviar para lá o que for marcado aqui.")}
+    </Aviso>
   );
 }

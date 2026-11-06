@@ -456,7 +456,7 @@ function BlocoDeAgendamento({
       )}
       style={{
         top: pixelsDe(minutosDesdeOTopo(comeca, fuso)),
-        height: Math.max(pixelsDe(duracao) - 2, 18),
+        height: Math.max(pixelsDe(duracao) - 2, 24),
         // `calc` em vez de porcentagem crua para os 2px de respiro entre
         // colunas vizinhas não saírem da largura útil de cada bloco.
         left: `calc(${(coluna / colunas) * 100}% + 2px)`,
@@ -857,7 +857,12 @@ export function GradeDaAgenda({
   interacao?: InteracaoDaGrade;
   className?: string;
 }) {
-  const dias = visao === "dia" ? [ancora] : diasDaSemanaDe(ancora);
+  const dias =
+    visao === "dia"
+      ? [ancora]
+      : visao === "tres"
+        ? [0, 1, 2].map((i) => addDays(ancora, i))
+        : diasDaSemanaDe(ancora);
 
   const gradeRef = React.useRef<HTMLDivElement>(null);
   const [proposta, setProposta] = React.useState<PropostaDeRemarcacao | null>(null);
