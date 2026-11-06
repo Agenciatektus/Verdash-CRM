@@ -119,7 +119,7 @@ export function PainelDeProvedores({ antesDosPontos }: { antesDosPontos?: ReactN
   const semChave = dados.credenciais.length === 0;
 
   return (
-    <Pagina testId="painel-de-provedores">
+    <Pagina testId="painel-de-provedores" largura="leitura">
       <CabecalhoDaPagina
         titulo={t("Provedores de IA")}
         descricao={
