@@ -103,9 +103,11 @@ async function entrar(page: Page, creds: Creds) {
  * seletor sumir da tela, esta linha falha antes de qualquer outra coisa.
  */
 async function escolherOTipoDoSeed(page: Page, nome: string) {
-  const seletor = page.getByTestId("tipo-da-grade");
+  const abrir = page.getByTestId("horarios-livres");
   // Organização com um tipo só não precisa de seletor, e ele não é renderizado.
-  if ((await seletor.count()) === 0) return;
+  if ((await abrir.count()) === 0) return;
+  await abrir.click();
+  const seletor = page.getByTestId("tipo-da-grade");
   await seletor.getByRole("button", { name: new RegExp(`^${nome}$`) }).click();
 }
 

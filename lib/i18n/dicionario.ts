@@ -19964,6 +19964,11 @@ export const DICIONARIO: Traducoes = {
   "Parâmetro inválido.": {
     es: "Parámetro no válido.",
   },
+  "3 dias": { es: "3 días" },
+  "Horários livres": { es: "Horarios libres" },
+  "Próximos hoje": { es: "Próximos hoy" },
+  "Ver todos": { es: "Ver todos" },
+  "Nada mais marcado para hoje.": { es: "Nada más agendado para hoy." },
 };
 
 /**

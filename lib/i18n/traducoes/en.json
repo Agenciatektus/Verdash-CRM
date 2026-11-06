@@ -9483,5 +9483,10 @@
   "Etiquetas de ativação": "Activation tags",
   "Etiquetas que ativam (opcional)": "Tags that activate it (optional)",
   "odonto, clínica": "dental, clinic",
-  "Se a conversa ou o contato tiver uma destas etiquetas, a skill entra mesmo sem a palavra-chave.": "If the conversation or the contact has one of these tags, the skill is used even without the keyword."
+  "Se a conversa ou o contato tiver uma destas etiquetas, a skill entra mesmo sem a palavra-chave.": "If the conversation or the contact has one of these tags, the skill is used even without the keyword.",
+  "3 dias": "3 days",
+  "Horários livres": "Free time slots",
+  "Próximos hoje": "Upcoming today",
+  "Ver todos": "View all",
+  "Nada mais marcado para hoje.": "Nothing else scheduled for today."
 }

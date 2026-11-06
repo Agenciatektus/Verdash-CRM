@@ -250,6 +250,7 @@ export default async function AgendaPage() {
 
   return (
     <AgendaClient
+      orgId={activeOrg.orgId}
       tituloDaAgenda={tituloDaAgenda(apresentacao?.settings)}
       // O fuso RESOLVIDO da organização: a régua da grade inteira. `page.tsx`
       // é a única que tem `activeOrg.timezone`, e até aqui ele parava em
