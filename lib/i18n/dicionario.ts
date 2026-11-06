@@ -18734,7 +18734,6 @@ export const DICIONARIO: Traducoes = {
   "Nenhuma cobrança paga para estornar.": { es: "Ningún cobro pagado para reembolsar." },
   "Assinatura cancelada. A empresa não paga mais por este plano.": { es: "Suscripción cancelada. La empresa ya no paga por este plan." },
   "Última cobrança estornada:": { es: "Último cobro reembolsado:" },
-  "de": { es: "de" },
   "Histórico de pagamentos": { es: "Historial de pagos" },
   "Nenhum pagamento registrado ainda. Os pagamentos aparecem aqui depois da primeira cobrança paga no provedor.": { es: "Aún no hay pagos registrados. Los pagos aparecen aquí después del primer cobro pagado en el proveedor." },
   "Pago": { es: "Pagado" },
