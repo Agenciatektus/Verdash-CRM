@@ -5933,5 +5933,8 @@
   "Titular anonimizado": "数据主体已匿名化",
   "Fechamento": "成交",
   "Perda": "丢单",
-  "Envia conversão": "发送转化"
+  "Envia conversão": "发送转化",
+  "sem chance definida": "未设置成交概率",
+  "Não avisa a equipe": "不通知团队",
+  "Não envia conversão": "不发送转化"
 }

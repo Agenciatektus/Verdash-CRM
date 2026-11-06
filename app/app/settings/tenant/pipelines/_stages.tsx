@@ -388,7 +388,11 @@ export function StagesSection({
       { stageId: etapaId, patch },
       {
         onSuccess: () => toast.success(t("Etapa atualizada.")),
-        onError: (e) => setErro({ etapaId, texto: mensagemDeErro(e, t), sobrePapel }),
+        onError: (e) => {
+          setErro({ etapaId, texto: mensagemDeErro(e, t), sobrePapel });
+          // O erro mora nos detalhes: com a linha recolhida ele ficaria escondido.
+          setAbertas((atual) => new Set(atual).add(etapaId));
+        },
       },
     );
   }
@@ -455,7 +459,7 @@ export function StagesSection({
   }
 
   return (
-    <div className="space-y-4" id={ancoraDasEtapas(pipelineId)} data-testid={`etapas-${pipelineId}`}>
+    <div className="@container space-y-4" id={ancoraDasEtapas(pipelineId)} data-testid={`etapas-${pipelineId}`}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{t("Etapas deste funil")}</h3>
         <p className="max-w-3xl text-sm leading-relaxed text-text-muted">
@@ -505,6 +509,9 @@ export function StagesSection({
                 <span className="min-w-0 flex-1 truncate font-medium">{etapa.name}</span>
                 <span className="hidden w-12 shrink-0 text-right tabular-nums text-text-muted sm:block">
                   {chanceDaLinha(etapa)}
+                  {!etapa.is_won && !etapa.is_lost && etapa.win_probability == null && (
+                    <span className="sr-only">{t("sem chance definida")}</span>
+                  )}
                 </span>
                 <span className="flex shrink-0 sm:w-32">
                   {papel === "won" ? (
@@ -523,14 +530,18 @@ export function StagesSection({
                     title={t("Avisa a equipe")}
                   >
                     <Bell size={16} aria-hidden />
-                    {etapa.avisar_na_central === true && <span className="sr-only">{t("Avisa a equipe")}</span>}
+                    <span className="sr-only">
+                      {etapa.avisar_na_central === true ? t("Avisa a equipe") : t("Não avisa a equipe")}
+                    </span>
                   </span>
                   <span
                     className={etapa.envia_conversao === true ? "text-accent-text" : "text-text-muted opacity-40"}
                     title={t("Envia conversão")}
                   >
                     <Megaphone size={16} aria-hidden />
-                    {etapa.envia_conversao === true && <span className="sr-only">{t("Envia conversão")}</span>}
+                    <span className="sr-only">
+                      {etapa.envia_conversao === true ? t("Envia conversão") : t("Não envia conversão")}
+                    </span>
                   </span>
                 </span>
                 <CaretDown
@@ -542,7 +553,7 @@ export function StagesSection({
 
               <div id={painel} hidden={!aberta}>
               <div className="flex flex-col gap-3 border-t border-border bg-surface-elevated p-4">
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 @xl:grid-cols-2">
                 <div className="min-w-0 space-y-1">
                   <span className="block text-xs font-medium text-text-muted">{t(ROTULO.nome)}</span>
                   <NomeDaEtapa

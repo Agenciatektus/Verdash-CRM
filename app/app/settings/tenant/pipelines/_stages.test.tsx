@@ -255,6 +255,22 @@ describe("StagesSection — a etapa é UMA linha que abre os detalhes no lugar",
     expect(botao).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("recolher e reabrir NÃO apaga o que foi digitado e ainda não foi confirmado", async () => {
+    const user = userEvent.setup();
+    montar();
+    const botao = await screen.findByTestId("abrir-etapa-e1");
+    await user.click(botao);
+    const campo = screen.getByTestId("nome-e1");
+    await user.clear(campo);
+    await user.type(campo, "Rascunho novo");
+
+    await user.click(botao); // recolhe sem confirmar
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    await user.click(botao);
+    expect(screen.getByTestId("nome-e1")).toBe(campo); // o MESMO nó: não foi desmontado
+    expect(screen.getByTestId("nome-e1")).toHaveValue("Rascunho novo");
+  });
+
   it("os ícones acendem só para quem avisa a equipe e envia conversão", async () => {
     vi.mocked(apiClient.get).mockResolvedValue({
       data: estado({}, [
@@ -267,9 +283,9 @@ describe("StagesSection — a etapa é UMA linha que abre os detalhes no lugar",
     montar();
     const e1 = await screen.findByTestId("abrir-etapa-e1");
     expect(e1).toHaveTextContent("Avisa a equipe");
-    expect(e1).not.toHaveTextContent("Envia conversão");
+    expect(e1).toHaveTextContent("Não envia conversão");
     expect(screen.getByTestId("abrir-etapa-e2")).toHaveTextContent("Envia conversão");
-    expect(screen.getByTestId("abrir-etapa-e3")).not.toHaveTextContent("Avisa a equipe");
+    expect(screen.getByTestId("abrir-etapa-e3")).toHaveTextContent("Não avisa a equipe");
   });
 });
 
@@ -1084,5 +1100,24 @@ describe("taxa histórica por etapa — a contagem ao lado do campo (#1753)", ()
     // A escrita é a MESMA de digitar no campo: uma rota só, sem caminho novo.
     const urls = vi.mocked(apiClient.patch).mock.calls.map(([rota]) => String(rota));
     expect(new Set(urls).size).toBe(1);
+  });
+});
+
+describe("StagesSection — erro com a linha recolhida", () => {
+  it("se a gravação falhar, a linha abre para mostrar o erro", async () => {
+    const user = userEvent.setup();
+    // A recusa só chega depois de a linha ser recolhida.
+    let recusar!: (e: unknown) => void;
+    vi.mocked(apiClient.patch).mockReturnValue(new Promise((_, rej) => (recusar = rej)));
+    montar();
+    const botao = await screen.findByTestId("abrir-etapa-e2");
+    await user.click(botao);
+    await user.click(screen.getByTestId("subir-e2"));
+    await user.click(botao); // recolhe a linha antes do erro chegar
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    recusar(new ApiError(422, "unprocessable_entity", undefined, "r", "Já existe uma etapa chamada «X» neste funil."));
+    // Recolhida ou não, o erro precisa aparecer: a linha abre sozinha.
+    expect(await screen.findByTestId("etapa-erro-e2")).toBeVisible();
+    expect(botao).toHaveAttribute("aria-expanded", "true");
   });
 });
