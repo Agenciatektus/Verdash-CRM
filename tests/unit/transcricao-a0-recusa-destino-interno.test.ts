@@ -27,14 +27,14 @@ function depsCom(baseUrlDoDestino: string, chamado: { n: number }) {
     anuncio: { provider: "openrouter", modelId: "openai/whisper-1" },
     baseUrlDoDestino,
   } as DecisaoDeTranscricao;
-  const llm = {
+  const llm: Parameters<typeof buildDeriveDeps>[0] = {
     provider: "openrouter",
     apiKey: "sk-or-teste",
     defaultModel: "openai/gpt-5",
     orcamento: { modo: "off", tetoCents: 0, efetivoEm: null, limiarPct: 80 },
     orcamentoIndisponivelPorque: null,
-    origemDaChave: "organizacao",
-  } as Parameters<typeof buildDeriveDeps>[0];
+    origemDaChave: "credencial_da_organizacao",
+  };
   return buildDeriveDeps(llm, decisao, "00000000-0000-0000-0000-0000000000a0", {} as never);
 }
 
