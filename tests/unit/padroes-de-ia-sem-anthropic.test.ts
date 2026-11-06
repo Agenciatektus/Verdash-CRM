@@ -64,7 +64,7 @@ describe("os defaults de código não são Anthropic", () => {
 // ── Varredura ───────────────────────────────────────────────────────────────
 
 const RAIZ = path.resolve(__dirname, "../..");
-const PASTAS = ["lib", "workers", "app"];
+const PASTAS = ["lib", "workers", "app", "components"];
 
 /**
  * Exceções EXPLÍCITAS: arquivo → literais Claude permitidos ali, e por quê.
@@ -91,6 +91,13 @@ const EXCECOES: Record<string, { porque: string; literais: string[] }> = {
   "lib/ai/log-invocation.ts": {
     porque: "detecção de provedor pelo prefixo do id",
     literais: ["anthropic/"],
+  },
+  "components/ai/AgentEditor.tsx": {
+    porque:
+      "editor do formato LEGADO (`AGENT_MODELS`, lista só Anthropic): o literal é só o valor exibido quando o " +
+      "modelo gravado está fora da lista; não executa chamada. Sair daqui pede migrar o editor para o par " +
+      "provedor+modelo da versão (pendência declarada ao dono em 06/11/2026).",
+    literais: ["anthropic/claude-sonnet-4-6"],
   },
 };
 
@@ -124,7 +131,50 @@ function literaisClaudeForaDaLista(): string[] {
 }
 
 describe("nenhum literal de modelo Claude fora das exceções", () => {
-  it("varre lib/, workers/ e app/ (sem testes)", () => {
+  it("varre lib/, workers/, app/ e components/ (sem testes)", () => {
     expect(literaisClaudeForaDaLista()).toEqual([]);
+  });
+});
+
+// ── SQL: o seed de organização nova também é "padrão de código" ─────────────
+//
+// P2 do Cassio (PR #545): a varredura só olhava .ts/.tsx, e o maior padrão Claude
+// do produto morava numa migration (a 9096 semeia org nova com
+// `openrouter` + `anthropic/claude-haiku-5.5`). Migration NOVA (a partir de 01/11/2026)
+// que cite modelo Claude só passa se estiver declarada aqui, com o motivo.
+
+const MIGRATIONS = path.join(RAIZ, "supabase", "migrations");
+const MIGRATIONS_DECLARADAS: Record<string, string> = {
+  "20261104120000_9096_ia_padrao_barato_e_teto_que_para.sql":
+    "seed de org nova em openrouter + anthropic/claude-haiku-5.5 (US$0,10/0,50 por M, " +
+    "mesmo patamar do Flash-Lite). DECLARADA ao dono em 06/11/2026: trocar é decisão de produto, " +
+    "não de limpeza. Enquanto valer, está aqui, à vista.",
+  "20261105120000_9098_teto_de_ia_padrao_por_plano.sql":
+    "repete o seed da 9096 (openrouter + anthropic/claude-haiku-5.5 para org nova). Mesma decisão " +
+    "declarada ao dono em 06/11/2026.",
+};
+
+function migrationsNovasComClaude(): string[] {
+  const achados: string[] = [];
+  for (const nome of readdirSync(MIGRATIONS)) {
+    if (!nome.endsWith(".sql") || nome < "20261101") continue;
+    const sql = readFileSync(path.join(MIGRATIONS, nome), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/--.*$/gm, "");
+    if (/claude-[\w.-]+/i.test(sql) && !(nome in MIGRATIONS_DECLARADAS)) achados.push(nome);
+  }
+  return achados;
+}
+
+describe("migration nova não semeia Claude escondido", () => {
+  it("toda migration de 11/2026 em diante que cita Claude está declarada", () => {
+    expect(migrationsNovasComClaude()).toEqual([]);
+  });
+
+  it("a declaração da 9096 ainda corresponde a um arquivo que cita Claude (a lista não apodrece)", () => {
+    for (const nome of Object.keys(MIGRATIONS_DECLARADAS)) {
+      const sql = readFileSync(path.join(MIGRATIONS, nome), "utf8").replace(/--.*$/gm, "");
+      expect(/claude-[\w.-]+/i.test(sql), nome).toBe(true);
+    }
   });
 });

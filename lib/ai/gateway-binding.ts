@@ -159,16 +159,30 @@ export async function resolverModeloDoPonto(
 
   // ── O DEFAULT DO PRODUTO NÃO CRUZA PROVEDOR ─────────────────────────────
   //
-  // `DEFAULT_CLASSIFIER_MODEL` nasceu Anthropic quando a Anthropic era a
-  // única chave que o instalador pedia: é compatibilidade EXPLÍCITA (item (c)
-  // da issue #2377), não fallback oculto. Enquanto o provedor efetivo for a
-  // Anthropic ou um agregador, ele segue valendo. Quando o provedor efetivo é
-  // OUTRO provedor direto, ele não é executado aqui — vale o par coerente da
-  // organização. Sem esta linha, uma empresa em OpenAI classificava o clima
-  // com um Claude que a tela nunca anunciava, pelo caminho que respondia
-  // sozinho (item (a) da mesma issue).
+  // Quando o provedor efetivo da org é um provedor direto, o default do produto
+  // não é executado aqui — vale o par coerente da organização. Sem esta regra,
+  // uma empresa em OpenAI classificava o clima com um modelo que a tela nunca
+  // anunciava (item (a) da issue #2377). Antes de 06/11/2026 o default era um
+  // Claude (compatibilidade do instalador antigo); hoje é o Flash-Lite.
+  //
+  // 06/11/2026: o default do produto passou a ser o Flash-Lite (não é mais
+  // Anthropic), mas a regra é a mesma e vale para QUALQUER default: a org com
+  // chave PRÓPRIA num provedor direto que não executa o id do produto
+  // (`idParaOProvider` devolve null: OpenAI, Anthropic, DeepSeek) classifica no
+  // par dela, na chave dela. Sem isto o texto do cliente final iria para a
+  // OpenRouter da plataforma (operador que a org não escolheu) e o custo sairia
+  // da chave da Tektus. A assinatura ChatGPT NÃO entra: o worker de sentimento
+  // não a executa (binding `openai-assinatura` é recusado), então ela segue pelo
+  // Flash-Lite da instalação até o worker aprender a usá-la.
+  const chavePropriaDiretaQueNaoExecutaOId =
+    daOrg !== null &&
+    daOrg.apiKey !== null &&
+    daOrg.provider !== null &&
+    provedorDiretoComChavePropria(daOrg.provider) &&
+    idParaOProvider(daOrg.provider, idPadrao) === null;
   const defaultNaoExecutaAqui =
-    ehODefaultAnthropicDoProduto(idPadrao) && provedorDiretoNaoAnthropic(providerEfetivo);
+    (ehODefaultAnthropicDoProduto(idPadrao) && provedorDiretoNaoAnthropic(providerEfetivo)) ||
+    chavePropriaDiretaQueNaoExecutaOId;
 
   /**
    * O fallback comum aos TRÊS pontos em que o resolvedor precisava escolher
@@ -194,8 +208,8 @@ export async function resolverModeloDoPonto(
       : providerEfetivo;
     if (defaultNaoExecutaAqui && !bindingDescartado) {
       const motivo =
-        `o padrão deste ponto é o default da Anthropic ("${idPadrao}") e o provedor efetivo ` +
-        `é "${providerEfetivo}" — o default do produto não é executado sob outro provedor`;
+        `o padrão deste ponto ("${idPadrao}") não roda no provedor efetivo ` +
+        `"${providerEfetivo}" — o default do produto não é executado sob outro provedor`;
       // Quem NÃO pediu a queda continua recebendo `null` (a mesma regra da
       // opção `naFaltaUsarOPadraoDaOrganizacao`): o agente que responde o
       // cliente não passa a ter um modelo que ninguém escolheu para ele. O
@@ -346,13 +360,10 @@ export async function resolverModeloDoPonto(
 }
 
 /**
- * O default de CLASSIFICAÇÃO do produto — o único que sobrou como constante.
- *
- * Compatibilidade explícita (issue #2377): nasceu Anthropic quando era a única
- * chave que o instalador pedia, e continua valendo como padrão do ponto. Quem
- * impede de virar fallback oculto é a conferência de par em
- * `resolverModeloDoPonto`: sob provedor direto diferente da Anthropic ele não
- * executa.
+ * O default de CLASSIFICAÇÃO do produto era Anthropic (issue #2377) e deixou de
+ * ser em 06/11/2026 (agora é o Flash-Lite). Esta checagem só continua útil para
+ * barrar a VOLTA de um default Anthropic sob outro provedor direto; a trava
+ * `tests/unit/padroes-de-ia-sem-anthropic.test.ts` reprova essa volta antes.
  */
 function ehODefaultAnthropicDoProduto(id: string): boolean {
   // Dormente desde 06/11/2026 (o default virou Flash-Lite): só volta a valer se
@@ -362,9 +373,12 @@ function ehODefaultAnthropicDoProduto(id: string): boolean {
 }
 
 function provedorDiretoNaoAnthropic(provider: string | null): boolean {
-  // A assinatura ChatGPT é provedor direto: sem ela aqui, Delicatto/Fiorotto/
-  // Lior/Fabiana classificavam com Claude pela chave da instalação.
-  return provider !== null && ["openai", "openai-assinatura", "google", "deepseek"].includes(provider);
+  return provider !== null && ["openai", "google", "deepseek"].includes(provider);
+}
+
+/** Provedor direto em que a org colou a PRÓPRIA chave (a assinatura fica de fora, ver acima). */
+function provedorDiretoComChavePropria(provider: string): boolean {
+  return ["openai", "anthropic", "google", "deepseek"].includes(provider);
 }
 
 function credencialUtilizavel(

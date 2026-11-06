@@ -85,8 +85,8 @@ describe("o sentimento nunca executa Claude por padrão", () => {
     ["assinatura ChatGPT com credencial", { llm: { provider: "openai-assinatura", default_model: "gpt-5.4" } }, CREDENCIAL],
     ["assinatura ChatGPT sem credencial", { llm: { provider: "openai-assinatura" } }, null],
     ["OpenRouter sem credencial", { llm: { provider: "openrouter" } }, null],
-    ["OpenAI direta com chave própria", { llm: { provider: "openai", default_model: "gpt-5.6-terra" } }, CREDENCIAL],
-    ["Anthropic com chave própria", { llm: { provider: "anthropic", default_model: "claude-sonnet-5" } }, CREDENCIAL],
+    // OpenAI direta SEM chave colada na org não tem o que executar: segue na instalação.
+    ["OpenAI direta sem credencial", { llm: { provider: "openai", default_model: "gpt-5.6-terra" } }, null],
     ["sem provedor configurado", null, null],
   ])("%s → Flash-Lite pela OpenRouter da instalação", async (_caso, settings, credencial) => {
     banco.settings = settings;
@@ -99,6 +99,37 @@ describe("o sentimento nunca executa Claude por padrão", () => {
     expect(e.sdk).not.toMatch(/anthropic/i);
     // O rótulo que vai para llm_calls diz quem atendeu, não o prefixo do id.
     expect(e.rotulo).toBe("openrouter");
+  });
+
+  // P1 do Cassio (PR #545): org com chave PRÓPRIA num provedor direto classifica
+  // no par e na chave DELA. Mandar o texto do cliente final para a OpenRouter da
+  // plataforma tira o operador que a org escolheu e passa o custo para a Tektus.
+  it.each([
+    ["OpenAI direta com chave própria", "openai", "gpt-5.6-terra"],
+    ["Anthropic direta com chave própria", "anthropic", "claude-sonnet-5"],
+    ["DeepSeek direto com chave própria", "deepseek", "deepseek-v4-flash"],
+  ])("%s → par da PRÓPRIA organização, nunca a chave da plataforma", async (_caso, provider, modelo) => {
+    banco.settings = { llm: { provider, default_model: modelo } };
+    banco.credencial = CREDENCIAL;
+    const r = await sentimento();
+    expect(r).not.toBeNull();
+    expect(r?.origem).not.toBe("padrao");
+    expect(r?.modelId).not.toMatch(/^google\//);
+    const e = executado(r);
+    expect(e.id).not.toMatch(/gemini/);
+    expect(e.rotulo).toBe(provider);
+  });
+
+  it("assinatura ChatGPT NÃO entra na regra da chave própria: segue no Flash-Lite da instalação", async () => {
+    // Fixa o COMPORTAMENTO medido em produção (Delicatto, Fiorotto, Lior,
+    // Fabiana): o worker não executa a assinatura, então o sentimento delas roda
+    // no Flash-Lite da instalação. Não prova a lista `provedorDiretoComChavePropria`:
+    // listar a assinatura ali não muda este resultado (mutação testada em 06/11).
+    banco.settings = { llm: { provider: "openai-assinatura", default_model: "gpt-5.4" } };
+    banco.credencial = CREDENCIAL;
+    const r = await sentimento();
+    expect(r?.origem).toBe("padrao");
+    expect(executado(r)).toMatchObject({ id: "google/gemini-2.5-flash-lite", rotulo: "openrouter" });
   });
 
   it("OpenRouter com credencial própria → Flash-Lite na chave DA organização", async () => {
