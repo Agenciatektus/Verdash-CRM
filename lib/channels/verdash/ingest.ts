@@ -57,6 +57,7 @@ import { extrairAtribuicaoVerdash } from "./atribuicao-de-anuncio";
 import { aplicarAlteracaoDeMensagem } from "../alteracao-de-mensagem";
 
 import { insertMessage, marcarConversa, pedirPersistenciaDaMidia } from "./gravacao";
+import { ingerirGrupo } from "./grupo";
 import { aplicarEventoDeConexao, eventoDeConexao, horaDoEvento } from "./eventos-conexao";
 import { parseVerdashInbound, type VerdashInboundMessage } from "./webhook";
 
@@ -104,12 +105,10 @@ export async function ingestVerdashInbound(
   const msg = parseVerdashInbound(input.payload);
   if (!msg) return { status: "ignored", reason: "evento_sem_interesse" };
 
-  // Grupo NÃO entra. Não é limitação técnica: é decisão de produto, e a mesma
-  // que o resto do CRM já toma — o inbox é de ATENDIMENTO, uma conversa por
-  // contato. Um número de clínica costuma estar em dezenas de grupos que não
-  // têm nada a ver com paciente, e derramá-los no inbox faria o atendente
-  // perder a conversa que importa no meio do ruído.
-  if (msg.isGroup) return { status: "ignored", reason: "mensagem_de_grupo" };
+  // Grupo só entra se o operador o LIGOU em Conexões › Grupos; o resto é descartado em
+  // `lib/grupos/ingest.ts`, como no canal por QR. Sem contato por participante, sem lead,
+  // sem IA (salvo a chave por grupo): o inbox continua sendo de atendimento.
+  if (msg.isGroup) return ingerirGrupo(admin, input, msg);
 
   // Sinal de protocolo, anúncio de álbum, reação retirada: não é conversa, e
   // gravá-lo era o que punha balão VAZIO no inbox (ver `./conteudo.ts`).
@@ -292,3 +291,4 @@ async function upsertContact(
 
   return contactId;
 }
+

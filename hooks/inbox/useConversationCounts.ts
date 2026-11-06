@@ -73,7 +73,8 @@ export function useConversationCounts(
   if (filtros.channel_session_id) qs.set("channel_session_id", filtros.channel_session_id);
   if (filtros.entrada) qs.set("entrada", filtros.entrada);
   if (filtros.canal) qs.set("canal", filtros.canal);
-  if (filtros.soGrupos) qs.set("is_group", "true");
+  // Grupo não conta junto do atendimento (badge, fila, aguardando): só quando pedido.
+  qs.set("is_group", filtros.soGrupos ? "true" : "false");
   if (filtros.atendimento) escreverFiltrosDoAtendimento(qs, filtros.atendimento);
   const sufixo = qs.toString();
 
