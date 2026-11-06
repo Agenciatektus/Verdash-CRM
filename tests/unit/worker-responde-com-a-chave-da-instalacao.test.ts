@@ -82,6 +82,7 @@ vi.mock("@/lib/crypto/aes_gcm", () => ({
 }));
 
 const { resolverModeloDoPonto } = await import("@/lib/ai/gateway-binding");
+const { DEFAULT_CLASSIFIER_MODEL } = await import("@/lib/ai/gateway");
 
 const ORG = "33333333-3333-4333-8333-333333333333";
 const MODELO_PADRAO_DA_OPENAI = "gpt-5.6-terra";
@@ -233,17 +234,24 @@ describe("o worker responde com a chave da instalação", () => {
   });
 });
 
-describe("o default de classificação numa VPS já instalada (#2377)", () => {
-  const HAIKU = "anthropic/claude-haiku-4-5";
-
-  it("org em openai SEM par próprio executável e só a chave Anthropic: classifica com o piso, não para", async () => {
+describe("o default de classificação numa VPS já instalada (#2377, 06/11/2026)", () => {
+  // O default deixou de ser Claude: é o Flash-Lite pela OpenRouter. Sem chave da
+  // OpenRouter (nem gateway), o default não é alcançável, e o ponto NUNCA cai no
+  // Claude pela chave Anthropic: usa o par da org ou pula com o motivo no log.
+  it("org em openai SEM par próprio e só a chave Anthropic: pula com motivo, não roda Claude", async () => {
     estado.settings = { llm: { provider: "openai" } };
     envMock.ANTHROPIC_API_KEY = "sk-ant";
-
-    const r = await resolverModeloDoPonto("sentiment_classify", ORG, HAIKU, { naFaltaUsarOPadraoDaOrganizacao: true });
-
-    expect(r?.modelId).toBe(HAIKU);
-    expect(r?.origem).toBe("padrao");
+    const { logger } = await import("@/lib/logger");
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    try {
+      const r = await resolverModeloDoPonto("sentiment_classify", ORG, DEFAULT_CLASSIFIER_MODEL, {
+        naFaltaUsarOPadraoDaOrganizacao: true,
+      });
+      expect(r).toBeNull();
+      expect(warn.mock.calls.some(([, c]) => JSON.stringify(c ?? {}).includes("motivo"))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("org em openai COM par próprio executável: classifica com o par dela, não com o Claude", async () => {
@@ -251,7 +259,9 @@ describe("o default de classificação numa VPS já instalada (#2377)", () => {
     envMock.ANTHROPIC_API_KEY = "sk-ant";
     envMock.OPENAI_API_KEY = "sk-openai";
 
-    const r = await resolverModeloDoPonto("sentiment_classify", ORG, HAIKU, { naFaltaUsarOPadraoDaOrganizacao: true });
+    const r = await resolverModeloDoPonto("sentiment_classify", ORG, DEFAULT_CLASSIFIER_MODEL, {
+      naFaltaUsarOPadraoDaOrganizacao: true,
+    });
 
     expect(r?.modelId).toBe(`openai/${MODELO_PADRAO_DA_OPENAI}`);
   });
