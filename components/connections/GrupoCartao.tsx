@@ -1,6 +1,7 @@
 "use client";
 /** Um grupo na lista de Canais › Grupos: nome, selos, contagens e as duas chaves (entrar na inbox / IA responde). */
 import { Badge } from "@/components/ui/badge";
+import { Escolha } from "@/components/ui/escolha";
 import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -53,17 +54,16 @@ export function GrupoCartao({
           parecerem uma só. */}
       {g.enabled && (
         <div className="flex items-center gap-2 pl-1">
-          <select
+          <Escolha
             aria-label={t("Permitir que a IA responda neste grupo")}
-            className="h-8 rounded-md border bg-background px-2 text-xs"
             value={g.iaModo ?? (g.iaResponde === true ? "todas" : "off")}
             disabled={bloqueado}
-            onChange={(e) => onIa(g, e.target.value as "off" | "chamada" | "todas")}
+            onValueChange={(v) => onIa(g, v as "off" | "chamada" | "todas")}
           >
             <option value="off">{t("Desligada")}</option>
             <option value="chamada">{t("Só quando chamada")}</option>
             <option value="todas">{t("Toda mensagem")}</option>
-          </select>
+          </Escolha>
           <span className="text-xs text-muted-foreground">
             {t("Só quando chamada: a IA responde quem marcar o número com @ ou responder uma mensagem dele.")}
           </span>

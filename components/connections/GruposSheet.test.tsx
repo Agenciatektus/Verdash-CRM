@@ -390,9 +390,8 @@ describe("GruposSheet", () => {
 
     const linhaLigado = screen.getByText("A").closest("li")!;
     const linhaDesligado = screen.getByText("B").closest("li")!;
-    const chaveLigado = within(linhaLigado).getByRole("combobox", {
-      name: /Permitir que a IA responda neste grupo/i,
-    });
+    // O seletor é o `Escolha` do DS: o valor mora no <select> escondido que ele mantém.
+    const chaveLigado = linhaLigado.querySelector("select[data-escolha-nativa]");
     expect(chaveLigado).toHaveValue("todas");
 
     expect(
@@ -409,9 +408,7 @@ describe("GruposSheet", () => {
     );
     render(<GruposSheet channelId="s1" onClose={() => {}} />);
     await screen.findByText("A");
-    const chave = within(screen.getByText("A").closest("li")!).getByRole("combobox", {
-      name: /Permitir que a IA responda neste grupo/i,
-    });
+    const chave = screen.getByText("A").closest("li")!.querySelector("select[data-escolha-nativa]")!;
     expect(chave).toHaveValue("off");
 
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -440,9 +437,7 @@ describe("GruposSheet", () => {
     );
     render(<GruposSheet channelId="s1" onClose={() => {}} />);
     await screen.findByText("A");
-    const chave = within(screen.getByText("A").closest("li")!).getByRole("combobox", {
-      name: /Permitir que a IA responda neste grupo/i,
-    });
+    const chave = screen.getByText("A").closest("li")!.querySelector("select[data-escolha-nativa]")!;
 
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (init?.method === "PUT") return resposta({ code: "grupo_desligado", message: "x" }, 409);
