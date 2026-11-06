@@ -36,6 +36,8 @@ export interface SinalDoWebhook {
   readonly eventoId: string;
   readonly tipo: string;
   readonly clienteRef: string | null;
+  /** Só quando o objeto não traz o cliente (Stripe Dispute): a cobrança contestada. */
+  readonly cobrancaRef?: string | null;
 }
 
 /** A única verdade que o provedor nos dá — relida na API. Tradução: `lib/cobranca/estado.ts`. */
@@ -152,6 +154,22 @@ export interface CobrancaEstornavel {
   readonly pagaEm: Date;
 }
 
+/** Um pagamento confirmado do cliente, RELIDO na API (vai para `cobranca_pagamentos`). Sem dado de cartão. */
+export interface PagamentoLido {
+  /** Fatura (Stripe `in_`) ou cobrança do provedor: a chave do upsert, com o provedor. */
+  readonly pagamentoRef: string;
+  /** A cobrança que o estorno usa (Stripe `ch_`); null se não achada. */
+  readonly cobrancaRef: string | null;
+  readonly valorCents: number;
+  readonly moeda: string;
+  readonly estornadoCents: number;
+  readonly contestado: boolean;
+  readonly pagoEm: Date;
+  readonly estornadoEm: Date | null;
+  readonly planoId: string | null;
+  readonly urlDoRecibo: string | null;
+}
+
 export interface AdaptadorDeCobranca {
   readonly id: ProvedorDeCobranca;
   testarChave(opcoes?: { modoExigido?: Modo }): Promise<ResultadoDoTesteDaChave>;
@@ -200,6 +218,11 @@ export interface AdaptadorDeCobranca {
   lerUltimaCobranca?(p: { clienteRef: string }): Promise<CobrancaEstornavel | null>;
   /** Opcional. Devolve `valorCents` da cobrança; a mesma `chaveIdempotencia` repetida não estorna duas vezes. */
   estornarCobranca?(p: { cobrancaRef: string; valorCents: number; chaveIdempotencia: string }): Promise<void>;
+  /**
+   * Opcional: os pagamentos confirmados do cliente, com o que deles voltou.
+   * Sem o método (Asaas, por ora), a sincronização não grava histórico.
+   */
+  listarPagamentos?(p: { clienteRef: string }): Promise<PagamentoLido[]>;
   urlDeGerenciar(p: { clienteRef: string; urlDeVolta: string }): Promise<string | null>;
   /** Venda direta (só Stripe): evento -> sessão de checkout -> compra, tudo relido na API. */
   lerCompra?(eventoId: string): Promise<CompraLida>;

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { argumentos, bancoFalso, type BancoFalso, type Cadeia, type Resposta } from "@/tests/helpers/banco-falso-da-cobranca";
+import { argumentos, bancoFalso, operacao, valorDoFiltro, type BancoFalso, type Cadeia, type Resposta } from "@/tests/helpers/banco-falso-da-cobranca";
 
 const h = vi.hoisted(() => ({
   ator: "aaaaaaaa-0000-4000-8000-000000000001",
@@ -139,5 +139,31 @@ describe("POST /admin/tenants/[id]/assinatura/estorno", () => {
     h.estornarCobranca.mockRejectedValue(new ErroDoProvedor(400, "invalid_request_error", false));
     expect((await POST(post({ valor_cents: 100, ...visto }), ctx)).status).toBe(502);
     expect(h.audit).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST estorno: marca o pagamento em cobranca_pagamentos", () => {
+  const marcas = () => h.banco.cadeias.filter((c) => c.tabela === "cobranca_pagamentos" && operacao(c) === "update");
+
+  it("depois de estornar, grava status e valor estornado na linha da cobrança da org", async () => {
+    h.lerUltimaCobranca.mockResolvedValue(cobranca(1_000));
+    const res = await POST(post({ valor_cents: 2_000, cobranca_ref: "ch_1", estornado_cents_visto: 1_000 }), ctx);
+    expect(res.status).toBe(200);
+    expect(marcas()).toHaveLength(1);
+    expect(argumentos(marcas()[0]!, "update")?.[0]).toMatchObject({ status: "estornado_parcial", valor_estornado_cents: 3_000 });
+    expect(valorDoFiltro(marcas()[0]!, "eq", "organization_id")).toBe(TENANT);
+    expect(valorDoFiltro(marcas()[0]!, "eq", "cobranca_ref")).toBe("ch_1");
+    expect(valorDoFiltro(marcas()[0]!, "eq", "provedor")).toBe("stripe");
+  });
+
+  it("estorno do saldo inteiro grava `estornado`", async () => {
+    await POST(post({ valor_cents: 10_000, ...visto }), ctx);
+    expect(argumentos(marcas()[0]!, "update")?.[0]).toMatchObject({ status: "estornado", valor_estornado_cents: 10_000 });
+  });
+
+  it("provedor recusou: nada é marcado", async () => {
+    h.estornarCobranca.mockRejectedValue(new ErroDoProvedor(400, "invalid_request_error", false));
+    await POST(post({ valor_cents: 200, ...visto }), ctx);
+    expect(marcas()).toEqual([]);
   });
 });

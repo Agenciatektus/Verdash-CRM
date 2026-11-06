@@ -9553,6 +9553,8 @@ export type Database = {
           cursor: NonNullable<Json>;
           dias: number;
           erro: string | null;
+          fonte: string;
+          credencial_cifrada: string | null;
           id: string;
           mensagens_existentes: number;
           mensagens_gravadas: number;
@@ -9573,6 +9575,8 @@ export type Database = {
           cursor?: NonNullable<Json>;
           dias: number;
           erro?: string | null;
+          fonte?: string;
+          credencial_cifrada?: string | null;
           id?: string;
           mensagens_existentes?: number;
           mensagens_gravadas?: number;
@@ -9592,6 +9596,8 @@ export type Database = {
           cursor?: NonNullable<Json>;
           dias?: number;
           erro?: string | null;
+          fonte?: string;
+          credencial_cifrada?: string | null;
           id?: string;
           mensagens_existentes?: number;
           mensagens_gravadas?: number;

@@ -26,6 +26,7 @@ import {
 import { lerOrgDoTenant } from "@/lib/cobranca/dono";
 import { sugerirEstorno } from "@/lib/cobranca/estorno";
 import { limiteDoProvedorPorOrg, recusaDoProvedor } from "@/lib/cobranca/falhas";
+import { marcarEstorno } from "@/lib/cobranca/pagamentos";
 import { adaptador } from "@/lib/cobranca/provedores";
 import type { AdaptadorDeCobranca, CobrancaEstornavel } from "@/lib/cobranca/provedores/contrato";
 import type { ProvedorDeCobranca } from "@/lib/cobranca/vocabulario";
@@ -45,7 +46,7 @@ type Rota = { params: Promise<{ id: string }> };
 /** Linha da assinatura + a cobrança lida no provedor. `resposta` é a recusa pronta. */
 type Lida =
   | { resposta: NextResponse<ApiError> }
-  | { resposta?: undefined; prov: AdaptadorDeCobranca; cobranca: CobrancaEstornavel | null; intervalo: "mes" | "ano" };
+  | { resposta?: undefined; prov: AdaptadorDeCobranca; provedor: ProvedorDeCobranca; cobranca: CobrancaEstornavel | null; intervalo: "mes" | "ano" };
 
 async function ler(admin: ReturnType<typeof createAdminClient>, tenantId: string, requestId: string): Promise<Lida> {
   const { data, error } = await admin
@@ -66,7 +67,7 @@ async function ler(admin: ReturnType<typeof createAdminClient>, tenantId: string
   const plano = Array.isArray(linha.plano) ? linha.plano[0] : linha.plano;
   try {
     const cobranca = await prov.lerUltimaCobranca({ clienteRef: linha.provedor_cliente_id });
-    return { prov, cobranca, intervalo: plano?.intervalo ?? "mes" };
+    return { prov, provedor: linha.provedor, cobranca, intervalo: plano?.intervalo ?? "mes" };
   } catch (e) {
     const r = recusaDoProvedor(e);
     return { resposta: fail(r.code, r.message, r.status, { requestId }) };
@@ -168,6 +169,14 @@ export async function POST(req: NextRequest, { params }: Rota) {
     return fail(rec.code, rec.message, rec.status, { requestId });
   }
 
+  await marcarEstorno(admin, {
+    orgId: tenantId,
+    provedor: r.provedor,
+    cobrancaRef: c.ref,
+    valorCents: c.valorCents,
+    estornadoCents: c.estornadoCents + corpo.data.valor_cents,
+    agora: new Date(),
+  });
   void audit({
     action: "cobranca.estorno_feito",
     actorUserId: adminCtx.user.id,
