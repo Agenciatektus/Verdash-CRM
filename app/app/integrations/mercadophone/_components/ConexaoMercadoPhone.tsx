@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { connectMercadoPhone } from "@/app/actions/integrations/connectMercadoPhone";
+import { importarMercadoPhone } from "@/app/actions/integrations/importarMercadoPhone";
 import { disconnectMercadoPhone } from "@/app/actions/integrations/disconnectMercadoPhone";
 import { useT } from "@/hooks/i18n/useT";
 import { irAoDesafioDeMfa } from "@/lib/auth/ir-ao-desafio-de-mfa";
@@ -27,6 +28,7 @@ export function ConexaoMercadoPhone({ conectado, isAdmin, orgId }: { conectado: 
   const [pending, start] = useTransition();
   const [apiToken, setApiToken] = useState("");
   const [webhookToken, setWebhookToken] = useState("");
+  const [desde, setDesde] = useState("");
   const urlDoWebhook = `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/mercadophone?org=${orgId ?? ""}`;
 
   const falhou = (erro: string) => {
@@ -36,19 +38,43 @@ export function ConexaoMercadoPhone({ conectado, isAdmin, orgId }: { conectado: 
 
   if (conectado) {
     return (
-      <Button
-        variant="outline"
-        disabled={!isAdmin || pending}
-        onClick={() =>
-          start(async () => {
-            const res = await disconnectMercadoPhone();
-            if (res.ok) toast.success(t("MercadoPhone desconectado."));
-            else falhou(res.error);
-          })
-        }
-      >
-        {pending ? t("Desconectando…") : t("Desconectar")}
-      </Button>
+      <div className="flex flex-col gap-4">
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="mp-desde">{t("Importar vendas desde (até 90 dias)")}</Label>
+            <Input id="mp-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} disabled={!isAdmin || pending} />
+          </div>
+          <Button
+            disabled={!isAdmin || pending || !desde}
+            onClick={() =>
+              start(async () => {
+                const res = await importarMercadoPhone({ desde });
+                if (!res.ok) return falhou(res.error);
+                if (res.parcial) setDesde(res.proximaData ?? desde);
+                toast.success(
+                  t(`${res.vendas} vendas e ${res.margens} margens importadas.`) +
+                    (res.parcial ? " " + t("Faltou tempo: clique de novo para continuar.") : ""),
+                );
+              })
+            }
+          >
+            {pending ? t("Importando…") : t("Importar vendas desde")}
+          </Button>
+        </div>
+        <Button
+          variant="outline"
+          disabled={!isAdmin || pending}
+          onClick={() =>
+            start(async () => {
+              const res = await disconnectMercadoPhone();
+              if (res.ok) toast.success(t("MercadoPhone desconectado."));
+              else falhou(res.error);
+            })
+          }
+        >
+          {pending ? t("Desconectando…") : t("Desconectar")}
+        </Button>
+      </div>
     );
   }
 
