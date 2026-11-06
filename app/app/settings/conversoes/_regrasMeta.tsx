@@ -130,7 +130,7 @@ export function RegrasDeConversaoMeta({
   return (
     <Card className="flex flex-col gap-4 p-6" data-testid="regras-meta-por-etapa">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-2xl">
+        <div>
           <h3 className="font-medium">{t("O que cada etapa do funil informa à Meta")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {t(
@@ -204,7 +204,7 @@ export function RegrasDeConversaoMeta({
                 <p
                   role="alert"
                   data-testid={`aviso-evento-fora-do-canal-${e.id}`}
-                  className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                  className="mt-2 rounded-md border border-warning-fg/30 bg-warning-bg p-3 text-sm"
                 >
                   {t(
                     "Este evento não sai pelo canal da conversa. Para esta etapa, escolha um destes",

@@ -41,6 +41,7 @@ export const dynamic = "force-dynamic";
 
 async function voltar(base: string, params: Record<string, string>): Promise<NextResponse> {
   const url = new URL("/app/settings/conversoes", base || "http://localhost:3000");
+  url.searchParams.set("aba", "google"); // o Google Ads tem aba própria desde o redesign de Conversões
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   // Ponte 200, não 302: o cookie de sessão Strict não viaja num redirect vindo da Meta/Google.
   const marca = await marcaDaSaida(null);

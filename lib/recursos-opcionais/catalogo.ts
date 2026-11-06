@@ -427,7 +427,7 @@ const DA_EMPRESA: RecursoOpcional[] = [
     nivel: "organizacao",
     padrao: "desligado",
     quemDecide: "admin",
-    href: "/app/settings/conversoes",
+    href: "/app/settings/conversoes?aba=meta",
   },
   {
     id: "venda_pelo_canal",
@@ -436,7 +436,7 @@ const DA_EMPRESA: RecursoOpcional[] = [
     nivel: "organizacao",
     padrao: "desligado",
     quemDecide: "admin",
-    href: "/app/settings/conversoes",
+    href: "/app/settings/conversoes?aba=meta",
     ler: peloSettings((s) => vendaPeloCanalLigada(s)),
   },
   {
@@ -446,7 +446,7 @@ const DA_EMPRESA: RecursoOpcional[] = [
     nivel: "organizacao",
     padrao: "desligado",
     quemDecide: "admin",
-    href: "/app/settings/conversoes",
+    href: "/app/settings/conversoes?aba=google",
   },
   {
     id: "captura_de_origem",
@@ -455,7 +455,7 @@ const DA_EMPRESA: RecursoOpcional[] = [
     nivel: "organizacao",
     padrao: "desligado",
     quemDecide: "admin",
-    href: "/app/settings/conversoes",
+    href: "/app/settings/conversoes?aba=site",
   },
   {
     id: "cliente_pela_agenda",
