@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import { soChavesAlteradas } from "@/lib/leads/custom-fields-so-diff";
+import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import { Funnel } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +105,9 @@ export function EditorDoNegocio({ leads, contactId, selecionadoId, onSelecionar,
   const t = useT();
   const ativo = leads.find((l) => l.id === selecionadoId) ?? leads[0]!;
   const status = (l: LeadRow) => t(STATUS_DO_LEAD[l.status] ?? l.status);
+  // A mensalidade ao lado do valor único (#3602); valor único fica sem "/mês" inventado.
+  const recorrente = (l: LeadRow) =>
+    rotuloDaRecorrencia(l.recurring_value_cents, l.recurring_period, l.currency ?? "BRL", { sufixo: t("/mês") });
 
   return (
     <div className="mt-2 space-y-3">
@@ -122,7 +126,12 @@ export function EditorDoNegocio({ leads, contactId, selecionadoId, onSelecionar,
                 >
                   <div className="truncate font-medium">{l.title}</div>
                   <div className={CLASSES_DE_ONDE_ESTA} title={ondeEstaOLead(l)}>{ondeEstaOLead(l)}</div>
-                  <div className="text-muted-foreground">{status(l)} · {formatMoney(l.value_cents, l.currency)}</div>
+                  <div className="text-muted-foreground">
+                    {status(l)} · {formatMoney(l.value_cents, l.currency)}
+                    {recorrente(l) && (
+                      <span className="ml-1" data-testid={`inbox-lead-recorrente-${l.id}`}>+ {recorrente(l)}</span>
+                    )}
+                  </div>
                 </button>
               </li>
             );
@@ -131,7 +140,10 @@ export function EditorDoNegocio({ leads, contactId, selecionadoId, onSelecionar,
       )}
       {leads.length === 1 && (
         <div data-testid="inbox-lead-unico" className="text-xs text-muted-foreground">
-          <p>{ativo.title} · {status(ativo)} · {formatMoney(ativo.value_cents, ativo.currency)}</p>
+          <p>
+            {ativo.title} · {status(ativo)} · {formatMoney(ativo.value_cents, ativo.currency)}
+            {recorrente(ativo) && <> + {recorrente(ativo)}</>}
+          </p>
           <p className={CLASSES_DE_ONDE_ESTA} title={ondeEstaOLead(ativo)}>{ondeEstaOLead(ativo)}</p>
         </div>
       )}

@@ -55,8 +55,9 @@ vi.mock("@/hooks/inbox/useUploadMedia", () => ({
 }));
 // A consulta do rascunho assistido mora num hook próprio e este arquivo não
 // monta `QueryClientProvider` — mesmo tratamento dos outros testes do composer.
-vi.mock("@/hooks/inbox/useRascunhoAssistido", () => ({
-  useRascunhoAssistido: () => ({ sugestao: undefined, invalidar: () => {} }),
+// No fork o estado da sugestão mora em `useSugestaoDeResposta` (visual v2), não em `useRascunhoAssistido`.
+vi.mock("@/components/inbox/composer/useSugestaoDeResposta", () => ({
+  useSugestaoDeResposta: () => ({ generate: vi.fn(), busy: false, draft: null, body: "", notice: null }),
 }));
 vi.mock("@/hooks/inbox/useAssignableMembers", () => ({
   useAssignableMembers: () => ({ data: [] }),

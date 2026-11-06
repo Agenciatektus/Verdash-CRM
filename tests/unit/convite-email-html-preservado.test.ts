@@ -5,7 +5,7 @@ import type { MarcaDeSaida } from "@/lib/branding/saida";
 import { montarTemplateDeAcesso, type ModeloDeAcesso } from "@/lib/email/templates/acesso-gotrue";
 import { buildInviteEmail } from "@/lib/email/templates/invite";
 
-// Gravado contra a main antes do porte, com entradas sintéticas. A extração da
+// Regravado na subida 1.95 com o NOSSO layout com a marca (o do upstream não entra), entradas sintéticas. A extração da
 // moldura não autoriza trocar cor, fonte, texto ou idioma de quem já recebia.
 const opcoes = {
   inviterName: "Ana",
@@ -32,9 +32,12 @@ describe("limpeza dos e-mails preserva a identidade distribuída", () => {
     const marca = caso.marca as MarcaDeSaida;
     const { html, text } = buildInviteEmail({ ...opcoes, marca, acceptUrl });
     const doc = new DOMParser().parseFromString(html, "text/html");
-    expect(doc.querySelector("a")?.getAttribute("href")).toBe(acceptUrl);
+    // Nosso layout com a marca (decisão da subida 1.95) põe aviso e botão antes do
+    // link copiável: a cerca procura pelo conteúdo, não pela posição.
+    // (o rodapé da marca também tem link, para a casa do app)
+    expect([...doc.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain(acceptUrl);
     expect(doc.querySelector("img[onerror]")).toBeNull();
-    expect(doc.querySelector("span")?.textContent).toBe(acceptUrl);
+    expect([...doc.querySelectorAll("body *")].some((el) => el.textContent === acceptUrl)).toBe(true);
     expect(text).toContain(acceptUrl);
     expect(html).toContain("&amp;b=&quot;&gt;&lt;img");
   });

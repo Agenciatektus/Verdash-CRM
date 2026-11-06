@@ -30,13 +30,15 @@ const CONVERSA = {
   modelId: "mistralai/modelo-de-controle",
   apiKey: "chave-sintetica-de-controle",
   baseUrl: "https://stt.exemplo.invalid/api/v1",
+  // Tektus: o degrau OpenRouter só vale com credencial PRÓPRIA da organização.
+  credencialPropria: true,
 };
 
 const fetchMock = vi.fn<typeof fetch>();
 
-async function escolher(chaveOpenai: string | null = null) {
+async function escolher(chaveOpenai: string | null = null, conversa: typeof CONVERSA = CONVERSA) {
   return decidirTranscricao({
-    conversa: CONVERSA,
+    conversa,
     idiomas: ["pt"],
     chaveOpenai: async () => chaveOpenai,
   });
@@ -92,8 +94,10 @@ describe("o limite multipart pertence ao degrau OpenRouter", () => {
     expect(MAX_MEDIA_BYTES).toBe(50 * 1024 * 1024);
   });
 
-  it("a prioridade OpenAI continua anterior e não recebe a restrição deste degrau", async () => {
-    const decisao = await escolher("outra-chave-de-controle");
+  // Tektus: na nossa escada o A0 (OpenRouter próprio) vem ANTES da chave OpenAI;
+  // sem credencial própria o A0 não vale e a chave OpenAI não herda o limite dele.
+  it("a chave OpenAI da organização não recebe a restrição deste degrau", async () => {
+    const decisao = await escolher("outra-chave-de-controle", { ...CONVERSA, credencialPropria: false });
     expect(decisao.origem).toBe("padrao_openai_compativel");
     await expect(decisao.transcriber!.transcribe(AUDIO_GRANDE, "audio/ogg"))
       .resolves.toBe("frase sintética");
@@ -101,10 +105,13 @@ describe("o limite multipart pertence ao degrau OpenRouter", () => {
   });
 });
 
+// Tektus: o custo do serviço sai por `transcribeComCusto` (`custoDaTranscricao`),
+// com o teto de sanidade de US$ 0,10 por transcrição: 1 USD vira null, não 100.
 describe("usage.cost é medição em USD, sem estimativa de preço", () => {
   it.each([
     { cost: 0.000508, cents: 0.0508 },
-    { cost: 1, cents: 100 },
+    { cost: 0.05, cents: 5 },
+    { cost: 1, cents: null },
     { cost: 0, cents: 0 },
     { cost: undefined, cents: null },
     { cost: null, cents: null },
@@ -113,10 +120,10 @@ describe("usage.cost é medição em USD, sem estimativa de preço", () => {
   ])("converte $cost USD para $cents centavos, sem transformar ausência em zero", async ({ cost, cents }) => {
     fetchMock.mockImplementation(async () => Response.json({ text: "frase sintética", usage: { cost } }));
     const decisao = await escolher();
-    const medir = decisao.transcriber!.transcribeMedindo;
+    const medir = decisao.transcriber!.transcribeComCusto;
     expect(medir).toBeTypeOf("function");
     const resultado = await medir!(Buffer.from("controle"), "audio/ogg");
-    expect(resultado).toMatchObject({ texto: "frase sintética", uso: null, custoCents: cents });
+    expect(resultado).toEqual({ texto: "frase sintética", costCents: cents });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

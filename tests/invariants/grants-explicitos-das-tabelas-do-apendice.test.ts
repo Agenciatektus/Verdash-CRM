@@ -62,7 +62,7 @@ const RAIZ = process.cwd();
 const DIR_MIGRATIONS = join(RAIZ, "supabase", "migrations");
 const SQL_DO_BASELINE = readFileSync(join(RAIZ, "supabase", "baseline.sql"), "utf8");
 const ARQUIVO = readdirSync(DIR_MIGRATIONS).find((nome) =>
-  /^\d{14}_9037_[a-z0-9_]+\.sql$/.test(nome),
+  /^\d{14}_9037_grants_explicitos_das_tabelas_do_apendice\.sql$/.test(nome),
 );
 if (ARQUIVO === undefined) {
   throw new Error(
@@ -75,6 +75,8 @@ const DML = ["SELECT", "INSERT", "UPDATE", "DELETE"] as const;
 const LE_E_CRIA = ["SELECT", "INSERT"] as const;
 const SO_LE = ["SELECT"] as const;
 const NADA = [] as const;
+// Fork (9009): o SELECT de authenticated é POR COLUNA (fora o envelope da senha), não da tabela.
+const ESCREVE_E_LE_POR_COLUNA = ["INSERT", "UPDATE", "DELETE"] as const;
 
 /** O contrato: privilégio de `authenticated` por tabela. `service_role` tem as quatro em todas; `anon`, nada. */
 const MAPA: Record<string, readonly string[]> = {
@@ -92,7 +94,7 @@ const MAPA: Record<string, readonly string[]> = {
   crm_lead_scores: DML,
   demanda_conversas: DML,
   demandas: DML,
-  external_db_connections: DML,
+  external_db_connections: ESCREVE_E_LE_POR_COLUNA,
   financial_accounts: DML,
   financial_entries: DML,
   lead_field_proposals: DML,
@@ -103,7 +105,7 @@ const MAPA: Record<string, readonly string[]> = {
   phone_numbers: DML,
   recurring_entries: DML,
   voice_calls: DML,
-  voip_trunk_settings: DML,
+  voip_trunk_settings: ESCREVE_E_LE_POR_COLUNA,
   webhook_sources: DML,
   automation_rule_runs: DML, // excesso declarado: ver EXCESSO_DECLARADO
   calendar_locations: LE_E_CRIA,

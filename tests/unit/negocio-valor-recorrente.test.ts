@@ -493,7 +493,8 @@ describe("o painel lateral do atendimento", () => {
       refetch: vi.fn(),
       data: {
         data: {
-          id: CONTACT_ID,
+          // literal: o factory do vi.mock sobe para o topo e não enxerga a const do describe
+          id: "c0000000-0000-4000-8000-000000000001",
           name: "Joana Prado",
           display_name: null,
           email: null,
@@ -522,6 +523,8 @@ describe("o painel lateral do atendimento", () => {
       user: { is_platform_admin: false, support: null },
       activeOrg: { orgId: "org-1", role: "agent", cliente_pela_agenda: false },
     }),
+    // O painel do fork grava com `contact.update`; agent tem.
+    usePermission: () => true,
   }));
   vi.mock("@/hooks/contacts/useHierarquiaDoAnuncio", () => ({ useHierarquiaDoAnuncio: () => ({ data: null }) }));
   vi.mock("@/hooks/contacts/useUnblockContact", () => ({ useUnblockContact: () => ({ mutate: vi.fn(), isPending: false }) }));

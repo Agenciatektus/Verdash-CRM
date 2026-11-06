@@ -61149,46 +61149,8 @@ notify pgrst, 'reload schema';
 -- ---- atendimento conjunto: controle e atualização da tela (migration 9016) ----
 -- A 0661 precede a 0726 na cadeia. Esta forward-fix reinstala a policy atual
 -- COM participação depois dela, sem editar nenhuma migration já publicada.
-do $conversations_select$ begin
-  -- O ramo de PARTICIPANTE (conversa atendida em conjunto) fica, e a forma da
-  -- main também: escopo resolvido em conjunto por fn_conversation_scope(), ANTES
-  -- do scan. A forma antiga do PR (fn_can_view_conversation por linha) fazia o
-  -- planner voltar a chamar a função por candidata — reprovado por
-  -- tests/invariants/escopo-da-conversa-avaliado-uma-vez.test.ts (#2848 sobre o
-  -- conserto #3090). A política abaixo é a da main (58213) + o ramo participante.
-  drop policy if exists "conversations_select" on public.conversations;
-  create policy "conversations_select" on public.conversations
-    for select using (
-      (select public.fn_is_platform_admin())
-      or organization_id in (
-           select s.organization_id from public.fn_conversation_scope() s where s.org_wide_read
-         )
-      or (
-           assigned_to_user_id = auth.uid()
-           and organization_id in (select s.organization_id from public.fn_conversation_scope() s)
-         )
-      or (
-           assigned_to_user_id is null
-           and organization_id in (
-                select s.organization_id from public.fn_conversation_scope() s where s.sees_unassigned
-              )
-         )
-      or exists (
-           select 1
-             from public.conversation_participants cp
-            where cp.conversation_id = conversations.id
-              and cp.organization_id = conversations.organization_id
-              and cp.user_id = auth.uid()
-              and cp.left_at is null
-              and not exists (
-                select 1 from public.contacts pc
-                 where pc.id=conversations.contact_id
-                   and pc.organization_id=conversations.organization_id
-                   and pc.is_personal
-              )
-         )
-    );
-end $conversations_select$;
+-- conversations_select da 9016 sai daqui: a versão integrada (escopo da 9027 + ramo de
+-- participante) é instalada uma vez só, no bloco SUBIDA 1.95 (migration 9100).
 
 -- O convite não amplia UPDATE/DELETE. Mantém o escopo anterior de quem já
 -- escrevia: owner, gestor e o modo de visibilidade configurado no banco.
@@ -68687,25 +68649,7 @@ grant execute on function public.fn_escopo_orgs() to authenticated, service_role
 -- caísse em lock timeout depois do drop, a tabela ficaria sem policy de SELECT
 -- (deny-all) até a próxima passada. Dentro do `do`, o par é uma instrução só:
 -- a troca acontece inteira ou não acontece, e a policy anterior fica de pé.
-do $rls9027$ begin
-  drop policy if exists "conversations_select" on public.conversations;
-  create policy "conversations_select" on public.conversations
-    for select using (
-      (select public.fn_is_platform_admin())
-      or organization_id in (
-        select e.organization_id from public.fn_escopo_orgs() e
-         where e.papel in ('viewer', 'manager', 'admin')
-            or (e.papel = 'agent' and e.modo = 'all'))
-      or (assigned_to_user_id = (select auth.uid())
-          and organization_id in (
-            select e.organization_id from public.fn_escopo_orgs() e
-             where e.papel = 'agent'))
-      or (assigned_to_user_id is null
-          and organization_id in (
-            select e.organization_id from public.fn_escopo_orgs() e
-             where e.papel = 'agent' and e.modo = 'own_and_unassigned'))
-    );
-end $rls9027$;
+-- conversations_select da 9027 sai daqui: a final (9027 + participante) está no bloco SUBIDA 1.95 (9100).
 
 do $rls9027$ begin
   drop policy if exists "crm_leads_select" on public.crm_leads;
@@ -76105,7 +76049,7 @@ comment on column public.cobranca_planos.aviso_ia_usd_cents is
 -- Fica DEPOIS das redefinições do upstream (9016, 9043, 0803, 9023) e ANTES da VARREDURA anon.
 
 -- ---- 1. conversations_select: a de conjunto da 9027 + o ramo de participante (0661/9016) ----
-do $rls9100$ begin
+do $conversations_select$ begin
   drop policy if exists "conversations_select" on public.conversations;
   create policy "conversations_select" on public.conversations
     for select using (
@@ -76139,7 +76083,14 @@ do $rls9100$ begin
               )
          )
     );
-end $rls9100$;
+end $conversations_select$;
+
+-- ---- 1b. grants próprios das tabelas do fork criadas no apêndice (régua da 9037) ----
+-- Cadência, alertas de IA da plataforma: só service_role (RLS ligada e sem policy).
+grant select, insert, update, delete on table public.cadencia_conducoes, public.cadencia_inscricoes_do_dia,
+  public.ia_plataforma_alertas to service_role;
+-- Fila de espera da agenda: as quatro policies (select manager+, escrita agent+) pressupõem DML.
+grant select, insert, update, delete on table public.calendar_waitlist to authenticated, service_role;
 
 -- ---- 2. fn_lgpd_cascade_redact_contact: 9043 do upstream + Instagram e transcrição do fork ----
 create or replace function public.fn_lgpd_cascade_redact_contact(p_organization_id uuid, p_contact_id uuid, p_request_id uuid) returns jsonb
@@ -78525,7 +78476,14 @@ begin
   revoke all on table public.demandas from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.demandas to authenticated, service_role;
   revoke all on table public.external_db_connections from anon, authenticated, service_role;
-  grant select, insert, update, delete on table public.external_db_connections to authenticated, service_role;
+  -- Fork (9009): authenticated lê external_db_connections só POR COLUNA; o envelope da senha fica fora.
+  grant insert, update, delete on table public.external_db_connections to authenticated;
+  grant select (
+    id, organization_id, label, host, port, database_name, username,
+    ssl_mode, enabled, last_tested_at, last_test_ok, last_test_error,
+    created_by, created_at, updated_at
+  ) on public.external_db_connections to authenticated;
+  grant select, insert, update, delete on table public.external_db_connections to service_role;
   revoke all on table public.financial_accounts from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.financial_accounts to authenticated, service_role;
   revoke all on table public.financial_entries from anon, authenticated, service_role;
@@ -78547,7 +78505,13 @@ begin
   revoke all on table public.voice_calls from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.voice_calls to authenticated, service_role;
   revoke all on table public.voip_trunk_settings from anon, authenticated, service_role;
-  grant select, insert, update, delete on table public.voip_trunk_settings to authenticated, service_role;
+  -- Fork (9009): authenticated lê voip_trunk_settings só POR COLUNA; o envelope da senha fica fora.
+  grant insert, update, delete on table public.voip_trunk_settings to authenticated;
+  grant select (
+    organization_id, host, port, username, password_last4,
+    from_domain, endpoint_name, is_active, updated_by, created_at, updated_at
+  ) on public.voip_trunk_settings to authenticated;
+  grant select, insert, update, delete on table public.voip_trunk_settings to service_role;
   revoke all on table public.webhook_sources from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.webhook_sources to authenticated, service_role;
 

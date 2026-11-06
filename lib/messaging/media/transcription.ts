@@ -116,8 +116,6 @@ export interface TranscriptionCreds {
   headers?: Record<string, string> | undefined;
   /** Contrato do fornecedor, sem alterar o teto global de mídia. */
   maxAudioBytes?: number;
-  /** Apenas no contrato OpenRouter: usage.cost é o total da chamada em USD. */
-  medirCustoEmUsd?: boolean;
 }
 
 export class TranscriptionTooLargeError extends Error {

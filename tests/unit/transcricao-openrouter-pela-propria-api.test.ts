@@ -112,6 +112,8 @@ const CONVERSA_OPENROUTER = {
   // Um modelo que a capacidade `audio` ACEITA (prefixo `google/`): é o caso em
   // que a escada antiga escolhia o degrau do modelo de conversa.
   modelId: "google/gemini-2.5-flash",
+  // Tektus: os degraus A0 e A só valem com credencial PRÓPRIA da organização.
+  credencialPropria: true,
 } as const;
 
 describe("#3382 — o áudio audio/ogg com conversa OpenRouter vai para /audio/transcriptions do próprio OpenRouter", () => {
@@ -161,27 +163,43 @@ describe("#3382 — o áudio audio/ogg com conversa OpenRouter vai para /audio/t
   });
 });
 
-describe("controles — os degraus de antes não mudaram de lugar", () => {
+// Tektus (decisão de 26/10): tudo o que é da organização vem antes; a chave da
+// instalação é a última. O A0 (OpenRouter próprio) fica antes da chave OpenAI.
+describe("controles — a nossa ordem: organização primeiro, instalação por último", () => {
   beforeEach(() => {
     transcricaoDoEnv.apiKey = ""; transcricaoDoEnv.baseUrl = "";
     transcricaoDoEnv.model = "";
     transcricaoDoEnv.languages = "";
   });
 
-  it("organização OpenRouter COM chave OpenAI continua no whisper-1 da OpenAI — ninguém troca de fornecedor numa atualização", async () => {
+  it("organização OpenRouter própria COM chave OpenAI transcreve na OpenRouter (A0 antes de B)", async () => {
     const decisao = await decidirTranscricao({
       conversa: CONVERSA_OPENROUTER,
+      chaveOpenai: async () => "chave-openai-de-controle",
+    });
+    expect(decisao.origem).toBe("padrao_openrouter");
+  });
+
+  it("OpenRouter SEM credencial própria e COM chave OpenAI continua no whisper-1 da OpenAI", async () => {
+    const decisao = await decidirTranscricao({
+      conversa: { ...CONVERSA_OPENROUTER, credencialPropria: false },
       chaveOpenai: async () => "chave-openai-de-controle",
     });
     expect(decisao.origem).toBe("padrao_openai_compativel");
     expect(decisao.anuncio.modelId).toBe("whisper-1");
   });
 
-  it("o serviço de transcrição da instalação continua ANTES de tudo (#2171)", async () => {
+  it("o serviço de transcrição da instalação é o ÚLTIMO: a OpenRouter própria vem antes", async () => {
     transcricaoDoEnv.apiKey = "chave-do-servico-da-instalacao";
     transcricaoDoEnv.model = "whisper-large-v3";
-    const decisao = await decidirTranscricao({
+    const propria = await decidirTranscricao({
       conversa: CONVERSA_OPENROUTER,
+      chaveOpenai: async () => null,
+    });
+    expect(propria.origem).toBe("padrao_openrouter");
+
+    const decisao = await decidirTranscricao({
+      conversa: { ...CONVERSA_OPENROUTER, credencialPropria: false },
       chaveOpenai: async () => null,
     });
     expect(decisao.origem).toBe("servico_da_instalacao");
@@ -192,7 +210,7 @@ describe("controles — os degraus de antes não mudaram de lugar", () => {
 
   it("a conversa Google com `audio` continua transcrevendo pelo próprio modelo (#2171)", async () => {
     const decisao = await decidirTranscricao({
-      conversa: { provider: "google", apiKey: "chave-google-de-controle", modelId: "gemini-3.5-flash" },
+      conversa: { provider: "google", apiKey: "chave-google-de-controle", modelId: "gemini-3.5-flash", credencialPropria: true },
       chaveOpenai: async () => null,
     });
     expect(decisao.origem).toBe("modelo_da_organizacao");

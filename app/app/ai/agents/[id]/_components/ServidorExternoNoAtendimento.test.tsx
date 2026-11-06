@@ -174,7 +174,8 @@ describe("editor do agente — ferramentas do servidor MCP externo (#3586)", () 
     marcar("faturar_pedido");
 
     const select = screen.getByTestId("marca-faturar_pedido") as HTMLSelectElement;
-    expect([...select.options].map((o) => o.value)).toEqual(["escrita"]);
+    // O <select> escondido do `Escolha` (DS) leva a opção vazia interna; ela não é marca.
+    expect([...select.options].map((o) => o.value).filter((v) => v !== "")).toEqual(["escrita"]);
   });
 
   it("desmarcar tira SÓ aquela — as outras duas ficam", async () => {

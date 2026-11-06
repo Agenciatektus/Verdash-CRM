@@ -47,7 +47,14 @@ begin
   revoke all on table public.demandas from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.demandas to authenticated, service_role;
   revoke all on table public.external_db_connections from anon, authenticated, service_role;
-  grant select, insert, update, delete on table public.external_db_connections to authenticated, service_role;
+  -- Fork (9009): authenticated lê external_db_connections só POR COLUNA; o envelope da senha fica fora.
+  grant insert, update, delete on table public.external_db_connections to authenticated;
+  grant select (
+    id, organization_id, label, host, port, database_name, username,
+    ssl_mode, enabled, last_tested_at, last_test_ok, last_test_error,
+    created_by, created_at, updated_at
+  ) on public.external_db_connections to authenticated;
+  grant select, insert, update, delete on table public.external_db_connections to service_role;
   revoke all on table public.financial_accounts from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.financial_accounts to authenticated, service_role;
   revoke all on table public.financial_entries from anon, authenticated, service_role;
@@ -69,7 +76,13 @@ begin
   revoke all on table public.voice_calls from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.voice_calls to authenticated, service_role;
   revoke all on table public.voip_trunk_settings from anon, authenticated, service_role;
-  grant select, insert, update, delete on table public.voip_trunk_settings to authenticated, service_role;
+  -- Fork (9009): authenticated lê voip_trunk_settings só POR COLUNA; o envelope da senha fica fora.
+  grant insert, update, delete on table public.voip_trunk_settings to authenticated;
+  grant select (
+    organization_id, host, port, username, password_last4,
+    from_domain, endpoint_name, is_active, updated_by, created_at, updated_at
+  ) on public.voip_trunk_settings to authenticated;
+  grant select, insert, update, delete on table public.voip_trunk_settings to service_role;
   revoke all on table public.webhook_sources from anon, authenticated, service_role;
   grant select, insert, update, delete on table public.webhook_sources to authenticated, service_role;
 

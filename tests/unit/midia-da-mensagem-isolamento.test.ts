@@ -12,6 +12,12 @@ const estado = vi.hoisted(() => ({
   assinar: vi.fn(async (_path: string, _ttl: number, _opcoes?: { download: string }) => ({
     data: { signedUrl: "https://storage.example/signed/midia" }, error: null,
   })),
+  // Tektus: o preview assina EM LOTE (`assinarMidias` → `createSignedUrls`);
+  // `createSignedUrl` (acima) fica só para o download com nome (#2613).
+  assinarLote: vi.fn(async (caminhos: string[], _ttl: number, _opcoes?: { download: boolean }) => ({
+    data: caminhos.map((path) => ({ path, signedUrl: "https://storage.example/signed/midia", error: null })),
+    error: null,
+  })),
   baixar: vi.fn(async (_path: string) => ({ data: new Blob(["ogg"]), error: null })),
   buscarNoCanal: vi.fn(),
   converter: vi.fn(async () => Buffer.from("aac")),
@@ -39,7 +45,7 @@ vi.mock("@/lib/auth/require-role", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    storage: { from: () => ({ createSignedUrl: estado.assinar, download: estado.baixar }) },
+    storage: { from: () => ({ createSignedUrl: estado.assinar, createSignedUrls: estado.assinarLote, download: estado.baixar }) },
     from: () => {
       const query = {
         select: () => query,
@@ -54,6 +60,7 @@ vi.mock("@/lib/channels", () => ({
   CHANNEL_SESSION_REF_COLUMNS: "id",
   DEFAULT_CHANNEL_PROVIDER: "waha",
   getAdapter: () => ({ fetchInboundMedia: estado.buscarNoCanal }),
+  getAdapterOpcional: () => ({ fetchInboundMedia: estado.buscarNoCanal }),
   resolveSessionRef: () => ({ id: "sessao" }),
 }));
 vi.mock("@/lib/ai/dispatcher/rate-limit", () => ({
@@ -67,6 +74,7 @@ vi.mock("@/lib/messaging/media/voice-transcode", () => ({
 
 import { GET } from "@/app/api/v1/messages/[id]/media/route";
 import { VALIDADE_DO_LINK_DE_MIDIA_S } from "@/lib/messaging/media/link-temporario";
+import { esquecerUrlsAssinadas } from "@/lib/messaging/media/url-assinada";
 
 function pedir(formato = "") {
   return GET(new Request(`https://app.example/api/v1/messages/${MENSAGEM}/media${formato}`) as never, {
@@ -76,6 +84,9 @@ function pedir(formato = "") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A URL assinada é cacheada por bloco no módulo: sem isto, o 2º caso com o
+  // mesmo caminho nem chega ao Storage.
+  esquecerUrlsAssinadas();
   estado.filtros = [];
   estado.mensagem = {
     id: MENSAGEM,
@@ -93,9 +104,10 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
   it("assina o objeto da organização ativa sem alterar o caminho", async () => {
     const resposta = await pedir();
     expect(resposta.status).toBe(302);
-    expect(estado.assinar).toHaveBeenCalledExactlyOnceWith(
-      `${ORG}/${CONVERSA}/entrada.ogg`, VALIDADE_DO_LINK_DE_MIDIA_S, undefined,
+    expect(estado.assinarLote).toHaveBeenCalledExactlyOnceWith(
+      [`${ORG}/${CONVERSA}/entrada.ogg`], expect.any(Number), undefined,
     );
+    expect(estado.assinar).not.toHaveBeenCalled();
     expect(estado.filtros).toContainEqual(["organization_id", ORG]);
     expect(estado.baixar).not.toHaveBeenCalled();
     expect(estado.buscarNoCanal).not.toHaveBeenCalled();
@@ -105,6 +117,7 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
     estado.mensagem.media_storage_path = `${OUTRA_ORG}/${CONVERSA}/entrada.ogg`;
     const resposta = await pedir(formato);
     expect(estado.assinar).not.toHaveBeenCalled();
+    expect(estado.assinarLote).not.toHaveBeenCalled();
     expect(estado.baixar).not.toHaveBeenCalled();
     expect(estado.buscarNoCanal).not.toHaveBeenCalled();
     expect(resposta.status).toBe(404);
@@ -132,7 +145,7 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
     estado.mensagem.media_storage_path = caminho;
     const resposta = await pedir();
     expect(resposta.status).toBe(302);
-    expect(estado.assinar).toHaveBeenCalledExactlyOnceWith(caminho, VALIDADE_DO_LINK_DE_MIDIA_S, undefined);
+    expect(estado.assinarLote).toHaveBeenCalledExactlyOnceWith([caminho], expect.any(Number), undefined);
   });
 
   it("download autorizado preserva o nome nas opções, sem trocá-lo pelo caminho", async () => {
@@ -177,6 +190,7 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
       expect(await resposta.json()).toMatchObject({ error: { code: "not_found", message: "Mensagem sem mídia." } });
     }
     expect(estado.assinar).not.toHaveBeenCalled();
+    expect(estado.assinarLote).not.toHaveBeenCalled();
     expect(estado.baixar).not.toHaveBeenCalled();
     expect(estado.converter).not.toHaveBeenCalled();
     expect(estado.buscarNoCanal).not.toHaveBeenCalled();
@@ -188,6 +202,7 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
     expect(estado.baixar).toHaveBeenCalledExactlyOnceWith(`${ORG}/${CONVERSA}/entrada.ogg`);
     expect(estado.converter).toHaveBeenCalledExactlyOnceWith(Buffer.from("ogg"), ORG);
     expect(estado.assinar).not.toHaveBeenCalled();
+    expect(estado.assinarLote).not.toHaveBeenCalled();
   });
 
   it("sem objeto persistido, continua buscando a mídia no canal autorizado", async () => {
@@ -198,6 +213,7 @@ describe("mídia da mensagem respeita o namespace autorizado", () => {
     expect(await resposta.text()).toBe("canal");
     expect(estado.buscarNoCanal).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ organizationId: ORG }));
     expect(estado.assinar).not.toHaveBeenCalled();
+    expect(estado.assinarLote).not.toHaveBeenCalled();
     expect(estado.baixar).not.toHaveBeenCalled();
   });
 });

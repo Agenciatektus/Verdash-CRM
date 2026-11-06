@@ -49,6 +49,10 @@ vi.mock("@/components/kanban/ContatoDoNegocio", () => ({ ContatoDoNegocio: () =>
 vi.mock("@/components/kanban/TarefasDoNegocio", () => ({ TarefasDoNegocio: () => null }));
 vi.mock("@/components/kanban/PropostasDoNegocio", () => ({ PropostasDoNegocio: () => null }));
 vi.mock("@/components/kanban/ConversaNoDossie", () => ({ ConversaNoDossie: () => null }));
+// A origem do anúncio no dossiê (fork, #284) consulta o contato pelo react-query.
+vi.mock("@/components/kanban/OrigemDoNegocio", () => ({ OrigemDoNegocio: () => null }));
+// O dossiê do fork monta o atalho "Abrir conversa" direto (usa router e query client).
+vi.mock("@/components/kanban/AbrirConversaDoLead", () => ({ AbrirConversaDoLead: () => null, temAlvoParaAbrir: () => false }));
 vi.mock("@/components/kanban/ScoreSlot", () => ({ ScoreSlot: () => null }));
 vi.mock("@/components/kanban/OwnerBadge", () => ({ OwnerBadge: () => null }));
 vi.mock("@/components/kanban/LeadTimeline", () => ({ LeadTimeline: () => null }));

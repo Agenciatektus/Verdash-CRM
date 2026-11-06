@@ -13,7 +13,11 @@ import type { Lead } from "@/lib/types/leads";
  */
 
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (chave: string) => chave }));
-vi.mock("@/hooks/i18n/useLocaleDeData", () => ({ useTagDeIdioma: () => "pt-BR" }));
+// O campo de data do DS (CampoDeData) pede o locale do date-fns.
+vi.mock("@/hooks/i18n/useLocaleDeData", async () => {
+  const { ptBR } = await import("date-fns/locale");
+  return { useTagDeIdioma: () => "pt-BR", useLocaleDeData: () => ptBR };
+});
 vi.mock("@/hooks/auth/AuthProvider", () => ({
   useUser: () => ({ id: "u1", is_platform_admin: false, support: false }),
   // `agent`: pode confirmar o que o documento disse (a régua da rota).
@@ -35,6 +39,10 @@ vi.mock("@/components/kanban/ContatoDoNegocio", () => ({ ContatoDoNegocio: () =>
 vi.mock("@/components/kanban/TarefasDoNegocio", () => ({ TarefasDoNegocio: () => null }));
 vi.mock("@/components/kanban/PropostasDoNegocio", () => ({ PropostasDoNegocio: () => null }));
 vi.mock("@/components/kanban/ConversaNoDossie", () => ({ ConversaNoDossie: () => null }));
+// A origem do anúncio no dossiê (fork, #284) consulta o contato pelo react-query.
+vi.mock("@/components/kanban/OrigemDoNegocio", () => ({ OrigemDoNegocio: () => null }));
+// O dossiê do fork monta o atalho "Abrir conversa" direto (usa router e query client).
+vi.mock("@/components/kanban/AbrirConversaDoLead", () => ({ AbrirConversaDoLead: () => null, temAlvoParaAbrir: () => false }));
 vi.mock("@/components/kanban/ScoreSlot", () => ({ ScoreSlot: () => null }));
 vi.mock("@/components/kanban/OwnerBadge", () => ({ OwnerBadge: () => null }));
 vi.mock("@/components/kanban/LeadTimeline", () => ({ LeadTimeline: () => null }));

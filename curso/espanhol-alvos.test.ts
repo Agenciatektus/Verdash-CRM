@@ -113,9 +113,9 @@ describe("alvos em espanhol das fotografias do curso", () => {
 
   it.each([
     ["^Propostas Configure", "Propostas", "Configure a validade padrão e condições para propostas comerciais."],
-    ["^Propostas Rascunhe", "Propostas", "Rascunhe, revise e envie propostas comerciais — do orçamento ao aceite."],
+    ["^Propostas Rascunhe", "Propostas", "Rascunhe, revise e envie propostas comerciais, do orçamento ao aceite."],
     ["^Automações O freio", "Automações", "O freio único do passo em que a IA escolhe entre as opções de uma regra, para a empresa inteira."],
-    ["^Tags O vocabulário", "Tags", "O vocabulário de etiquetas da empresa: onde cada uma é usada e como renomear, juntar ou excluir."],
+    ["^Etiquetas As etiquetas", "Etiquetas", "As etiquetas da empresa: acrescentar, escolher quais são sugeridas em conversas e contatos, renomear, juntar, arquivar e excluir."],
     ["^Conversões Devolver ao anúncio", "Conversões", "Devolver ao anúncio as vendas que ele trouxe, e marcar a origem de quem chega pelo site."],
   ])("encontra %s montado com título e descrição separados", (original, titulo, descricao) => {
     expect(padrao(original).test(`${t(titulo)} ${t(descricao)}`)).toBe(true);

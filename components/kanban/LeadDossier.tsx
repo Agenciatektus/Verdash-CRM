@@ -65,6 +65,8 @@ const CONSULTA_TELA_LARGA = "(min-width: 64rem)";
 function useTelaLarga(): boolean {
   const [larga, setLarga] = useState(false);
   useEffect(() => {
+    // Mesmo piso do `useEhCelular`: sem `matchMedia` (jsdom), fica estreita.
+    if (typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia(CONSULTA_TELA_LARGA);
     const atualizar = () => setLarga(mq.matches);
     atualizar();

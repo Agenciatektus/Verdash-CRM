@@ -435,7 +435,9 @@ describe("worker de mídia: chamada paga grava em llm_calls", () => {
 describe("custo da transcrição pelo serviço e da assinatura (21/10/2026)", () => {
   it("⭐ degrau 2 com custo na resposta grava esse custo na linha da organização da mensagem", async () => {
     comAudio();
-    linhaDaMensagem = { ...linhaDaMensagem, organization_id: "org2" };
+    // O caminho do objeto tem de ser da org da mensagem: o worker recusa
+    // `invalid_media_path` antes de derivar (upstream 1.95).
+    linhaDaMensagem = { ...linhaDaMensagem, organization_id: "org2", media_storage_path: "org2/conv1/msg1.ogg" };
     servico.custo = 0.12;
 
     await deriveMessageMedia(eventRow("org2"));

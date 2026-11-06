@@ -193,7 +193,8 @@ describe("transcrição da organização OpenRouter vai ao gateway da variável"
     vi.resetModules();
     const { decidirTranscricao } = await import("@/lib/messaging/media/escada-de-transcricao");
     const decisao = await decidirTranscricao({
-      conversa: { provider: "openrouter", apiKey: "sk-or-x", modelId: "google/gemini-2.5-flash" },
+      // Tektus: o degrau OpenRouter só vale com credencial PRÓPRIA da organização.
+      conversa: { provider: "openrouter", apiKey: "sk-or-x", modelId: "google/gemini-2.5-flash", credencialPropria: true },
       chaveOpenai: async () => null,
     });
     await decisao.transcriber!.transcribe(Buffer.from("ogg"), "audio/ogg");

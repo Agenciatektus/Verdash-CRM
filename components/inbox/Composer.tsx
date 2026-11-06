@@ -800,6 +800,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   return (
     <>
       <div
+        data-testid="composer"
         className="relative bg-bg px-4 pb-3.5 pt-2.5"
         data-modo={mode}
         onDragEnter={onDragEnter}

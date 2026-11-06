@@ -12,8 +12,9 @@
  *  (A) `?baixar=1` + nome guardado → a URL assinada sai com `download`, que é
  *      o que faz o Storage responder `Content-Disposition: attachment` com o
  *      nome. Sem o terceiro argumento, o Storage devolve o basename canônico.
- *  (B) `?baixar=1` SEM nome guardado → NENHUM nome é inventado: a assinatura
- *      continua sem opções de download. Anexo antigo (ou canal que não manda
+ *  (B) `?baixar=1` SEM nome guardado → NENHUM nome é inventado. Tektus: o que
+ *      a tela não exibe (documento) sai como attachment GENÉRICO
+ *      (`download: true`, P2-3 do Cassio na #83), nunca com um nome. Anexo antigo (ou canal que não manda
  *      `filename`) não vira `documento.pdf` na cara do atendente.
  *  (C) sem `?baixar=1` → a rota segue 302 como sempre: o cartão abre o PDF em
  *      aba nova, e o preview não é sequestrado pelo download.
@@ -46,6 +47,8 @@ vi.mock("@/lib/channels", async () => {
   return {
     ...actual,
     getAdapter: vi.fn(),
+    // Tektus: a rota busca no canal por `getAdapterOpcional`.
+    getAdapterOpcional: vi.fn(),
     // O ref da sessão é só o endereço do canal; o adapter é quem busca os bytes.
     resolveSessionRef: vi.fn(() => ({ provider: actual.DEFAULT_CHANNEL_PROVIDER, sessionName: "sessao-de-teste" })),
   };
@@ -54,7 +57,8 @@ vi.mock("@/lib/channels", async () => {
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { orgAtivaDaApi } from "@/lib/auth/require-role";
 import { loadAuthUser } from "@/lib/auth/server";
-import { DEFAULT_CHANNEL_PROVIDER, getAdapter } from "@/lib/channels";
+import { DEFAULT_CHANNEL_PROVIDER, getAdapterOpcional } from "@/lib/channels";
+import { esquecerUrlsAssinadas } from "@/lib/messaging/media/url-assinada";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -134,6 +138,14 @@ function adminFake() {
             error: null,
           };
         },
+        // Tektus: sem nome, a rota assina pelo lote (`assinarMidias`).
+        createSignedUrls: async (paths: string[], ttl: number, opcoes?: unknown) => {
+          for (const path of paths) ASSINATURAS.push({ bucket, path, ttl, opcoes });
+          return {
+            data: paths.map((path) => ({ path, signedUrl: `https://storage.test/signed/${path}?token=t`, error: null })),
+            error: null,
+          };
+        },
       }),
     },
   };
@@ -147,6 +159,8 @@ const PARAMS = { params: Promise.resolve({ id: MENSAGEM }) };
 
 beforeEach(() => {
   ASSINATURAS.length = 0;
+  // A URL sem nome é cacheada por bloco no módulo; cada caso assina do zero.
+  esquecerUrlsAssinadas();
   MENSAGENS = [];
   vi.mocked(createAdminClient).mockReturnValue(adminFake() as never);
   vi.mocked(createClient).mockResolvedValue({
@@ -189,13 +203,15 @@ describe("?baixar=1 com nome original guardado", () => {
 });
 
 describe("?baixar=1 sem nome original", () => {
-  it("não inventa nome: assina sem `download`, como hoje", async () => {
+  // Tektus: a planilha não é exibível, então sai como attachment genérico
+  // (`download: true`), sem nome — nunca um nome inventado.
+  it("não inventa nome: assina sem nome em `download`", async () => {
     MENSAGENS = [linha({ metadata: null })];
 
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
     expect(res.status).toBe(302);
-    expect(ASSINATURAS[0]?.opcoes).toBeUndefined();
+    expect(ASSINATURAS[0]?.opcoes).toEqual({ download: true });
   });
 
   it("metadata sem a chave (anexo antigo) também não vira nome", async () => {
@@ -203,13 +219,19 @@ describe("?baixar=1 sem nome original", () => {
 
     await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
-    expect(ASSINATURAS[0]?.opcoes).toBeUndefined();
+    expect(ASSINATURAS[0]?.opcoes).toEqual({ download: true });
   });
 });
 
 describe("sem ?baixar=1", () => {
   it("segue 302 sem `download`: o cartão abre o PDF em vez de baixá-lo", async () => {
-    MENSAGENS = [linha({ metadata: { media_filename: NOME } })];
+    MENSAGENS = [
+      linha({
+        media_mime: "application/pdf",
+        media_storage_path: `${ORG_ID}/conv/${MENSAGEM}.pdf`,
+        metadata: { media_filename: "Relatorio.pdf" },
+      }),
+    ];
 
     const res = await GET(new NextRequest(url()), PARAMS);
 
@@ -227,7 +249,7 @@ describe("janela do worker (bytes ainda no canal)", () => {
         metadata,
       }),
     ];
-    vi.mocked(getAdapter).mockReturnValue({
+    vi.mocked(getAdapterOpcional).mockReturnValue({
       fetchInboundMedia: async () => ({
         buffer: Buffer.from("bytes-de-teste"),
         mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -253,7 +275,8 @@ describe("janela do worker (bytes ainda no canal)", () => {
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
 
     expect(res.status).toBe(200);
-    expect(res.headers.get("content-disposition")).toBeNull();
+    // Tektus: planilha não exibível sai como attachment genérico, sem filename.
+    expect(res.headers.get("content-disposition")).toBe("attachment");
   });
 });
 
@@ -266,15 +289,19 @@ describe("o nome atravessa o SDK instalado sem codificação duplicada", () => {
   const sdk = criarClienteDoSdk("https://storage.test", "chave-ficticia", {
     auth: { persistSession: false, autoRefreshToken: false, storageKey: "sdk-rota-media-teste" },
     global: {
-      fetch: async () => Response.json({
-        signedURL: `/object/sign/whatsapp-media/${caminho}?token=${token}`,
-      }),
+      // Assinatura única (com nome) e em lote (Tektus: sem nome, `createSignedUrls`).
+      fetch: async (entrada: RequestInfo | URL) => {
+        const signedURL = `/object/sign/whatsapp-media/${caminho}?token=${token}`;
+        return String(entrada).endsWith("/object/sign/whatsapp-media")
+          ? Response.json([{ path: caminho, signedURL, error: null }])
+          : Response.json({ signedURL });
+      },
     },
   });
 
-  function usarSdkReal(metadata: Record<string, unknown> | null) {
+  function usarSdkReal(metadata: Record<string, unknown> | null, media_mime?: string) {
     vi.mocked(createAdminClient).mockReturnValue({ storage: sdk.storage } as never);
-    MENSAGENS = [linha({ media_storage_path: caminho, metadata })];
+    MENSAGENS = [linha({ media_storage_path: caminho, metadata, ...(media_mime ? { media_mime } : {}) })];
   }
 
   it.each(["arquivo.xlsx", "Relatório sintético.xlsx", "Planilha [100%] + final.xlsx"])(
@@ -290,17 +317,19 @@ describe("o nome atravessa o SDK instalado sem codificação duplicada", () => {
     },
   );
 
+  // Tektus: preview só existe para mime exibível (PDF); documento sai como attachment.
   it("preview com nome conhecido continua sem parâmetro download", async () => {
-    usarSdkReal({ media_filename: "Relatório sintético.xlsx" });
+    usarSdkReal({ media_filename: "Relatório sintético.pdf" }, "application/pdf");
     const res = await GET(new NextRequest(url()), PARAMS);
     const destino = new URL(res.headers.get("location")!);
     expect(destino.searchParams.has("download")).toBe(false);
     expect(destino.searchParams.get("token")).toBe(token);
   });
 
+  // Tektus: attachment genérico (`download=` vazio), nunca um nome inventado.
   it("download sem nome continua sem nome inventado", async () => {
     usarSdkReal(null);
     const res = await GET(new NextRequest(url("?baixar=1")), PARAMS);
-    expect(new URL(res.headers.get("location")!).searchParams.has("download")).toBe(false);
+    expect(new URL(res.headers.get("location")!).searchParams.get("download")).toBe("");
   });
 });

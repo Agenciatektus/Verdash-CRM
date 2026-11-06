@@ -40,11 +40,14 @@ describe("links dos relatórios conservam URL e idioma sem introduzir HTML", () 
     const mensagem = enviados[0]!;
     const doc = new DOMParser().parseFromString(mensagem.html, "text/html");
     expect(doc.documentElement.lang).toBe(pais === "BR" ? "pt-BR" : "pt-PT");
-    const links = doc.querySelectorAll("a");
-    expect(links[0]?.getAttribute("href")).toBe(signedUrl);
-    expect(links[1]?.getAttribute("href")).toBe(signedUrlDados);
-    expect(links[1]?.textContent).toBe(signedUrlDados);
+    // Nosso layout com a marca (decisão da subida 1.95): botão do relatório e link
+    // do data.json no rodapé, com rótulo; a URL crua aparece no TEXTO do corpo.
+    const hrefs = [...doc.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain(signedUrl);
+    expect(hrefs).toContain(signedUrlDados);
+    expect(doc.body.textContent).toContain(signedUrlDados);
     expect(doc.querySelector("img[onerror]")).toBeNull();
+    expect(doc.querySelector("img[src='x']")).toBeNull();
     expect(mensagem.text).toContain(signedUrl);
     expect(mensagem.text).toContain(signedUrlDados);
   });

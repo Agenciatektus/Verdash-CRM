@@ -41,7 +41,7 @@
   "^Recebido em .* · Vence em": "^Recibido el .* · Vence el",
   "^Rede Sorriso Pleno.*Atenção.*Overflow": "^Rede Sorriso Pleno.*Atención.*Desborde",
   "^Servidor externo removido": "^Servidor externo eliminado",
-  "^Tags O vocabulário": "^Etiquetas El vocabulario",
+  "^Etiquetas As etiquetas": "^Etiquetas Las etiquetas",
   "^Tokens server-to-server": "^Tokens de servidor a servidor",
   "^Uma conversa conta como perdida no silêncio após": "^Una conversación cuenta como perdida por silencio tras",
   "^\\d+ contatos$": "^\\d+ contactos$",

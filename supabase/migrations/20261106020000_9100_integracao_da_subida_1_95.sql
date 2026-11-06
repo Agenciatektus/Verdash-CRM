@@ -9,7 +9,7 @@
 --   fn_vocabulario_de_tags_operar     9023              9038/9058/9059
 
 -- ---- 1. conversations_select: a de conjunto da 9027 + o ramo de participante (0661/9016) ----
-do $rls9100$ begin
+do $conversations_select$ begin
   drop policy if exists "conversations_select" on public.conversations;
   create policy "conversations_select" on public.conversations
     for select using (
@@ -43,7 +43,14 @@ do $rls9100$ begin
               )
          )
     );
-end $rls9100$;
+end $conversations_select$;
+
+-- ---- 1b. grants próprios das tabelas do fork criadas no apêndice (régua da 9037) ----
+-- Cadência, alertas de IA da plataforma: só service_role (RLS ligada e sem policy).
+grant select, insert, update, delete on table public.cadencia_conducoes, public.cadencia_inscricoes_do_dia,
+  public.ia_plataforma_alertas to service_role;
+-- Fila de espera da agenda: as quatro policies (select manager+, escrita agent+) pressupõem DML.
+grant select, insert, update, delete on table public.calendar_waitlist to authenticated, service_role;
 
 -- ---- 2. fn_lgpd_cascade_redact_contact: 9043 do upstream + Instagram e transcrição do fork ----
 create or replace function public.fn_lgpd_cascade_redact_contact(p_organization_id uuid, p_contact_id uuid, p_request_id uuid) returns jsonb

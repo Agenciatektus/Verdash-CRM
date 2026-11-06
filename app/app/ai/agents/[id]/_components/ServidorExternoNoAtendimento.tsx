@@ -54,6 +54,7 @@ import {
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Escolha } from "@/components/ui/escolha";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
@@ -296,13 +297,13 @@ export function ServidorExternoNoAtendimento({
                       ) : null}
                     </span>
                     {marca !== null ? (
-                      <select
+                      <Escolha
                         data-testid={`marca-${opcao.nome}`}
                         aria-label={`${t("Marca desta ferramenta")}: ${opcao.nome}`}
                         value={marca}
-                        onChange={(e) => trocarMarca(opcao, e.target.value as MarcaRemota)}
+                        onValueChange={(v) => trocarMarca(opcao, v as MarcaRemota)}
                         disabled={disabled}
-                        className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                        className="h-8 w-auto text-xs"
                       >
                         {/*
                           `leitura` só aparece para ferramenta que o servidor
@@ -315,7 +316,7 @@ export function ServidorExternoNoAtendimento({
                           <option value="leitura">{t("Leitura")}</option>
                         ) : null}
                         <option value="escrita">{t("Escrita")}</option>
-                      </select>
+                      </Escolha>
                     ) : null}
                   </li>
                 );

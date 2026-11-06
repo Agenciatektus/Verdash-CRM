@@ -351,7 +351,7 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
         );
         if (!escreveVinculo) continue;
         if (!fonte.includes("@/lib/auth/cache-curto")) {
-          problematicos.push(path.relative(RAIZ, caminho));
+          problematicos.push(path.relative(RAIZ, caminho).split(path.sep).join("/"));
         }
       }
     };
@@ -384,7 +384,7 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
         if (!/\.tsx?$/.test(entrada) || entrada.includes(".test.")) continue;
         const fonte = readFileSync(caminho, "utf8");
         if (!ESCREVE_METADATA.test(fonte)) continue;
-        const relativo = path.relative(RAIZ, caminho);
+        const relativo = path.relative(RAIZ, caminho).split(path.sep).join("/");
         vistos.push(relativo);
         if (FORA.has(relativo)) continue;
         if (!fonte.includes("@/lib/auth/cache-curto") || !/invalidarUsuario\(/.test(fonte)) {
@@ -420,9 +420,9 @@ describe("CERCA — quem escreve vínculo, papel ou estado de org invalida", () 
         if (!entrada.endsWith(".ts") || entrada.includes(".test.")) continue;
         const fonte = readFileSync(caminho, "utf8");
         if (!MUDA_ESTADO_DA_ORG.test(fonte)) continue;
-        vistos.push(path.relative(RAIZ, caminho));
+        vistos.push(path.relative(RAIZ, caminho).split(path.sep).join("/"));
         if (!fonte.includes("@/lib/auth/cache-curto") || !/invalidarOrg\(/.test(fonte)) {
-          problematicos.push(path.relative(RAIZ, caminho));
+          problematicos.push(path.relative(RAIZ, caminho).split(path.sep).join("/"));
         }
       }
     };

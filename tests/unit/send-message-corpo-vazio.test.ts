@@ -16,7 +16,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ENVIO_S7 } from "./_fonte-do-send-message";
 
-const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/inbound-turn.ts"), "utf8");
+// Tektus (ADR-0006, S7): o send_message mora em `turno/ferramentas/envio.ts`.
+const FONTE = readFileSync(join(process.cwd(), "lib/agent-engine/agent/turno/ferramentas/envio.ts"), "utf8");
 const corpoDoSend = (() => {
   const i = ENVIO_S7.indexOf("send_message: tool({");
   const j = ENVIO_S7.indexOf("update_lead_state: criarUpdateLeadState(", i);
@@ -34,7 +35,7 @@ describe("send_message nunca manda bolha em branco", () => {
   it("a trava usa a função de conteúdo visível, não só trim(): U+200E não sai como bolha", () => {
     // spec 28: "‎".trim() continua "‎" (comprimento 1). Sem a função, a trava deixava passar.
     expect(corpoDoSend).not.toMatch(/body\.trim\(\) === ''/);
-    expect(FONTE).toContain("import { semConteudoVisivel } from './conteudo-visivel';");
+    expect(FONTE).toContain("import { semConteudoVisivel } from '../../conteudo-visivel';");
     expect("‎".trim()).toBe("‎");
   });
 

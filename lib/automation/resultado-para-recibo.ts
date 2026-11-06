@@ -82,6 +82,20 @@ const CODIGOS_DAS_ACOES = new Set([
   "user_not_in_org",
   "whatsapp_enviado",
   "whatsapp_falhou",
+  // Tektus: motivos fixos das nossas ações. Fora daqui o recibo os trocava por
+  // `internal_error` e a aba Atividade perdia o porquê do pulo.
+  "card_aberto_reaproveitado",
+  "card_ja_criado",
+  "classe_d",
+  "contato_ja_tem_card_aberto",
+  "criacao_em_lote",
+  "destino_e_o_mesmo_funil",
+  "dono_inativo_nao_copiado",
+  "dono_indeterminado_nao_copiado",
+  "etapa_de_destino_de_fechamento",
+  "etapa_de_destino_invalida",
+  "funil_de_destino_indisponivel",
+  "lead_de_origem_nao_encontrado",
 ]);
 const CODIGOS_DE_INFRA = new Set([
   "23502",

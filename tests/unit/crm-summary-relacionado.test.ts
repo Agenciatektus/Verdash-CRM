@@ -68,6 +68,11 @@ vi.mock("@/lib/supabase/admin", () => ({
     return { from: () => q };
   },
 }));
+// No fork a rota passa por `requireRole("agent")` (enriquecimento service-only, suporte, MFA);
+// a organização vem dela. O gate tem teste próprio; aqui só a sessão de um agent da org-a.
+vi.mock("@/lib/auth/require-role", () => ({
+  requireRole: async () => ({ ok: true, user: { id: "user-a" }, org: { orgId: "org-a", role: "agent" } }),
+}));
 vi.mock("@/lib/users/nome-do-atendente", () => ({ nomesDosAtendentes: async () => new Map() }));
 
 import { GET } from "@/app/api/v1/contacts/[id]/crm-summary/route";

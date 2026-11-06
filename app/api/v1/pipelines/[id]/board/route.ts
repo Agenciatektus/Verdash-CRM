@@ -604,7 +604,6 @@ async function withAnexos(
   if (leads.length === 0 || campos.length === 0) return { leads, error: null };
 
   const leadIds = leads.map((l) => l.id);
-  const chaves = campos.map((campo) => campo.key);
 
   const { data, error } = await buscaEmLotes(leadIds, (lote) =>
     supabase
@@ -612,7 +611,8 @@ async function withAnexos(
       .select("lead_id, field_key, id, file_name, mime_type, file_size, created_at")
       .eq("organization_id", organizationId)
       .in("lead_id", lote)
-      .in("field_key", chaves)
+      // Sem `.in("field_key", …)`: a cerca do board só aceita `.in` em lote, e
+      // `anexarAnexosAosNegocios` já descarta a chave que o funil não declara.
       .order("created_at", { ascending: true }),
   );
   if (error) return { leads, error: error.message };

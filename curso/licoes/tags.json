@@ -22,7 +22,7 @@
         {
           "id": "p1",
           "titulo": "Onde fica",
-          "texto": "Clique em \"Configurações\", no rodapé do menu lateral, para abrir a lista de todas as configurações. \"Tags\" fica no grupo \"Sua empresa\". Clique no cartão para abrir a tela.",
+          "texto": "Clique em \"Configurações\", no rodapé do menu lateral, para abrir a lista de todas as configurações. \"Etiquetas\" fica no grupo \"Sua empresa\". Clique no cartão para abrir a tela.",
           "dica": "Só gerente e administrador abrem esta tela. Um atendente que tentar entrar recebe a página de acesso negado.",
           "rota": "/app/settings",
           "antes": [],
@@ -30,16 +30,16 @@
             {
               "alvo": {
                 "role": "link",
-                "nome": "^Tags O vocabulário",
+                "nome": "^Etiquetas As etiquetas",
                 "regex": true
               },
-              "rotulo": "Abrir Tags",
+              "rotulo": "Abrir Etiquetas",
               "tipo": "caixa"
             }
           ],
           "clicar": {
             "role": "link",
-            "nome": "^Tags O vocabulário",
+            "nome": "^Etiquetas As etiquetas",
             "regex": true
           }
         },

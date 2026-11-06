@@ -84,19 +84,27 @@ describe("a fiação do predicado (quem responde × quem pergunta)", () => {
     expect(fonte).toMatch(/\.\.\.\(options\?\.efeitos \? \{ efeitos: options\.efeitos \} : \{\}\)/);
   });
 
+  // Tektus (ADR-0006, S6/S7): o turno saiu do `inbound-turn.ts` para `turno/*`. O
+  // coletor nasce no EstadoDoTurno, e ponte, gate e prévia leem `estado.efeitos`.
   it("o turno cria UMA instância, entrega à ponte e a MESMA ao gate", () => {
-    const fonte = ler("lib/agent-engine/agent/inbound-turn.ts");
-    expect(fonte).toMatch(/const efeitosDoTurno = criarEfeitoDasEscrituras\(\)/);
+    const pasta = "lib/agent-engine/agent/";
+    const estado = ler(pasta + "turno/estado-do-turno.ts");
+    const conjunto = ler(pasta + "turno/conjunto-de-ferramentas.ts");
+    const envio = ler(pasta + "turno/ferramentas/argumentos-do-envio.ts");
+    const todos = [ler(pasta + "inbound-turn.ts"), estado, conjunto, envio].join("\n");
+    expect(estado).toMatch(/efeitos: criarEfeitoDasEscrituras\(\),/);
     // uma instância por turno, não duas
-    expect(fonte.match(/criarEfeitoDasEscrituras\(\)/g) ?? []).toHaveLength(1);
+    expect(todos.match(/criarEfeitoDasEscrituras\(\)/g) ?? []).toHaveLength(1);
+    // o gate lê o MESMO coletor do estado
+    expect(estado).toContain("return { active: ferramentas.length > 0, ferramentas, efeitos: estado.efeitos };");
     // a ponte recebe o coletor nos DOIS modos (prévia e produção)
-    expect(fonte).toMatch(/preview \? \{ readOnly: true, efeitos: efeitosDoTurno \} : \{ readOnly: false, efeitos: efeitosDoTurno \}/);
+    expect(conjunto).toContain("{ readOnly: Boolean(preview), efeitos: estado.efeitos }");
     // o before-send recebe a leitura do MESMO coletor
-    expect(fonte).toMatch(/registro: registroDoTurno\(\),/);
+    expect(envio).toMatch(/registro: registroDoTurno\(agentConfig, estado\),/);
     // a prévia arma igual ao turno real (o motivo escrito em `preview.ts` para a agenda)
-    expect(fonte).toMatch(/registro: registroDoTurno\(\),\s*\n\s*\}\s*\n\s*: null;/);
+    expect(conjunto).toMatch(/registro: registroDoTurno\(agentConfig, estado\),\s*\n\s*\}\s*\n\s*: null;/);
     // ...e o turno NÃO decide sucesso por conta própria: quem responde é a ponte.
-    expect(fonte).not.toContain("efeitosDoTurno.registrar");
+    expect(todos).not.toMatch(/efeitos\.registrar/);
   });
 
   it("o gate lê o predicado, não 'a ferramenta foi chamada'", () => {

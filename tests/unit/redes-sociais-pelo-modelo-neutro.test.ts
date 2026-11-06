@@ -141,6 +141,9 @@ describe("CONTROLE: os canais que já existiam continuam declarados", () => {
       "meta_cloud",
       "zernio",
       "zernio_social",
+      // Tektus: o canal nativo do CRM (FZAP) e o Instagram direto.
+      "verdash",
+      "instagram",
       "datafy",
     ]);
     for (const provider of PROVIDERS_DE_MENSAGEM) {

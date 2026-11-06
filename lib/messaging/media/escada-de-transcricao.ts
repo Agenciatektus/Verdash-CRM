@@ -328,27 +328,31 @@ export async function decidirTranscricao(
 
   const degraus: Array<() => Promise<DecisaoDeTranscricao | null>> = [
     // A0 · OpenRouter da conversa com chave PRÓPRIA (#3382): o chat recusa `audio/ogg`,
-    //      então a própria OpenRouter transcreve. Endereço público fixo: a chave da
-    //      organização não vai a `base_url` cadastrada sem a recusa de destino interno.
-    async () =>
-      conversa?.apiKey && conversa.credencialPropria && (conversa.provider ?? "").toLowerCase() === "openrouter"
-        ? {
-            origem: "padrao_openrouter",
-            transcriber: apiTranscriptionProvider(
-              {
-                apiKey: conversa.apiKey,
-                baseUrl: OPENROUTER_ENDPOINT,
-                model: MODELO_DE_TRANSCRICACAO_OPENROUTER,
-                languages: idiomas,
-                headers: cabecalhosDeAtribuicaoOpenRouter(),
-                maxAudioBytes: LIMITE_MULTIPART_OPENROUTER_BYTES,
-              },
-              fetchDoProvedor(OPENROUTER_ENDPOINT),
-            ),
-            motivo: MOTIVOS_DA_TRANSCRICAO.openrouterDaConversa,
-            anuncio: { provider: "openrouter", modelId: MODELO_DE_TRANSCRICACAO_OPENROUTER },
-          }
-        : null,
+    //      então a própria OpenRouter transcreve. Endpoint do painel (ou OPENROUTER_BASE_URL);
+    //      o cadastrado passa pela recusa de destino interno do worker (`baseUrlDoDestino`).
+    async () => {
+      if (!(conversa?.apiKey && conversa.credencialPropria && (conversa.provider ?? "").toLowerCase() === "openrouter")) {
+        return null;
+      }
+      const endpoint = conversa.baseUrl || OPENROUTER_ENDPOINT;
+      return {
+        origem: "padrao_openrouter",
+        transcriber: apiTranscriptionProvider(
+          {
+            apiKey: conversa.apiKey,
+            baseUrl: endpoint,
+            model: MODELO_DE_TRANSCRICACAO_OPENROUTER,
+            languages: idiomas,
+            headers: cabecalhosDeAtribuicaoOpenRouter(),
+            maxAudioBytes: LIMITE_MULTIPART_OPENROUTER_BYTES,
+          },
+          fetchDoProvedor(endpoint),
+        ),
+        motivo: MOTIVOS_DA_TRANSCRICAO.openrouterDaConversa,
+        baseUrlDoDestino: conversa.baseUrl ?? null,
+        anuncio: { provider: "openrouter", modelId: MODELO_DE_TRANSCRICACAO_OPENROUTER },
+      };
+    },
     // A · assinatura/chave PRÓPRIA da organização, no modelo de conversa.
     async () =>
       conversaOuve && conversa!.credencialPropria

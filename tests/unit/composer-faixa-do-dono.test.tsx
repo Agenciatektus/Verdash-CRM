@@ -21,7 +21,10 @@ const automatico = vi.hoisted(() => ({ ativo: true as boolean | undefined }));
 vi.mock("@/hooks/inbox/useSendMessage", () => ({ useSendMessage: () => ({ mutate: vi.fn(), isPending: false }) }));
 vi.mock("@/hooks/inbox/useCreateNote", () => ({ useCreateNote: () => ({ mutate: vi.fn(), isPending: false }) }));
 vi.mock("@/hooks/inbox/useUploadMedia", () => ({ useUploadMedia: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
-vi.mock("@/hooks/inbox/useMessageTemplates", () => ({ useMessageTemplates: () => ({ data: [], isLoading: false }) }));
+vi.mock("@/hooks/inbox/useMessageTemplates", () => ({
+  useMessageTemplates: () => ({ data: [], isLoading: false }),
+  useGruposDeRespostas: () => ({ data: [] }),
+}));
 vi.mock("@/hooks/inbox/useClaimConversation", () => ({
   useClaimConversation: () => ({ mutate: claimMock, isPending: false }),
 }));

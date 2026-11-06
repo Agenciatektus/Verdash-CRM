@@ -483,7 +483,8 @@ describe("#3644 · o custo por mensagem recebida", () => {
     });
     await garantirLeadDaConversa(adminFake(c), DADOS);
 
-    expect(c.consultas).toEqual(["contacts", "crm_leads", "organizations", "crm_pipelines", "crm_stages"]);
+    // + "conversations": o fork lê o dono da conversa UMA vez, só quando o card nasce (passo 4b).
+    expect(c.consultas).toEqual(["contacts", "crm_leads", "organizations", "crm_pipelines", "crm_stages", "conversations"]);
   });
 
   it("criação de card com a chave LIGADA lê uma venda e um nome — número fixo, não por mensagem", async () => {
@@ -498,6 +499,7 @@ describe("#3644 · o custo por mensagem recebida", () => {
       "crm_pipelines", // nome do funil da venda (só para o texto)
       "crm_pipelines", // funil de clientes
       "crm_stages",
+      "conversations", // fork, passo 4b: o dono da conversa, uma vez por card criado
     ]);
   });
 });

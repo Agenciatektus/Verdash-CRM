@@ -451,8 +451,8 @@ describe('texto de reserva: {{variavel|"reserva"}}', () => {
     for (const expressao of [
       '{{nome|"a{b"}}',
       '{{nome|"um "aluno""}}',
-      "{{nome|aluno}}",
-      "{{nome|'aluno'}}",
+      // Tektus: reserva sem aspas (`{{nome|aluno}}`, `{{nome|'aluno'}}`) é válida no
+      // fork (9034, paridade com a cadência; ver `{{nome|lojista}}` acima), então sai daqui.
       '{{nome|""}}',
       '{{nome|"   "}}',
       `{{nome|"${"x".repeat(101)}"}}`,

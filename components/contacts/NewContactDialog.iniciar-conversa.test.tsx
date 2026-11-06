@@ -48,10 +48,15 @@ const showApiErrorMock = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock, replace: vi.fn(), refresh: vi.fn() }),
+  // `usePedidoDeCriar` (o "+" do celular chega por `?criar=1`).
+  usePathname: () => "/app/contacts",
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({
-  useActiveOrg: () => ({ currency: "BRL", country: null }),
+  useActiveOrg: () => ({ currency: "BRL", country: null, role: "agent" }),
   useAuth: () => ({ user: { id: "usuario-eu" } }),
+  // `usePodeCriar` (FAB/`?criar=1` do celular) lê o usuário pelo `useUser`.
+  useUser: () => ({ id: "usuario-eu", is_platform_admin: false, support: null }),
   usePermission: () => true,
 }));
 vi.mock("sonner", () => ({ toast: toastMock }));
@@ -191,7 +196,8 @@ describe("NewContactDialog · salvar e iniciar conversa (#3483)", () => {
     const fetchMock = rotear({ canais: 1 });
     const user = userEvent.setup();
     envolver(<ContactsListClient />);
-    await user.click(screen.getByRole("button", { name: "Novo contato" }));
+    // [0] = botão do cabeçalho; o FAB do celular (mesmo nome) só some por CSS, que o jsdom não aplica.
+    await user.click(screen.getAllByRole("button", { name: "Novo contato" })[0]!);
     const cadastro = screen.getByRole("dialog", { name: "Novo contato" });
     await user.type(within(cadastro).getByLabelText(/Telefone/i), "+5511987654321");
     await user.click(within(cadastro).getByRole("button", { name: "Salvar e iniciar conversa" }));
@@ -208,7 +214,8 @@ describe("NewContactDialog · salvar e iniciar conversa (#3483)", () => {
     const fetchMock = rotear({ canais: 1 });
     const user = userEvent.setup();
     envolver(<ContactsListClient />);
-    await user.click(screen.getByRole("button", { name: "Novo contato" }));
+    // [0] = botão do cabeçalho; o FAB do celular (mesmo nome) só some por CSS, que o jsdom não aplica.
+    await user.click(screen.getAllByRole("button", { name: "Novo contato" })[0]!);
     const cadastro = screen.getByRole("dialog", { name: "Novo contato" });
     await user.type(within(cadastro).getByLabelText(/Telefone/i), "+5511987654321");
     const cpf = within(cadastro).getByLabelText(/CPF/i);

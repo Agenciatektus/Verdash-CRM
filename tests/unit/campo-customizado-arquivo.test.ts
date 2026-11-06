@@ -365,10 +365,15 @@ describe("fiação — o card do quadro lê o anexo que a rota anexou", () => {
     expect(rota, "a rota não importa a regra do card").toMatch(
       /from\s*"@\/lib\/kanban\/anexos-no-card"/,
     );
-    expect(rota, "a rota não chama withAnexos").toMatch(/leadsComAnexos\s*=\s*await withAnexos\(/);
-    expect(rota, "o resultado de withAnexos não chega à resposta").toMatch(
-      /withConversas\(\s*supabase,\s*\(pipeline as Pipeline\)\.organization_id,\s*leadsComAnexos\.leads,?\s*\)/,
+    // No fork as famílias do quadro rodam em paralelo (`enriquecerEmParalelo`) e são
+    // fundidas por id: os anexos são uma família própria, e o erro dela derruba o quadro.
+    expect(rota, "a rota não chama withAnexos").toMatch(
+      /anexos:\s*\(\)\s*=>\s*withAnexos\(\s*supabase,\s*organizationId,\s*leadsDoQuadro,/,
     );
+    expect(rota, "o erro de withAnexos não derruba o quadro").toMatch(
+      /resultados\.anexos,\s*\]\.find\(\(r\) => r\.error\)/,
+    );
+    expect(rota, "o resultado de withAnexos não chega à resposta").toMatch(/resultados\.anexos\.leads,/);
     expect(rota, "a leitura não é em lotes").toMatch(/crm_lead_attachments/);
     expect(rota, "a leitura não filtra pela organização da sessão").toMatch(
       /\.eq\("organization_id", organizationId\)/,

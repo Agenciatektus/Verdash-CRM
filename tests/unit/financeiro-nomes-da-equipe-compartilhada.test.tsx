@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -78,15 +78,15 @@ describe("nomes financeiros no contrato compartilhado com o atendimento", () => 
   it("Comissão mostra full_name nas opções e regras, com fallback sem nome ou membro desconhecido", async () => {
     const view = await atendimentoNoMesmoCache();
     view.rerender(<CatalogoFinanceiro podeEditar comissaoDisponivel />);
-    const pessoas = await screen.findByRole("combobox", { name: "Pessoa" });
-    expect(await within(pessoas).findByRole("option", { name: "Técnica Azul" })).toHaveValue(
-      "pessoa-azul",
-    );
-    expect(within(pessoas).getByRole("option", { name: "Sem nome" })).toHaveValue(
-      "pessoa-sem-nome",
-    );
+    await screen.findByRole("combobox", { name: "Pessoa" });
     const titulo = screen.getByRole("heading", { name: "Comissão", level: 2 });
     const secao = titulo.closest("section")!;
+    // `Escolha` do DS (Radix) no lugar do <select>: as opções fechadas moram no
+    // <select> escondido que acompanha o gatilho "Pessoa" (o primeiro da seção).
+    const opcoesDaPessoa = () =>
+      Array.from(secao.querySelectorAll("select")[0]!.options).map((o) => [o.textContent, o.value]);
+    await waitFor(() => expect(opcoesDaPessoa()).toContainEqual(["Técnica Azul", "pessoa-azul"]));
+    expect(opcoesDaPessoa()).toContainEqual(["Sem nome", "pessoa-sem-nome"]);
     expect(
       await within(secao).findByText("Técnica Azul · 10%", { selector: "span" }),
     ).toBeVisible();
