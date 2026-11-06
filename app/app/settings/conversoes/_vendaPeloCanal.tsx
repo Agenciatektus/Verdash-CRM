@@ -47,7 +47,7 @@ export function VendaPeloCanal({ ligada, idioma }: { ligada: boolean; idioma: Id
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <Label htmlFor="report_via_channel">{t("Enviar vendas pelo canal da conversa")}</Label>
-          <p className="max-w-2xl text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {t(
               "Sem conexão direta com a Meta, a venda de quem veio de anúncio pode ir pelo canal intermediado do WhatsApp, quando ele já liga o seu conjunto de dados da Meta ao número. Saem para o provedor do canal o valor, a moeda, o telefone do cliente e a conversa. Vem desligado: ligue só se a sua política de privacidade cobre esse uso.",
             )}

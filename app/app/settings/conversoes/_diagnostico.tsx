@@ -7,9 +7,9 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
 const ESTILO: Record<Saude, string> = {
-  ok: "border-emerald-500/40 bg-emerald-500/10",
-  atencao: "border-amber-500/40 bg-amber-500/10",
-  problema: "border-destructive/40 bg-destructive/10",
+  ok: "border-success-fg/30 bg-success-bg",
+  atencao: "border-warning-fg/30 bg-warning-bg",
+  problema: "border-error-fg/30 bg-error-bg",
 };
 
 const ROTULO: Record<Saude, string> = { ok: "OK", atencao: "Atenção", problema: "Problema" };

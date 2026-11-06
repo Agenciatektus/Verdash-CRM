@@ -183,7 +183,7 @@ export function LinksRastreaveis({
         )}
       </p>
       <form
-        className="max-w-2xl space-y-4 rounded-md border p-4"
+        className="space-y-4 rounded-md border p-4"
         onSubmit={(e) => {
           e.preventDefault();
           start(async () => {
@@ -298,7 +298,7 @@ export function LinksRastreaveis({
         </div>
       </form>
       {saved && (
-        <div className="max-w-2xl space-y-4 rounded-md border p-4">
+        <div className="space-y-4 rounded-md border p-4">
           {!saved.enabled && (
             <p role="alert">
               {t("Este link está desativado e não abre o WhatsApp. Ative e salve para usar.")}

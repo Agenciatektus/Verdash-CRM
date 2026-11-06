@@ -25,7 +25,7 @@ const chipVariants = cva(
     variants: {
       tom: {
         padrao:
-          "border-border-strong bg-surface text-text-muted hover:border-text-subtle hover:text-text aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-foreground",
+          "border-border-strong bg-surface text-text-muted hover:border-text-subtle hover:text-text aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-foreground aria-selected:border-accent aria-selected:bg-accent aria-selected:text-accent-foreground",
       },
     },
     defaultVariants: { tom: "padrao" },
@@ -35,8 +35,8 @@ const chipVariants = cva(
 export interface ChipProps
   extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "aria-pressed">,
     VariantProps<typeof chipVariants> {
-  /** Ligado. Vira `aria-pressed`, que é o que a cor e a pele leem. */
-  ligado?: boolean;
+  /** Ligado. Vira `aria-pressed`, que é o que a cor e a pele leem. `null` = não emite (aba usa `aria-selected`; navegação não é toggle). */
+  ligado?: boolean | null;
 }
 
 const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
@@ -44,7 +44,7 @@ const Chip = React.forwardRef<HTMLButtonElement, ChipProps>(
     <button
       ref={ref}
       type={type}
-      aria-pressed={ligado}
+      aria-pressed={ligado === null ? undefined : ligado}
       className={cn(chipVariants({ tom }), className)}
       {...props}
     />

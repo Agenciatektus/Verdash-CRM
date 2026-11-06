@@ -83,10 +83,10 @@ describe("cartão do Google Ads", () => {
 
   it("a página passa as duas funções da config — não um valor cravado", () => {
     const fonte = fs.readFileSync(
-      path.join(__dirname, "..", "..", "app", "app", "settings", "conversoes", "page.tsx"),
+      path.join(__dirname, "..", "..", "app", "app", "settings", "conversoes", "_abaGoogle.tsx"),
       "utf8",
     );
-    expect(fonte).toMatch(/configurado=\{googleAdsEstaConfigurado\(estadoGoogle.api\)\}/);
-    expect(fonte).toMatch(/falta=\{faltaParaConectarOGoogleAds\(estadoGoogle.api\)\}/);
+    expect(fonte).toMatch(/configurado=\{googleAdsEstaConfigurado\(estado.api\)\}/);
+    expect(fonte).toMatch(/falta=\{faltaParaConectarOGoogleAds\(estado.api\)\}/);
   });
 });

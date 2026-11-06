@@ -10,8 +10,8 @@
  * origem, não o formato.
  */
 
-/** As três visões da grade. A semana é o padrão de quem atende. */
-export type VisaoDaAgenda = "dia" | "semana" | "mes";
+/** As visões da grade. A semana é o padrão de quem atende; "tres" é o do tablet. */
+export type VisaoDaAgenda = "dia" | "tres" | "semana" | "mes";
 
 /**
  * Índice da trilha de cor, 1..8 — casa com `--agenda-pessoa-N` no globals.css.

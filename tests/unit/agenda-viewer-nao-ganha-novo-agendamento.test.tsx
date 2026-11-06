@@ -138,6 +138,7 @@ function montar({
   return render(
     <QueryClientProvider client={cliente}>
       <AgendaClient
+        orgId="org-teste"
         fusoDaAgenda="America/Sao_Paulo"
         fusoDeApresentacao="America/Sao_Paulo"
         // A data de hoje NO FUSO DA ORGANIZAÇÃO, que o servidor resolve e a tela

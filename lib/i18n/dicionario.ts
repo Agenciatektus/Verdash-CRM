@@ -19964,6 +19964,26 @@ export const DICIONARIO: Traducoes = {
   "Parâmetro inválido.": {
     es: "Parámetro no válido.",
   },
+  "3 dias": { es: "3 días" },
+  "Horários livres": { es: "Horarios libres" },
+  "Próximos hoje": { es: "Próximos hoy" },
+  "Ver todos": { es: "Ver todos" },
+  "Nada mais marcado para hoje.": { es: "Nada más agendado para hoy." },
+  "Site e links": { es: "Sitio y enlaces" },
+  "Ver pendência": { es: "Ver pendiente" },
+  "Pendências de envio:": { es: "Pendientes de envío:" },
+  "Veja o motivo na lista abaixo.": { es: "Mira el motivo en la lista de abajo." },
+  "Não conectada": { es: "No conectada" },
+  "Envio desligado": { es: "Envío desactivado" },
+  "Envio automático": { es: "Envío automático" },
+  "Pelo canal do WhatsApp": { es: "Por el canal de WhatsApp" },
+  "Etapas enviando": { es: "Etapas enviando" },
+  "Site e WhatsApp": { es: "Sitio y WhatsApp" },
+  "Captura ligada": { es: "Captura activada" },
+  "Captura desligada": { es: "Captura desactivada" },
+  "Endereço de captura": { es: "Dirección de captura" },
+  "Script no site": { es: "Script en el sitio" },
+  "Ligue uma captura": { es: "Activa una captura" },
 };
 
 /**
