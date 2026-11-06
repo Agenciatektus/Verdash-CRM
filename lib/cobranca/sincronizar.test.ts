@@ -57,7 +57,9 @@ const ler = vi.fn<AdaptadorDeCobranca["lerSituacao"]>();
 const cancelarNoFim = vi.fn<AdaptadorDeCobranca["cancelarNoFim"]>();
 const enviarAviso = vi.fn();
 
+let erroDosPagamentos: Resposta["error"] = null;
 function responder(c: Cadeia): Resposta {
+  if (c.tabela === "cobranca_pagamentos") return { error: erroDosPagamentos };
   if (c.tabela === "organizations") return { data: m.org };
   if (c.tabela === "agent_inbox_items") return { data: null };
   if (c.tabela === "cobranca_planos") return { data: m.plano };
@@ -440,5 +442,44 @@ describe("sincronizar — entrada paga (plano sem dias de teste)", () => {
     expect(r).toMatchObject({ tipo: "sem_provedor" });
     expect(r).not.toMatchObject({ acao: "reativar" });
     expect(rpcs("fn_reativar_organizacao")).toEqual([]);
+  });
+});
+
+describe("sincronizar: histórico de pagamentos (cobranca_pagamentos)", () => {
+  const pagamento = { pagamentoRef: "in_1", cobrancaRef: "ch_1", valorCents: 4990, moeda: "brl", estornadoCents: 0, contestado: false, pagoEm: AGORA, estornadoEm: null, planoId: null, urlDoRecibo: null };
+  const listar = vi.fn<NonNullable<AdaptadorDeCobranca["listarPagamentos"]>>();
+  const comHistorico = (): DependenciasDaCobranca => ({
+    ...deps(),
+    adaptador: () => ({ lerSituacao: ler, cancelarNoFim, listarPagamentos: listar } as unknown as AdaptadorDeCobranca),
+  });
+  const upserts = () => banco.cadeias.filter((c) => c.tabela === "cobranca_pagamentos" && operacao(c) === "upsert");
+
+  beforeEach(() => {
+    erroDosPagamentos = null;
+    listar.mockReset().mockResolvedValue([pagamento]);
+  });
+
+  it("depois da leitura, grava os pagamentos relidos por upsert em (provedor, pagamento_ref) da org", async () => {
+    expect(await sincronizar(banco.cliente as never, ORG, comHistorico())).toMatchObject({ tipo: "aplicada" });
+    expect(listar).toHaveBeenCalledWith({ clienteRef: "cus_1" });
+    expect(upserts()).toHaveLength(1);
+    const [linhas, opcoes] = argumentos(upserts()[0]!, "upsert") as [Record<string, unknown>[], { onConflict: string }];
+    expect(opcoes.onConflict).toBe("provedor,pagamento_ref");
+    expect(linhas).toEqual([expect.objectContaining({ organization_id: ORG, provedor: "stripe", pagamento_ref: "in_1", status: "pago" })]);
+  });
+
+  it("falha ao listar ou ao gravar pagamentos NÃO derruba a sincronização da assinatura", async () => {
+    listar.mockRejectedValue(new ErroDoProvedor(503, "provedor_fora", true));
+    expect(await sincronizar(banco.cliente as never, ORG, comHistorico())).toMatchObject({ tipo: "aplicada" });
+    listar.mockResolvedValue([pagamento]);
+    erroDosPagamentos = { code: "42P01", message: "relation does not exist" };
+    expect(await sincronizar(banco.cliente as never, ORG, comHistorico())).toMatchObject({ tipo: "aplicada" });
+    expect(escritas().length).toBeGreaterThan(0);
+  });
+
+  it("leitura da situação que falha: não lista pagamentos", async () => {
+    ler.mockRejectedValue(new ErroDoProvedor(503, "provedor_fora", true));
+    expect(await sincronizar(banco.cliente as never, ORG, comHistorico())).toMatchObject({ tipo: "falhou" });
+    expect(listar).not.toHaveBeenCalled();
   });
 });
