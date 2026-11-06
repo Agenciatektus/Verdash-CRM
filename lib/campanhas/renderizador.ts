@@ -51,8 +51,16 @@ import {
   resolverSpintax,
   spintaxValido,
 } from "@/lib/texto/variacao";
+import { RESERVA_DA_VARIAVEL } from "@/lib/texto/reserva-da-variavel";
 
 import { horaNoFuso } from "./relogio";
+
+/**
+ * Reserva que COMEÇA com aspas segue a sintaxe do upstream inteira (aspas retas
+ * ou tipográficas, 1 a 100 caracteres, sem `{`, `}` nem aspas dentro); fora dela
+ * o token fica literal. Sem aspas vale a reserva solta do fork (9034).
+ */
+const RESERVA_ENTRE_ASPAS = new RegExp(`^${RESERVA_DA_VARIAVEL}$`);
 
 /** As variáveis que existem. Oferecer uma que não resolve é prometer dado que não há. */
 export const VARIAVEIS_DA_CAMPANHA = ["nome", "primeiro_nome", "saudacao"] as const;
@@ -92,6 +100,8 @@ export interface ValoresDoDestinatario {
  * Enquanto o pipe não era lido, `{{nome|lojista}}` não casava este TOKEN — logo
  * não entrava em `faltando` NEM em `desconhecidas` — e saía LITERAL no WhatsApp.
  * O fallback vale para `{{lead.x}}`/`{{contato.x}}` também.
+ * A reserva também aceita aspas, como a dica da tela ensina: `{{primeiro_nome|"aluno"}}`
+ * (sintaxe do upstream, `lib/texto/reserva-da-variavel.ts`); as aspas não vão para a mensagem.
  */
 const TOKEN = /\{\{\s*([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)\s*(?:\|([^}]*))?\}\}/g;
 
@@ -127,10 +137,16 @@ export function renderizar(
 
   const texto = template.replace(TOKEN, (literal, bruto: string, fallback?: string) => {
     const chave = bruto.toLowerCase();
+    let reserva = fallback?.trim();
+    if (fallback !== undefined && /^\s*["“]/.test(fallback)) {
+      const entreAspas = RESERVA_ENTRE_ASPAS.exec(`|${fallback}`);
+      if (!entreAspas) return literal; // reserva torta: o texto fica como foi escrito
+      reserva = entreAspas[1];
+    }
     // O fallback cobre a falta ANTES de ela virar exclusão: quem escreveu
     // `{{primeiro_nome|tudo bem}}` já disse o que quer no lugar do nome.
     const semValor = (variavel: string) =>
-      fallback !== undefined ? fallback.trim() : marcarFalta(faltando, variavel, literal);
+      reserva !== undefined ? reserva : marcarFalta(faltando, variavel, literal);
     switch (chave) {
       case "nome": {
         if (nome === "") return semValor("nome");
@@ -144,7 +160,8 @@ export function renderizar(
       case "saudacao": {
         // Sem instante, a saudação fica literal: quem renderiza a PRÉVIA não
         // sabe a hora do envio, e cravar uma ali ensinaria o operador a esperar
-        // aquela. A prévia mostra `{{saudacao}}`; o envio resolve.
+        // aquela. A prévia mostra `{{saudacao}}`; o envio resolve. A reserva
+        // nunca é usada: saudação não falta.
         if (!quando) return literal;
         return saudacaoDaHora(quando.agora, quando.fuso);
       }

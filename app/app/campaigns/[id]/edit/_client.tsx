@@ -505,7 +505,10 @@ export function EditarCampanha({ id }: { id: string }) {
             onChange={setModelo}
           />
         ) : (
-          <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+          <>
+            <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+            <p className="text-sm text-muted-foreground">{t('Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.')}</p>
+          </>
         )}
       </Card>
 
