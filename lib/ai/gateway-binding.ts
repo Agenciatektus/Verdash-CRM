@@ -34,7 +34,13 @@ import { CODIGO_IA_PROPRIA_SEM_CREDENCIAL, instalacaoPodeServirIaComMemo } from 
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { escolherModeloNoCatalogo } from "./agents/escolher-modelo";
-import { DEFAULT_CLASSIFIER_MODEL, OPENROUTER_BASE_URL, resolveLanguageModel, type ModelId } from "./gateway";
+import {
+  DEFAULT_CLASSIFIER_MODEL,
+  OPENROUTER_BASE_URL,
+  provedorDaChaveDaInstalacao,
+  resolveLanguageModel,
+  type ModelId,
+} from "./gateway";
 import { logarResolucaoDeModelo, provedorNaturalDoModelo, validarParProvedorModelo } from "./par-provedor-modelo";
 
 export interface ModeloResolvido {
@@ -141,13 +147,14 @@ export async function resolverModeloDoPonto(
     // personalizado cujo id de modelo tem barra.
     //
     // Só nas origens em que o provedor É o executor. Com origem `padrao` quem
-    // atende é a chave do `.env`, e o provedor configurado na organização não
-    // decide o destino: uma org em `openrouter` sem credencial, numa instalação
+    // atende é a chave do `.env` (`provedorDaChaveDaInstalacao`: `openrouter`
+    // quando é ela que executa, senão vazio), e o provedor configurado na
+    // organização não decide o destino: uma org em `openrouter` sem credencial, numa instalação
     // só com `ANTHROPIC_API_KEY`, faz chamada Anthropic direta, e gravar
     // `openrouter` ali seria o mesmo sintoma da #3098 por outro caminho.
     return resolvido === null
       ? null
-      : { ...resolvido, provider: resolvido.origem === "padrao" ? "" : provider };
+      : { ...resolvido, provider: resolvido.origem === "padrao" ? provedorDaChaveDaInstalacao() : provider };
   };
 
   // ── O DEFAULT DO PRODUTO NÃO CRUZA PROVEDOR ─────────────────────────────
@@ -288,7 +295,11 @@ export async function resolverModeloDoPonto(
         providerEfetivo ?? "",
         coerente?.modelId ?? "",
         coerente?.origem ?? "padrao_da_organizacao",
-        coerente === null ? "o provedor efetivo não executa o padrão do ponto e a organização não tem par próprio" : undefined,
+        coerente === null
+          ? "o provedor efetivo não executa o padrão do ponto e a organização não tem par próprio"
+          : // Sem isto, a instalação sem OPENROUTER_API_KEY trocava o Flash-Lite pelo
+            // modelo de conversa da org sem rastro no log.
+            `nenhuma chave desta instalação executa o padrão do ponto ("${idPadrao}") — usando o par da organização`,
       );
     }
     return devolver(null, providerEfetivo ?? "", idPadrao, "padrao", "nenhuma chave desta instalação atende o par provedor+modelo do ponto");
@@ -344,11 +355,16 @@ export async function resolverModeloDoPonto(
  * executa.
  */
 function ehODefaultAnthropicDoProduto(id: string): boolean {
-  return id === DEFAULT_CLASSIFIER_MODEL;
+  // Dormente desde 06/11/2026 (o default virou Flash-Lite): só volta a valer se
+  // alguém repuser um default Anthropic, e a trava
+  // `tests/unit/padroes-de-ia-sem-anthropic.test.ts` reprova isso antes.
+  return id === DEFAULT_CLASSIFIER_MODEL && provedorNaturalDoModelo(id) === "anthropic";
 }
 
 function provedorDiretoNaoAnthropic(provider: string | null): boolean {
-  return provider !== null && ["openai", "google", "deepseek"].includes(provider);
+  // A assinatura ChatGPT é provedor direto: sem ela aqui, Delicatto/Fiorotto/
+  // Lior/Fabiana classificavam com Claude pela chave da instalação.
+  return provider !== null && ["openai", "openai-assinatura", "google", "deepseek"].includes(provider);
 }
 
 function credencialUtilizavel(

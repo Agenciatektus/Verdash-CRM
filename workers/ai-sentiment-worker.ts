@@ -2,7 +2,7 @@
  * ai-sentiment-worker — classifies the sentiment of inbound messages.
  *
  * Consumes `message.received` events (parallel to ai-response-worker).
- * Uses `anthropic/claude-haiku-4-5` via Vercel AI Gateway with generateObject
+ * Uses `DEFAULT_CLASSIFIER_MODEL` (google/gemini-2.5-flash-lite) via resolverModeloDoPonto with generateObject
  * and a strict Zod schema so the result is always typed.
  *
  * Com o Jev (System One) ligado em `organizations.settings.jev`, ele mede
@@ -51,7 +51,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { aConversaAgora, perguntarOsPedidosDoCliente } from "@/workers/ai-sentiment-worker.pedidos";
 import { rpc } from "@/lib/supabase/rpc";
 
-const SENTIMENT_MODEL = DEFAULT_CLASSIFIER_MODEL; // "anthropic/claude-haiku-4-5"
+const SENTIMENT_MODEL = DEFAULT_CLASSIFIER_MODEL; // "google/gemini-2.5-flash-lite"
 const CLASSIFY_TIMEOUT_MS = 5_000;
 
 // As descrições NÃO são decoração: viram o JSON Schema da ferramenta que o
