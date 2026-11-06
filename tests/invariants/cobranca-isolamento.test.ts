@@ -98,3 +98,49 @@ describe("inv. 1 — a assinatura de uma org não vaza para a outra", () => {
     expect(valor(comoServidor(`select count(*) from public.cobranca_assinaturas where organization_id in ('${ORG_A}', '${ORG_B}')`))).toBe("2");
   });
 });
+
+// Migration 9230: o histórico de pagamentos tem a mesma regra da assinatura (leitura
+// do admin da própria org, escrita só do servidor). Também fica fora de TABLES pelo
+// mesmo motivo: o usuário semeado de lá é `agent`, que aqui lê zero.
+describe("inv. 1 — o histórico de pagamentos de uma org não vaza para a outra", () => {
+  beforeAll(() => {
+    sql(
+      `insert into public.cobranca_pagamentos (organization_id, provedor, pagamento_ref, valor_cents, moeda, pago_em)
+       values ('${ORG_A}', 'stripe', 'in_iso_a', 1000, 'brl', now()), ('${ORG_B}', 'stripe', 'in_iso_b', 1000, 'brl', now());`,
+    );
+  });
+
+  it("⭐ admin de A lê o pagamento de A e zero de B, e o de B o espelho", () => {
+    expect(countAs(ADMIN_A, `select count(*) from public.cobranca_pagamentos where organization_id = '${ORG_A}';`)).toBe(1);
+    expect(countAs(ADMIN_A, `select count(*) from public.cobranca_pagamentos where organization_id = '${ORG_B}';`)).toBe(0);
+    expect(countAs(ADMIN_A, `select count(*) from public.cobranca_pagamentos;`)).toBe(1);
+    expect(countAs(ADMIN_B, `select count(*) from public.cobranca_pagamentos where organization_id = '${ORG_B}';`)).toBe(1);
+    expect(countAs(ADMIN_B, `select count(*) from public.cobranca_pagamentos where organization_id = '${ORG_A}';`)).toBe(0);
+  });
+
+  it("⭐ agent de A não lê nem o da própria organização", () => {
+    expect(countAs(AGENTE_A, `select count(*) from public.cobranca_pagamentos;`)).toBe(0);
+  });
+
+  it("⭐ a sessão não escreve, nem o admin de A na própria linha", () => {
+    const comandos = [
+      `update public.cobranca_pagamentos set status = 'estornado' where organization_id = '${ORG_A}'`,
+      `insert into public.cobranca_pagamentos (organization_id, provedor, pagamento_ref, valor_cents, moeda, pago_em) values ('${ORG_A}', 'stripe', 'in_iso_x', 1, 'brl', now())`,
+      `delete from public.cobranca_pagamentos where organization_id = '${ORG_A}'`,
+    ];
+    for (const comando of comandos) {
+      const e = erroDe(comoUsuario(ADMIN_A, comando));
+      expect(e, comando).toContain("42501");
+      expect(e, comando).toContain("permission denied for table cobranca_pagamentos");
+    }
+    expect(valor(`select status from public.cobranca_pagamentos where organization_id = '${ORG_A}';`)).toBe("pago");
+  });
+
+  it("anon não lê", () => {
+    expect(erroDe(comoAnon(`select count(*) from public.cobranca_pagamentos`))).toContain("permission denied for table cobranca_pagamentos");
+  });
+
+  it("controle: o servidor lê as duas organizações", () => {
+    expect(valor(comoServidor(`select count(*) from public.cobranca_pagamentos where organization_id in ('${ORG_A}', '${ORG_B}')`))).toBe("2");
+  });
+});
