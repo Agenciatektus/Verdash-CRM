@@ -82000,3 +82000,17 @@ begin
   end loop;
 end $grants_por_coluna$;
 
+
+-- ---- 6. Fonte e credencial da importação do histórico (migration 9102) ----
+-- Mesmo corpo da migration 9102. Roda por último: o select por coluna precisa ver todas as colunas.
+alter table public.importacoes_de_historico add column if not exists fonte text not null default 'waha';
+alter table public.importacoes_de_historico add column if not exists credencial_cifrada text;
+do $grants_importacoes$
+declare cols text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'importacoes_de_historico' and column_name <> 'credencial_cifrada';
+  revoke select on public.importacoes_de_historico from authenticated;
+  execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
+end $grants_importacoes$;
