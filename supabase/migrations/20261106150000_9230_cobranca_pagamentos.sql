@@ -1,6 +1,6 @@
--- manifest: 9223 — cobranca_pagamentos (historico de pagamentos relido no provedor; unico em provedor + pagamento_ref para o upsert idempotente da sincronizacao). RLS: platform admin le tudo, admin da org le o seu; escrita so service_role. Sem PII de cartao. Tabela nova, aditiva e idempotente. Apendice igual no baseline.sql.
+-- manifest: 9230 — cobranca_pagamentos (historico de pagamentos relido no provedor; unico em provedor + pagamento_ref para o upsert idempotente da sincronizacao). RLS: platform admin le tudo, admin da org le o seu; escrita so service_role. Sem PII de cartao. Tabela nova, aditiva e idempotente. Apendice igual no baseline.sql.
 --
--- 9223: PR 1 do plano de cobranca e afiliados (A2). `sincronizar` grava aqui o
+-- 9230: PR 1 do plano de cobranca e afiliados (A2). `sincronizar` grava aqui o
 -- que releu no provedor (nunca o corpo do webhook); o estorno do admin marca a
 -- linha. Base do historico de pagamentos e, depois, das comissoes.
 
@@ -28,7 +28,7 @@ create index if not exists cobranca_pagamentos_org_pago_em_idx
   on public.cobranca_pagamentos (organization_id, pago_em desc);
 
 comment on table public.cobranca_pagamentos is
-  'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9223). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
+  'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9230). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
 
 alter table public.cobranca_pagamentos enable row level security;
 drop policy if exists tenant_isolation_cobranca_pagamentos_select on public.cobranca_pagamentos;

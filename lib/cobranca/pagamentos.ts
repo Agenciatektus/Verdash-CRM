@@ -1,5 +1,5 @@
 /**
- * O HISTÓRICO DE PAGAMENTOS (`cobranca_pagamentos`, migration 9223).
+ * O HISTÓRICO DE PAGAMENTOS (`cobranca_pagamentos`, migration 9230).
  *
  * Fonte: a RELEITURA do provedor em `sincronizar` (nunca o corpo do webhook).
  * Upsert por (provedor, pagamento_ref): reler N vezes dá a mesma linha. As duas

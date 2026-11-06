@@ -73847,7 +73847,7 @@ create trigger trg_cobranca_compras_touch
   before update on public.cobranca_compras
   for each row execute function public.fn_touch_updated_at();
 
--- ---- Historico de pagamentos relido no provedor (migration 9223) ----
+-- ---- Historico de pagamentos relido no provedor (migration 9230) ----
 create table if not exists public.cobranca_pagamentos (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
@@ -73872,7 +73872,7 @@ create index if not exists cobranca_pagamentos_org_pago_em_idx
   on public.cobranca_pagamentos (organization_id, pago_em desc);
 
 comment on table public.cobranca_pagamentos is
-  'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9223). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
+  'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9230). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
 
 alter table public.cobranca_pagamentos enable row level security;
 drop policy if exists tenant_isolation_cobranca_pagamentos_select on public.cobranca_pagamentos;
