@@ -48,6 +48,13 @@ describe("enviarAvisoNoWhatsApp", () => {
     expect(envia).not.toHaveBeenCalled();
   });
 
+  it("com a opção permiteDestinoDaPropriaOrganizacao: envia mesmo sendo conexão da organização", async () => {
+    const { d, envia } = deps();
+    d.destinoEhDaPropriaOrganizacao = async () => true;
+    expect(await enviarAvisoNoWhatsApp(d, "o", "x", { permiteDestinoDaPropriaOrganizacao: true })).toBe("enviado");
+    expect(envia).toHaveBeenCalledTimes(1);
+  });
+
   it("número inválido: não envia", async () => {
     const { d, envia } = deps();
     d.transporte.resolveDestino = async () => null;

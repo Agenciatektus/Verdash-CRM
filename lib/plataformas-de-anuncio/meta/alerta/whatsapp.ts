@@ -32,10 +32,16 @@ export type DesfechoDoWhatsApp = "enviado" | "ignorado" | `falhou:${string}`;
 /** Quem envia o texto à equipe da organização. */
 export type EnviarWhatsApp = (orgId: string, texto: string) => Promise<DesfechoDoWhatsApp>;
 
+export interface OpcoesDoWhatsApp {
+  /** Pula só o guarda de laço robô com robô. O dono pediu: o destino do alerta é o canal Comercial da própria org. */
+  permiteDestinoDaPropriaOrganizacao?: boolean;
+}
+
 export async function enviarAvisoNoWhatsApp(
   deps: DepsDoWhatsApp,
   orgId: string,
   texto: string,
+  opcoes: OpcoesDoWhatsApp = {},
 ): Promise<DesfechoDoWhatsApp> {
   try {
     const cfg = await deps.carregaConfig(orgId);
@@ -51,7 +57,10 @@ export async function enviarAvisoNoWhatsApp(
     const pacing = await deps.pacing.decide(orgId, canal.id, agora);
     if (!pacing.liberado) return `falhou:pacing_${pacing.motivo}`;
 
-    if (await deps.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino)) {
+    if (
+      !opcoes.permiteDestinoDaPropriaOrganizacao &&
+      (await deps.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino))
+    ) {
       return "falhou:destino_da_propria_organizacao";
     }
     const to = await deps.transporte.resolveDestino(orgId, canal, cfg.telefone_destino);
@@ -67,7 +76,10 @@ export async function enviarAvisoNoWhatsApp(
 }
 
 /** O enviador real, com os imports pesados só na hora de usar (como o handler do aviso de caso). */
-export async function criarEnviadorDeWhatsApp(admin: SupabaseClient): Promise<EnviarWhatsApp> {
+export async function criarEnviadorDeWhatsApp(
+  admin: SupabaseClient,
+  opcoes: OpcoesDoWhatsApp = {},
+): Promise<EnviarWhatsApp> {
   const [{ createSupabaseAvisoDb }, { criarTransporteDoAviso }, { criarPacingDoCanal }] = await Promise.all([
     import("@/lib/escalacao/aviso-ao-suporte"),
     import("@/lib/escalacao/aviso-ao-suporte.handler"),
@@ -88,5 +100,6 @@ export async function criarEnviadorDeWhatsApp(admin: SupabaseClient): Promise<En
       },
       orgId,
       texto,
+      opcoes,
     );
 }
