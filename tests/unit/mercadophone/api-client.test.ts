@@ -8,7 +8,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("api-client do MercadoPhone", () => {
   it("manda Authorization sem Bearer, a classe/método na URL e o corpo JSON", async () => {
-    const f = vi.fn<(...a: any[]) => Promise<Response>>().mockResolvedValue(ok({ totalItens: 0, itens: [] }));
+    const f = vi.fn<(url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<Response>>().mockResolvedValue(ok({ totalItens: 0, itens: [] }));
     vi.stubGlobal("fetch", f);
     await listarEstoque(TOKEN, { page: 2, limit: 5 });
     const [url, init] = f.mock.calls[0]!;
@@ -19,7 +19,7 @@ describe("api-client do MercadoPhone", () => {
   });
 
   it("listarVendas leva o período em filters", async () => {
-    const f = vi.fn<(...a: any[]) => Promise<Response>>().mockResolvedValue(ok({ totalItens: 0, itens: [] }));
+    const f = vi.fn<(url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<Response>>().mockResolvedValue(ok({ totalItens: 0, itens: [] }));
     vi.stubGlobal("fetch", f);
     await listarVendas(TOKEN, { dataVendaInicial: "2026-11-01", dataVendaFinal: "2026-11-06" });
     expect(f.mock.calls[0]![0]).toContain("class=VendaApiController&method=index");
