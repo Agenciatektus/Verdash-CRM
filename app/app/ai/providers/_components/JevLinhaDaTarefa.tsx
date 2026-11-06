@@ -22,7 +22,7 @@ import {
   roteadorSobDemanda,
 } from "./jev-dados";
 import { ConcordanciaDaTarefa, PercebidosDaTarefa } from "./JevPecas";
-import type { useMudarOJev } from "./JevConfiguracao";
+import type { useMudarOJev } from "./JevMudar";
 
 /** Uma linha por tarefa: o estado dela e o "Deixar o Jev decidir" dela. */
 export function LinhaDaTarefa({

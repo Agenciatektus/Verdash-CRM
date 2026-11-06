@@ -14,7 +14,7 @@ import { O_QUE_FAZER_DO_JEV } from "@/lib/ai/decisao/textos";
 
 import { DadosDoJev, TarefaNoCartao, parada, roda, concordanciaDa, tarefasDoCartao, corpoDaMudanca, Estado, doRegistro, avisaAEquipe, podeDecidir, decide, fraseObservando, fraseDecidindo, roteadorSobDemanda } from "./jev-dados";
 import { ConfirmarDecidir, ConcordanciaDaTarefa, PercebidosDaTarefa, Numero } from "./JevPecas";
-import { useMudarOJev } from "./JevConfiguracao";
+import { useMudarOJev } from "./JevMudar";
 import { LinhaDaTarefa } from "./JevLinhaDaTarefa";
 
 export function Ligado({

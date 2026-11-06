@@ -82,8 +82,6 @@
   "app/app/ai/followups/_components/QueueTab.tsx",
   "app/app/ai/followups/enrollments/[id]/_components/DossieDoFollowup.tsx",
   "app/app/ai/memory/_client.tsx",
-  "app/app/ai/providers/_components/CartaoDoJev.tsx",
-  "app/app/ai/providers/_components/PainelDeProvedores.tsx",
   "app/app/ai/routers/[id]/_client.tsx",
   "app/app/ai/skills/_client.tsx",
   "app/app/automacoes/[id]/_components/CanvasDaAutomacao.tsx",

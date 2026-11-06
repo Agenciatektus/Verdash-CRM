@@ -27,7 +27,8 @@ import { descreverErroDeValidacao } from "@/lib/ai/credenciais/erro-de-validacao
 import { PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 
 import { AceiteDoPadrao, type DadosDoJev, type Estado, estadoDoJev, decideEmParte, origemDoCartao } from "./jev-dados";
-import { DeOndeResponde, SemChave, ProblemaDaChave, ProntoParaLigar } from "./JevConfiguracao";
+import { ProntoParaLigar } from "./JevConfiguracao";
+import { DeOndeResponde, SemChave, ProblemaDaChave } from "./JevChave";
 import { Ligado } from "./JevTarefas";
 
 export function CartaoDoJev({
