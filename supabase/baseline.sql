@@ -82001,7 +82001,7 @@ begin
 end $grants_por_coluna$;
 
 
--- ---- provider 'mercadophone' em tenant_integrations (migration 9100) ----
+-- ---- provider 'mercadophone' em tenant_integrations (migration 9101) ----
 -- Mesmo bloco da migration 9101. Nao cria funcao: pode ficar depois da VARREDURA anon.
 
 -- manifest: 9101 — tenant_integrations_provider_check aceita 'mercadophone' (PDV; conexão por dois tokens colados, sem OAuth)
