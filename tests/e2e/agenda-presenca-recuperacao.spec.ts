@@ -371,7 +371,7 @@ test("Inbox marca cliente/conversa; detalhe antigo confirma presença com evidê
     .toBe("resolved");
   const msg = await inbound(f, p, "Compareci à consulta, obrigado.");
   await page.reload();
-  await page.getByLabel("Mensagem de evidência").selectOption(msg);
+  await nativoDaEscolha(page.getByLabel("Mensagem de evidência")).selectOption(msg);
   await page.getByRole("button", { name: "Compareceu", exact: true }).click();
   await expect(page.getByText("Presença registrada pela equipe", { exact: false })).toBeVisible();
   const outcome = await db

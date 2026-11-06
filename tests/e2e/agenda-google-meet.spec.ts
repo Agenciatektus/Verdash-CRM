@@ -503,15 +503,9 @@ test("marca Meet, copia link, autoriza em atendimento humano e entrega novamente
     expect(oldJob).toHaveLength(1);
     expect(oldJob[0]).toMatchObject({ id: firstJob, organization_id: f.org, contact_id: f.contact, kind: "transactional_delivery", status: "done" });
     await page.goto(`/app/inbox/${f.conversation}`);
-    // Fechar não é mais `window.confirm()` (bloqueado em iframe, ignora o
-    // tema) — é o `AlertDialog` da casa. Desde o visual v2 o ícone do
-    // cabeçalho se chama "Fechar conversa"; o "Fechar" de dentro do
-    // `alertdialog` é o que confirma.
+    // "Fechar conversa" encerra no primeiro clique, sem janela de confirmação
+    // (contrato de `ConversationHeader.test.tsx`); o status no banco é a prova.
     await page.getByRole("button", { name: "Fechar conversa", exact: true }).click();
-    await page
-      .getByRole("alertdialog")
-      .getByRole("button", { name: "Fechar", exact: true })
-      .click();
     await expect
       .poll(
         async () =>
