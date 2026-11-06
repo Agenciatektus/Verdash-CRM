@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -152,40 +153,36 @@ export function PlanosDeTarefa() {
   }
 
   return (
-    // O contêiner é largura toda, com o respiro do skeleton; o limite de leitura
-    // vale para cada bloco da página (`*:`), não para o contêiner.
-    <div className="space-y-4 p-6 *:max-w-3xl">
-      <div>
-        <Link
-          href="/app/tasks"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-text"
-        >
-          <ArrowBendUpLeft size={14} aria-hidden />
-          {t("Tarefas")}
-        </Link>
-      </div>
+    <Pagina largura="leitura">
+      <CabecalhoDaPagina
+        antes={
+          <Link
+            href="/app/tasks"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-text"
+          >
+            <ArrowBendUpLeft size={14} aria-hidden />
+            {t("Tarefas")}
+          </Link>
+        }
+        titulo={t("Planos de tarefa")}
+        descricao={t(
+          "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.",
+        )}
+        acoes={
+          <Button
+            type="button"
+            disabled={!listaLida}
+            onClick={() => {
+              setErro(null);
+              setRascunho(novoPlano());
+            }}
+          >
+            {t("Novo plano")}
+          </Button>
+        }
+      />
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("Planos de tarefa")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.",
-            )}
-          </p>
-        </div>
-        <Button
-          type="button"
-          disabled={!listaLida}
-          onClick={() => {
-            setErro(null);
-            setRascunho(novoPlano());
-          }}
-        >
-          {t("Novo plano")}
-        </Button>
-      </header>
-
+      <SecaoDaPagina>
       {erro ? (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
           {erro}
@@ -260,7 +257,8 @@ export function PlanosDeTarefa() {
           </ol>
         </Card>
       ))}
-    </div>
+      </SecaoDaPagina>
+    </Pagina>
   );
 }
 
