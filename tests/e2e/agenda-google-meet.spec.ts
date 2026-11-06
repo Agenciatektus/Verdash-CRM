@@ -1,4 +1,5 @@
 import pg from "pg";
+import { nativoDaEscolha } from "./helpers/escolha";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { ehVistoAzul } from "../support/waha-visto-azul";
@@ -177,7 +178,7 @@ async function book(page: Page, f: Fixture) {
   await page.getByRole("link", { name: "Marcar compromisso", exact: true }).click();
   await expect(page.getByTestId("painel-de-marcacao")).toBeVisible();
   await expect(page.getByTestId("quem-sera-atendido")).toHaveAttribute("data-contact-id", f.contact);
-  await expect(page.getByLabel("Conversa vinculada (opcional)")).toHaveValue(f.conversation);
+  await expect(nativoDaEscolha(page.getByLabel("Conversa vinculada (opcional)"))).toHaveValue(f.conversation);
   await page.keyboard.press("Escape");
   const days = await irParaASemanaSeguinte(page);
   await page.getByRole("button", { name: /novo agendamento/i }).click();

@@ -1,4 +1,5 @@
 import pg from "pg";
+import { nativoDaEscolha } from "./helpers/escolha";
 import { sendTurnMessage } from "../../lib/agent-engine/edge/crm/send-message";
 import { completeTurnForEnrollment, createPgAdminClient } from "../../lib/followup/turn-bridge";
 import { claimOfJob } from "../../lib/agent-engine/queue/claim";
@@ -322,7 +323,7 @@ test("Inbox marca cliente/conversa; detalhe antigo confirma presença com evidê
   const panel = page.getByTestId("painel-de-marcacao");
   await expect(panel).toBeVisible();
   await expect(page.getByTestId("quem-sera-atendido")).toHaveAttribute("data-contact-id", p.contact);
-  await expect(page.getByLabel("Conversa vinculada (opcional)")).toHaveValue(p.conversation);
+  await expect(nativoDaEscolha(page.getByLabel("Conversa vinculada (opcional)"))).toHaveValue(p.conversation);
   // Fecha o painel para navegar a grade; reabre pela mesma entrada contextual.
   await page.keyboard.press("Escape");
   const days = await irParaASemanaSeguinte(page);
