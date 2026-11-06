@@ -83,9 +83,10 @@ test.describe("QA — o selo de autoria com o funil já vivido", () => {
     // Sempre o PRIMEIRO fechado: o `.all()` congela índices de um seletor que
     // encolhe a cada clique (aria-expanded vira "true"), e o 5º índice some.
     const fechados = page.locator('[data-testid^="abrir-etapa-"][aria-expanded="false"]');
-    while ((await fechados.count()) > 0) {
+    for (let i = 0; i < 50 && (await fechados.count()) > 0; i++) {
       await fechados.first().click();
     }
+    await expect(fechados).toHaveCount(0);
 
     const doAgente = page.locator('[data-autoria="ai"]');
     const doHumano = page.locator('[data-autoria="user"]');
