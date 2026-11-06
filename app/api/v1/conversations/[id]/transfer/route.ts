@@ -115,8 +115,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   });
   // Fork Tektus: depois da sincronia do upstream, assumir/transferir à mão também troca o dono dos
   // demais leads abertos (substitui humano ou agente). Convive com o motivo da auditoria acima.
+  // Conta os leads trocados para a auditoria não dizer só `ja_tinha_responsavel` (P2 do Cassio na #505).
+  let leadsAdotados = 0;
   if (isServiceRoleConfigured()) {
-    await adotarLeadsDoContato(createAdminClient(), orgId, conv.contact_id, input.to_user_id, {
+    leadsAdotados = await adotarLeadsDoContato(createAdminClient(), orgId, conv.contact_id, input.to_user_id, {
       substituir: true,
     });
   }
@@ -133,6 +135,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       ...(input.reason ? { note: input.reason } : {}),
       negocio_aberto: sincronia.motivo,
       ...(sincronia.leadId ? { negocio_id: sincronia.leadId } : {}),
+      leads_adotados: leadsAdotados,
     },
   });
 

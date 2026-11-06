@@ -10283,7 +10283,6 @@ alter table public.agent_inbox_items
     -- avisa o RESPONSÁVEL (Central + push só para ele). Kind próprio, e não
     -- `other`, porque o rótulo de `other` é "Aviso do assistente" — falso para
     -- uma tarefa que uma pessoa marcou. NESTA lista pelas razões de sempre (#159).
-    'task_due',
     -- (migration 0589, issue #2389) A pausa de uma conexão era silenciosa para
     -- todo mundo menos para quem clicou. O audit registrava `channel.disabled`
     -- / `channel.enabled`, mas audit é histórico para quem procura, não
