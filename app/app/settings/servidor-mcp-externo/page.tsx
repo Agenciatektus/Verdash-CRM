@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { CabecalhoDaPagina, Pagina } from "@/components/pagina";
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { exigirProvaDeMfa, mfaEmDividaEstrita, requireAuth } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { CadastroDoServidorMcpExterno } from "./_components/CadastroDoServidorMcpExterno";
@@ -50,7 +50,9 @@ export default async function ServidorMcpExternoPage() {
           idioma,
         )}
       />
-      <CadastroDoServidorMcpExterno />
+      <SecaoDaPagina>
+        <CadastroDoServidorMcpExterno />
+      </SecaoDaPagina>
     </Pagina>
   );
 }

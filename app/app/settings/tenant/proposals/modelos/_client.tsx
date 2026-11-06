@@ -128,12 +128,14 @@ export function ModelosDeProposta() {
     return (
       <Pagina largura="leitura">
         <CabecalhoDaPagina titulo={t("Modelos de proposta")} />
+        <SecaoDaPagina>
         <p>
           {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Propostas e salve.")}
         </p>
         <Button asChild variant="outline">
           <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Propostas")}</Link>
         </Button>
+        </SecaoDaPagina>
       </Pagina>
     );
   }

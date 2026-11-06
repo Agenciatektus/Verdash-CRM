@@ -13,7 +13,7 @@
  */
 import { redirect } from "next/navigation";
 
-import { CabecalhoDaPagina, Pagina } from "@/components/pagina";
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { AI_DECIDE_PADRAO, CHAVE_DAS_AUTOMACOES } from "@/lib/automation/ai-decide-da-org";
@@ -59,6 +59,7 @@ export default async function AutomacoesSettingsPage() {
     <Pagina largura="leitura">
       <CabecalhoDaPagina titulo={traduzir("Automações", idioma)} descricao={traduzir(DESCRICAO, idioma)} />
 
+      <SecaoDaPagina>
       {error ? (
         <p role="alert" className="rounded-md border border-destructive/40 p-4 text-sm text-destructive">
           {traduzir(ERRO_DE_LEITURA, idioma)}
@@ -66,6 +67,7 @@ export default async function AutomacoesSettingsPage() {
       ) : (
         <InterruptorAiDecide ligado={ligado} idioma={idioma} />
       )}
+      </SecaoDaPagina>
     </Pagina>
   );
 }

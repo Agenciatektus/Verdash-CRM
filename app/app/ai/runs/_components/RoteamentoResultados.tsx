@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CabecalhoDaPagina, Pagina } from "@/components/pagina";
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { Button } from "@/components/ui/button";
 import { Escolha } from "@/components/ui/escolha";
 import { Card } from "@/components/ui/card";
@@ -104,11 +104,12 @@ export function RoteamentoResultados() {
   const porcentagem = (a: number, b: number) => b ? `${Math.round(100 * a / b)}% (${a}/${b})` : t("Sem pares");
   return (
     <Pagina testId="resultados-roteamento">
+      <SecaoDaPagina><div className="mb-2 flex gap-3 text-sm"><Link href="/app/ai/runs" className="underline">{t("Execuções")}</Link><span aria-current="page" className="font-medium">{t("Roteamento")}</span></div></SecaoDaPagina>
       <CabecalhoDaPagina
-        antes={<div className="mb-2 flex gap-3 text-sm"><Link href="/app/ai/runs" className="underline">{t("Execuções")}</Link><span aria-current="page" className="font-medium">{t("Roteamento")}</span></div>}
         titulo={t("Resultados do roteamento")}
         descricao={<>{t("Compare os modos e revise decisões reais. Concordância entre IAs não é prova de acerto.")}<span className="mt-1 block text-xs">{t("A janela é a da sua IA de sempre. O Jev recebe só a mensagem atual.")}</span></>}
       />
+      <SecaoDaPagina>
       <Card className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5">
         <label className="text-xs">{t("Período")}
           <Escolha className="mt-1 block w-full rounded-md border bg-background p-2" value={dias} onValueChange={(valor) => setDias(valor)}>
@@ -172,6 +173,7 @@ export function RoteamentoResultados() {
           </div>
         </Card>)}
       </div> : <Card className="p-6 text-sm text-muted-foreground">{t("Ainda não há decisões de roteamento nesses filtros.")}</Card>)}
+      </SecaoDaPagina>
     </Pagina>
   );
 }

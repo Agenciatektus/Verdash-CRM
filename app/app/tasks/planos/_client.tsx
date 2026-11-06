@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { CabecalhoDaPagina, Pagina } from "@/components/pagina";
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -154,17 +154,16 @@ export function PlanosDeTarefa() {
 
   return (
     <Pagina largura="leitura">
-      <div>
-        <Link
-          href="/app/tasks"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-text"
-        >
-          <ArrowBendUpLeft size={14} aria-hidden />
-          {t("Tarefas")}
-        </Link>
-      </div>
-
       <CabecalhoDaPagina
+        antes={
+          <Link
+            href="/app/tasks"
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-text"
+          >
+            <ArrowBendUpLeft size={14} aria-hidden />
+            {t("Tarefas")}
+          </Link>
+        }
         titulo={t("Planos de tarefa")}
         descricao={t(
           "Monte a sequência uma vez; a ação Aplicar um plano de tarefas aplica o plano ao negócio.",
@@ -183,6 +182,7 @@ export function PlanosDeTarefa() {
         }
       />
 
+      <SecaoDaPagina>
       {erro ? (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
           {erro}
@@ -257,6 +257,7 @@ export function PlanosDeTarefa() {
           </ol>
         </Card>
       ))}
+      </SecaoDaPagina>
     </Pagina>
   );
 }
