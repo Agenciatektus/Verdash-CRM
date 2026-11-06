@@ -5930,5 +5930,11 @@
   "Dados que serão afetados": "将受影响的数据",
   "Nenhuma solicitação neste filtro": "此筛选下没有请求",
   "Há mais resultados na próxima página.": "下一页还有更多结果。",
-  "Titular anonimizado": "数据主体已匿名化"
+  "Titular anonimizado": "数据主体已匿名化",
+  "Fechamento": "成交",
+  "Perda": "丢单",
+  "Envia conversão": "发送转化",
+  "sem chance definida": "未设置成交概率",
+  "Não avisa a equipe": "不通知团队",
+  "Não envia conversão": "不发送转化"
 }

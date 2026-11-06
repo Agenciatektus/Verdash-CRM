@@ -70,12 +70,19 @@ test.describe("QA — o selo de autoria com o funil já vivido", () => {
          and s.id = (select s2.id from crm_stages s2 join crm_pipelines p2 on p2.id=s2.pipeline_id
                       join organizations o2 on o2.id=p2.organization_id
                      where o2.slug='e2e-test-org' and s2.is_archived=false
+                       -- a tela mostra UM funil (o primeiro por position): o selo tem de estar nele
+                       and p2.id = (select p3.id from crm_pipelines p3 where p3.organization_id=o2.id
+                                     and p3.is_archived=false order by p3.position limit 1)
                      order by s2.position desc limit 1);
     `);
 
     await login(page);
     await page.goto(`${APP_URL}/app/settings/tenant/pipelines`);
     await page.waitForLoadState("networkidle");
+    // O selo mora nos detalhes de cada etapa, fechados de início: abre todas.
+    for (const botao of await page.locator('[data-testid^="abrir-etapa-"][aria-expanded="false"]').all()) {
+      await botao.click();
+    }
 
     const doAgente = page.locator('[data-autoria="ai"]');
     const doHumano = page.locator('[data-autoria="user"]');

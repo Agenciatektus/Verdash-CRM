@@ -130,7 +130,17 @@ test("a etapa marcada avisa a equipe na Central; a vizinha, sem a marca, não", 
   await entrar(page);
 
   // ---- 1. a chave, pela tela ----
-  await page.goto("/app/settings/tenant/pipelines");
+  // Um funil por vez (?funil=) e etapa em linha que abre no lugar.
+  const abrirEtapas = async () => {
+    for (const id of [etapaConfirmado, etapaEnviado]) {
+      const botao = page.getByTestId(`abrir-etapa-${id}`);
+      await expect(botao).toBeVisible({ timeout: ESPERA });
+      if ((await botao.getAttribute("aria-expanded")) === "false") await botao.click();
+      await expect(botao).toHaveAttribute("aria-expanded", "true");
+    }
+  };
+  await page.goto(`/app/settings/tenant/pipelines?funil=${funilId}`);
+  await abrirEtapas();
   const chave = page.getByTestId(`avisar-${etapaConfirmado}`);
   await expect(chave).toBeVisible({ timeout: ESPERA });
   await expect(chave, "vem desligada").toHaveAttribute("aria-checked", "false");
@@ -144,6 +154,7 @@ test("a etapa marcada avisa a equipe na Central; a vizinha, sem a marca, não", 
 
   // A chave ficou gravada: recarregar a tela mostra a mesma coisa.
   await page.reload();
+  await abrirEtapas();
   await expect(page.getByTestId(`avisar-${etapaConfirmado}`)).toHaveAttribute("aria-checked", "true", { timeout: ESPERA });
   await expect(page.getByTestId(`avisar-${etapaEnviado}`)).toHaveAttribute("aria-checked", "false");
 

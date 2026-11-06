@@ -24,7 +24,12 @@ export const dynamic = "force-dynamic";
  * continua recusando quem não é admin no servidor, e a UI dele só é renderizada
  * para admin — esconder o que a ação recusaria é honestidade, não permissão nova.
  */
-export default async function PipelinesSettingsPage() {
+export default async function PipelinesSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ funil?: string }>;
+}) {
+  const { funil } = await searchParams;
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -78,6 +83,7 @@ export default async function PipelinesSettingsPage() {
       <SecaoDaPagina>
         <PipelinesClient
           pipelines={pipelines}
+          funilEscolhido={funil}
           etapas={etapasPorFunil}
           podeEditarConfig={podeEditarConfig}
         comandaDisponivel={comandaDisponivel}
