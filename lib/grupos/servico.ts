@@ -120,7 +120,8 @@ export interface GruposDb {
    * Upsert de tudo o que o WhatsApp devolveu SEM tocar em archived/pinned (o espelho vem por
    * evento) e apaga do diretório o que ele não devolveu mais.
    */
-  gravarDiretorio(org: string, sessionId: string, grupos: ChannelGroup[], agoraIso: string): Promise<void>;
+  /** Apaga só o que é mais velho que `corteIso` (o INÍCIO desta busca), para não apagar o que outra busca simultânea acabou de gravar. */
+  gravarDiretorio(org: string, sessionId: string, grupos: ChannelGroup[], agoraIso: string, corteIso: string): Promise<void>;
   contarLigados(org: string, sessionId: string): Promise<number>;
   gravarLinha(org: string, sessionId: string, row: LinhaDeGravacao): Promise<{ id: string }>;
   /**
@@ -171,14 +172,20 @@ export async function listarGruposDoNumero(
   },
 ): Promise<ListaDeGrupos> {
   const s = await sessaoComGrupos(deps, e.organizationId, e.channelSessionId);
-  const aoVivo = async () => {
-    const doCanal = await deps.listGroups(s.provider, s.sessionRef, e.organizationId);
-    await deps.db.gravarDiretorio(e.organizationId, e.channelSessionId, doCanal, deps.agora().toISOString());
-  };
   let cache = await deps.db.lerDiretorio(e.organizationId, e.channelSessionId);
+  const aoVivo = async () => {
+    const corteIso = deps.agora().toISOString();
+    const doCanal = await deps.listGroups(s.provider, s.sessionRef, e.organizationId);
+    // Lista vazia com cache cheio é envelope estranho ou sessão meio conectada: não apaga o diretório.
+    if (doCanal.length === 0 && cache.length > 0) throw new Error("lista_de_grupos_vazia");
+    await deps.db.gravarDiretorio(e.organizationId, e.channelSessionId, doCanal, deps.agora().toISOString(), corteIso);
+  };
   let desatualizado = false;
   const maisNovo = () => cache.reduce((m, l) => (l.refreshed_at > m ? l.refreshed_at : m), "");
-  const velho = () => deps.agora().getTime() - new Date(maisNovo()).getTime() >= VALIDADE_DO_DIRETORIO_MS;
+  const idade = () => deps.agora().getTime() - new Date(maisNovo()).getTime();
+  const velho = () => idade() >= VALIDADE_DO_DIRETORIO_MS;
+  // `?refresh=1` em laço não pode virar um /group/list de vários MB por clique: 30 s entre buscas forçadas.
+  if (e.refresh && cache.length > 0 && idade() < 30_000) e = { ...e, refresh: false };
 
   if (cache.length > 0 && !e.refresh && velho() && e.agendar) {
     // Velho: responde com o que tem e atualiza depois.
@@ -477,7 +484,7 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
         if (error) throw error;
         return (data ?? []) as LinhaDoDiretorio[];
       },
-      async gravarDiretorio(org, sessionId, grupos, agoraIso) {
+      async gravarDiretorio(org, sessionId, grupos, agoraIso, corteIso) {
         // Sem archived/pinned/archived_changed_at no objeto: o upsert não os sobrescreve.
         const linhas = grupos.map((g) => ({
           organization_id: org,
@@ -497,14 +504,14 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
             .upsert(linhas.slice(i, i + 200), { onConflict: "channel_session_id,group_chat_id" });
           if (error) throw error;
         }
-        // O que o WhatsApp não devolveu mais sai: tudo o que acabou de ser gravado tem
-        // `agoraIso`, o resto é mais velho (evita lista de ids na URL).
+        // O que o WhatsApp não devolveu mais sai: o corte é o INÍCIO desta busca, então o que
+        // esta ou outra busca simultânea gravou depois fica (evita lista de ids na URL).
         const { error } = await admin
           .from("channel_session_group_directory")
           .delete()
           .eq("organization_id", org)
           .eq("channel_session_id", sessionId)
-          .lt("refreshed_at", agoraIso);
+          .lt("refreshed_at", corteIso);
         if (error) throw error;
       },
       async contarLigados(org, sessionId) {
