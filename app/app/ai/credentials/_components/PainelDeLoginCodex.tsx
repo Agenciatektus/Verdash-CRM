@@ -197,7 +197,7 @@ export function PainelDeLoginCodex({
               ? t("Há um login anterior salvo, mas ele ainda não autorizou o uso do plano ChatGPT. Conecte novamente por este link para listar modelos e usar a assinatura.")
               : jaConectado
               ? t(
-                  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token antes de vencer — na janela de 8 dias, e também na hora em que o sistema acordar.",
+                  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token sozinho, minutos antes de vencer.",
                 )
               : t("Nenhuma conta conectada nesta empresa ainda.")}
             {jaConectado && !validada && !conectouAgora

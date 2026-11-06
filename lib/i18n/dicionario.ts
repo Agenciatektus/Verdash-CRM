@@ -17488,7 +17488,7 @@ export const DICIONARIO: Traducoes = {
   // entrada vive aqui, coberta por `i18n-provedores-e-pontos`.
   "Para quem já paga o ChatGPT: a conversa sai pela mesma conta do Codex, sem chave de API nenhuma — e, se a assinatura não estiver disponível ou falhar, a chamada cai sozinha na chave da empresa.": { es: "Para quien ya paga ChatGPT: la conversación sale por la misma cuenta de Codex, sin clave de API alguna; si la suscripción no está disponible o falla, la llamada pasa de forma automática a la clave de la empresa." },
   "Nenhuma conta conectada nesta empresa ainda.": { es: "Ninguna cuenta conectada en esta empresa todavía." },
-  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token antes de vencer — na janela de 8 dias, e também na hora em que o sistema acordar.": { es: "Cuenta conectada en esta empresa, guardada con cifrado. El sistema renueva el token antes de vencer — en la ventana de 8 días, y también cuando el sistema despierta." },
+  "Conta conectada nesta empresa, guardada com cifra. O sistema renova o token sozinho, minutos antes de vencer.": { es: "Cuenta conectada en esta empresa, guardada con cifrado. El sistema renueva el token solo, minutos antes de vencer." },
   "Ainda sem validação registrada: gere o link de novo e conecte de novo.": { es: "Aún sin validación registrada: genera el enlace de nuevo y conecta otra vez." },
   "Não deu para desconectar. Tente de novo em instantes.": { es: "No se pudo desconectar. Intenta de nuevo en unos momentos." },
   "O recurso está desligado nesta instalação. Só quem administra a instalação pode ligá-lo, em Recursos opcionais.": { es: "El recurso está desactivado en esta instalación. Solo quien administra la instalación puede activarlo, en Recursos opcionales." },

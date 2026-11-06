@@ -68,6 +68,23 @@ describe("sem binding e sem credencial da organização, vale a chave da instala
     expect(r?.origem).toBe("padrao");
     expect(r?.modelId).toBe("anthropic/claude-haiku-4-5");
   });
+
+  it("resolver pela chave da instalação NÃO é logado como recusa (o falso alarme de 05/11)", async () => {
+    const { logger } = await import("@/lib/logger");
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+    try {
+      const r = await resolverModeloDoPonto("sentiment_classify", ORG, "anthropic/claude-haiku-4-5");
+      expect(r).not.toBeNull();
+      const recusas = warn.mock.calls.filter(([m]) => String(m).includes("recusado"));
+      expect(recusas, "resolveu, mas o log disse que recusou").toHaveLength(0);
+      const validado = info.mock.calls.find(([m]) => String(m).includes("validado"));
+      expect(validado?.[1]).toMatchObject({ queda: expect.stringContaining("instalação") });
+    } finally {
+      warn.mockRestore();
+      info.mockRestore();
+    }
+  });
 });
 
 describe("com binding, o painel manda", () => {

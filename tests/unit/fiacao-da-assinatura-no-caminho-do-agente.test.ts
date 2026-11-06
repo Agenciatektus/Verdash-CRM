@@ -301,7 +301,7 @@ describe("2. resolveOrgLlmConfig: assinatura → reserva → erro antigo", () =>
 describe("3. a renovação automática do caminho do agente", () => {
   it("passa por renovarComTravaDeBanco e a auditoria recebe userId: null", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaDoLogin(Date.now() + 2 * 24 * 60 * 60 * 1000); // janela de 8 dias aberta
+    fake.linha = linhaDoLogin(Date.now() + 2 * 60 * 1000); // janela de 5 minutos aberta
 
     const r = await lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: ORG });
 
