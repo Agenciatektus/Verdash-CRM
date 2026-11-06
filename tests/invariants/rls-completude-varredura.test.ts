@@ -150,6 +150,14 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "por ACERTO ali.",
   },
   {
+    tabela: "order_margins",
+    razao:
+      "tests/invariants/order-margins-rls.test.ts prova isolamento cross-tenant, " +
+      "o gate de papel (o `agent` da própria org não lê custo nem lucro) e que " +
+      "nenhuma sessão escreve (só service role), migration 9240. Fora de TABLES " +
+      "pelo mesmo motivo de webhook_lead_captures: a policy exige `manager`.",
+  },
+  {
     tabela: "webhook_events_log",
     razao:
       "tests/invariants/arquivo-de-webhook-so-manager-9035.test.ts prova " +
