@@ -32,26 +32,38 @@ const linha = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  credenciais.mockReset().mockResolvedValue({ apiToken: TOKEN, webhookToken: "w" });
+  credenciais.mockReset().mockResolvedValue({ apiToken: TOKEN });
   listar.mockReset();
 });
 
 describe("agruparEstoque", () => {
   it("agrupa aparelhos iguais, conta e esconde o que não está disponível", () => {
-    const g = agruparEstoque([
+    const { grupos: g } = agruparEstoque([
       linha(),
       linha({ serialNumber: "B" }),
       linha({ corDescricao: "Azul" }),
       linha({ disponibilidade: "Laboratório", produtoDisponibilidadeId: 2 }),
-      linha({ aparelhoDescricao: "", descricao: "Capa", tipoProdutoDescricao: "Acessório", gbDescricao: "" }),
+      linha({ aparelhoDescricao: "", nome: "Capa", tipoProdutoDescricao: "Acessório", gbDescricao: "" }),
     ]);
     expect(g).toHaveLength(3);
     expect(g.find((x) => x.cor === "Preto" && x.aparelho === "iPhone 13")?.quantidade).toBe(2);
     expect(g.find((x) => x.tipo === "Acessório")?.aparelho).toBe("Capa");
   });
 
+  it("sem aparelhoDescricao: nome com IMEI/série é pulado e contado; nome limpo entra", () => {
+    const imei = "356789012345678";
+    const { grupos, semNome } = agruparEstoque([
+      linha({ aparelhoDescricao: "", nome: `4847227 - REDMI PAD 2 - SN: ${imei}` }),
+      linha({ aparelhoDescricao: "", nome: `Celular ${imei}` }),
+      linha({ aparelhoDescricao: "", nome: "Capa", descricao: `${imei} - X` }),
+    ]);
+    expect(semNome).toBe(2);
+    expect(JSON.stringify(grupos)).not.toContain(imei);
+    expect(grupos.map((g) => g.aparelho)).toEqual(["Capa"]);
+  });
+
   it("filtra por texto sem acento nem caixa", () => {
-    const g = agruparEstoque([linha(), linha({ aparelhoDescricao: "Galaxy S22" })]);
+    const { grupos: g } = agruparEstoque([linha(), linha({ aparelhoDescricao: "Galaxy S22" })]);
     expect(filtrarGrupos(g, "IPHONE 128gb")).toHaveLength(1);
     expect(filtrarGrupos(g, "xiaomi")).toHaveLength(0);
   });
@@ -68,6 +80,18 @@ describe("crm_check_pdv_stock", () => {
     expect(json).not.toMatch(/valorCusto|2100|SERIE123|serialNumber/);
     expect(json).not.toContain(TOKEN);
     expect((r as { itens: Array<{ quantidade: number }> }).itens.map((i) => i.quantidade).sort()).toEqual([1, 200]);
+  });
+
+  it("prazo da varredura estoura: devolve o parcial com aviso e não cacheia", async () => {
+    const agora = vi.spyOn(Date, "now");
+    let t = 0;
+    agora.mockImplementation(() => (t += 15_000));
+    listar.mockResolvedValue({ totalItens: 999, itens: Array.from({ length: 200 }, () => linha()) });
+    const r = (await crmCheckPdvStock.handler({}, ctx)) as { parcial?: boolean; itens: unknown[] };
+    agora.mockRestore();
+    expect(r.parcial).toBe(true);
+    expect(r.itens.length).toBeGreaterThan(0);
+    expect(listar.mock.calls.length).toBeLessThan(25);
   });
 
   it("org sem conexão não chama a API", async () => {
