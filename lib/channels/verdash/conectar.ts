@@ -73,7 +73,7 @@ export const VERDASH_CHANNEL_LABEL = "Verdash";
  * o que o próprio FZAP manda por automação, e deixá-la de fora esconderia do
  * histórico o que o cliente recebeu sem ninguém digitar.
  */
-const EVENTOS = ["Message", "AutomationMessage", "Connected", "Disconnected", "LoggedOut"];
+const EVENTOS = ["Message", "AutomationMessage", "Connected", "Disconnected", "LoggedOut", "AppState"];
 
 /**
  * O header por onde o segredo do CRM viaja em cada entrega.
