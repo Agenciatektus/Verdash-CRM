@@ -244,7 +244,7 @@ describe("as recusas, cada uma com o seu código", () => {
     d.deps.db.destinoEhDaPropriaOrganizacao = vi.fn(async () => true);
     const r = await enviarAvisoDeTeste(d.deps, entrada);
     expect(r).toEqual({ enviado: false, codigo: "destino_da_propria_organizacao" });
-    expect(d.deps.db.destinoEhDaPropriaOrganizacao).toHaveBeenCalledWith(ORG, TELEFONE);
+    expect(d.deps.db.destinoEhDaPropriaOrganizacao).toHaveBeenCalledWith(ORG, TELEFONE, entrada.channelSessionId);
     expect(d.deps.transporte.envia).not.toHaveBeenCalled();
     expect(d.enviados).toEqual([]);
     expect(d.ledger).toEqual([]);

@@ -58,6 +58,7 @@ import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 import type { Idioma } from "@/lib/i18n/idiomas";
 import { logger } from "@/lib/logger";
+import { avisoParaConexaoPropriaPermitido } from "./numero-interno-de-aviso";
 
 import { montarAvisoDeCaso } from "./texto-do-aviso";
 import { linkDoCaso, urlPublicaUsavel } from "./url-publica";
@@ -201,7 +202,7 @@ export interface AvisoDb {
    * — é exatamente essa janela que ela fecha. Quem responde é uma consulta a
    * `channel_sessions`, a MESMA que `fn_definir_aviso_de_caso` faz.
    */
-  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string): Promise<boolean>;
+  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string, remetenteId: string): Promise<boolean>;
   avisaNaCentral(entrada: {
     organizationId: string;
     caseId: string;
@@ -481,7 +482,7 @@ export async function aplicaAvisoDeCaso(
   // volta (canal oficial, pareamento do onboarding, conclusão do pareamento
   // por QR) em vez de uma guarda por caminho — a próxima forma de reativar
   // nasceria sem ela.
-  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino)) {
+  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino, canal.id)) {
     return await condena(
       deps,
       orgId,
@@ -828,7 +829,7 @@ export function createSupabaseAvisoDb(admin: SupabaseClient): AvisoDb {
      * arquivada não envia nem recebe, então não fecha laço. A diferença em
      * relação ao SQL é WHERE ela roda, não O QUE ela pergunta.
      */
-    async destinoEhDaPropriaOrganizacao(orgId, telefone) {
+    async destinoEhDaPropriaOrganizacao(orgId, telefone, remetenteId) {
       const variantes = phoneLookupVariants(telefone).map((v) => v.replace(/\D/g, ""));
       if (variantes.length === 0) return false;
       // ⚠️ `organization_id` filtrado À MÃO: o client é o de service role, que
@@ -840,12 +841,17 @@ export function createSupabaseAvisoDb(admin: SupabaseClient): AvisoDb {
         .is("archived_at", null)
         .not("phone_number", "is", null);
       if (error) throw new Error(error.message);
-      return ((data ?? []) as Array<{ phone_number: string | null }>).some(
+      const casam = ((data ?? []) as Array<{ id: string; phone_number: string | null }>).filter(
         (linha) =>
           linha.phone_number !== null &&
           // Mesma normalização do SQL: só dígitos, dos dois lados.
           variantes.includes(linha.phone_number.replace(/\D/g, "")),
       );
+      if (casam.length === 0) return false;
+      // 9224: com a exceção da plataforma ligada, só a PRÓPRIA conexão remetente
+      // conta (mandar para si mesma) — a mesma regra de `fn_definir_aviso_*`.
+      if (casam.some((linha) => linha.id === remetenteId)) return true;
+      return !(await avisoParaConexaoPropriaPermitido(admin, orgId));
     },
 
     async avisaNaCentral({ organizationId, caseId, titulo, corpo }) {
