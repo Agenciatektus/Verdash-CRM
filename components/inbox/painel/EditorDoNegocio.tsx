@@ -78,7 +78,7 @@ function CamposDoFunil({ leadId, pipelineId, fieldDefs, valores, onSalvo }: {
   return (
     <div className="space-y-3">
       <h4 className="text-xs font-semibold text-text">{t("Campos do funil")}</h4>
-      <CustomFieldsEditor fields={fieldDefs} value={customFields} onChange={setCustomFields} mode="lead" className="gap-3" />
+      <CustomFieldsEditor fields={fieldDefs} value={customFields} onChange={setCustomFields} mode="lead" leadId={leadId} className="gap-3" />
       <Button size="sm" className="h-7 w-full text-xs" disabled={edit.isPending} onClick={() => void salvar()}>
         {edit.isPending ? t("Salvando…") : t("Salvar")}
       </Button>

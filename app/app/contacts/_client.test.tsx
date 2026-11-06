@@ -6,6 +6,7 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ContactsListClient } from "@/app/app/contacts/_client";
@@ -99,5 +100,7 @@ describe("caixas de seleção da lista de contatos", () => {
     // Na linha do fork o nome aparece mais de uma vez (nome + avatar/rótulo); basta que a linha exista.
     expect(screen.getAllByText("Joana Prado").length).toBeGreaterThan(0);
     expect(caixas()).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Selecionar todos os contatos visíveis" })).toBeNull();
   });
+
 });

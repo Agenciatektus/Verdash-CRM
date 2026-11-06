@@ -3,6 +3,7 @@
  * O visual é o do `montarEmail` (identidade fixa do produto); a marca da
  * instalação (`marcaDaSaida(organizationId)`) entra só nos textos e no assunto.
  */
+import { rotuloDoPapel } from "@/lib/auth/types";
 import { montarEmail } from "@/lib/email/layout";
 import type { MarcaDeSaida } from "@/lib/branding/saida";
 
@@ -53,7 +54,7 @@ export function buildInviteEmail(opts: InviteEmailOptions): {
     assunto: subject,
     eyebrow: "Convite",
     titulo: `Você foi convidado para a ${opts.orgName}`,
-    paragrafos: [`${opts.inviterName} convidou você como ${opts.role} no ${marca}.`],
+    paragrafos: [`${opts.inviterName} convidou você como ${rotuloDoPapel(opts.role)} no ${marca}.`],
     botao: { rotulo: "Aceitar convite", href: botaoHref },
     aviso: `Este link vale até ${validade}. Se você não esperava este convite, pode ignorá-lo.`,
   });

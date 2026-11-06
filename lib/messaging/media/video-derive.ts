@@ -23,6 +23,16 @@ const FRAME_SCALE = "512:-1";
 class TranscricaoSubiu {
   constructor(readonly causa: unknown) {}
 }
+/**
+ * Só os contêineres de vídeo que chegam pelos canais, lidos só do arquivo local:
+ * o ffmpeg não adivinha o formato de entrada. Vai ANTES do `-i`, nas duas
+ * chamadas. Formato fora da lista falha, e a derivação segue sem aquela trilha,
+ * como já faz com vídeo sem áudio.
+ */
+export const ENTRADA_DE_VIDEO = [
+  "-protocol_whitelist", "file",
+  "-format_whitelist", "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm",
+] as const;
 
 export interface VideoDeriveDeps {
   transcriber: TranscriptionProvider;
@@ -65,7 +75,7 @@ export async function deriveVideoText(buffer: Buffer, deps: VideoDeriveDeps): Pr
     // 1) faixa de áudio → ogg/opus mono 16k (ideal p/ Whisper). Pode falhar se sem áudio.
     let transcript = "";
     try {
-      await run(["-i", "in.mp4", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "audio.ogg"], dir);
+      await run([...ENTRADA_DE_VIDEO, "-i", "in.mp4", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "libopus", "audio.ogg"], dir);
       const audio = await readFile(join(dir, "audio.ogg"));
       if (audio.byteLength > 0) {
         try {
@@ -84,7 +94,7 @@ export async function deriveVideoText(buffer: Buffer, deps: VideoDeriveDeps): Pr
     let frameDescriptions: string[] = [];
     try {
       await run(
-        ["-i", "in.mp4", "-vf", `thumbnail,scale=${FRAME_SCALE}`, "-frames:v", String(FRAME_COUNT), "frame-%02d.jpg"],
+        [...ENTRADA_DE_VIDEO, "-i", "in.mp4", "-vf", `thumbnail,scale=${FRAME_SCALE}`, "-frames:v", String(FRAME_COUNT), "frame-%02d.jpg"],
         dir,
       );
       const files = (await readdir(dir)).filter((f) => f.startsWith("frame-")).sort();

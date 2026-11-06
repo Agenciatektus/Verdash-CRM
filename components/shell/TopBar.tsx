@@ -87,7 +87,7 @@ export function TopBar() {
     // separada por um fio. `md:pl-12` põe a trilha na MESMA coluna do conteúdo:
     // o `p-6` do `<main>` somado ao `p-6` da `Pagina` (e do skeleton). Medir as
     // duas bordas juntas ao mudar uma.
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 bg-background/95 pl-3 pr-3 backdrop-blur dark:bg-background/60 md:gap-3 md:pl-12">
+    <header className="sticky top-[var(--faixas-de-cima,0px)] z-20 flex h-14 items-center justify-between gap-2 bg-background/95 pl-3 pr-3 backdrop-blur dark:bg-background/60 md:gap-3 md:pl-12">
       <div className="flex min-w-0 items-center gap-2">
         <MobileSidebar />
         {/* No desktop a organização mora no topo do trilho (quadro DS); aqui

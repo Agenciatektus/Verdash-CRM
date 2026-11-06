@@ -6,6 +6,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { NoteCard } from "@/components/inbox/NoteCard";
 import { PassagemCard } from "@/components/inbox/PassagemCard";
+import type { ReacaoNoBalao } from "@/lib/inbox/reacoes-no-fio";
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import type { Message } from "@/lib/types/messaging";
@@ -28,6 +29,8 @@ export interface ContextoDoFio {
   porId: Map<string, Message>;
   debugCitations: boolean;
   temResponder: boolean;
+  temEncaminhar: boolean;
+  reacoesPorAlvo: Map<string, ReacaoNoBalao[]>;
   usuarioId: string;
   canalAlteraEnviada: boolean;
   podeGerir: boolean;
@@ -99,6 +102,8 @@ export function ConteudoDaLinha({ linha, inicioDoBloco, ctx }: { linha: LinhaDoF
       searchMatch={ctx.resultados.has(item.data.id)}
       debugCitations={ctx.debugCitations}
       temResponder={ctx.temResponder}
+      temEncaminhar={ctx.temEncaminhar}
+      reacoes={ctx.reacoesPorAlvo.get(item.data.id)}
       // A citada sai da MESMA lista já carregada: buscar no servidor por cada
       // citação faria uma consulta por bolha. Quando a citada é antiga demais e
       // ficou fora da página, o fio some — melhor que segurar a conversa.

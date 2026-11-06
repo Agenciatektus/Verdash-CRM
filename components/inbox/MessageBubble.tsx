@@ -3,13 +3,16 @@
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import { format } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
-import { ArrowBendUpLeft, CaretDown, PencilSimple, Robot, Trash } from "@/lib/ui/icons";
+import { ArrowBendUpLeft, ArrowBendUpRight, CaretDown, PencilSimple, Robot, Trash } from "@/lib/ui/icons";
 import { useEffect, useRef, useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types/messaging";
 import { lerRemetenteDeGrupo, rotuloDoRemetente } from "@/lib/messaging/remetente-de-grupo";
 import { localizacaoDaMensagem } from "@/lib/messaging/localizacao";
+import type { ReacaoNoBalao } from "@/lib/inbox/reacoes-no-fio";
+import { lerAnuncioDaMensagem } from "@/lib/leads/atribuicao-de-anuncio";
+import { AnuncioCard } from "@/components/inbox/AnuncioCard";
 import { extractCitations, isAiGeneratedMessage } from "@/lib/ai/citations/types";
 import { larguraDaMeta, rotuloDaAutoria } from "./bolha/autoria";
 import { CitacaoNaBolha } from "./bolha/CitacaoNaBolha";
@@ -33,6 +36,10 @@ interface Props {
   debugCitations?: boolean;
   /** Escolher esta mensagem para responder "em cima" dela. */
   onResponder?: (m: Message) => void;
+  /** Escolher esta mensagem para ENCAMINHAR a outra conversa (#2835). */
+  onEncaminhar?: (m: Message) => void;
+  /** As reações a ESTA mensagem: marca no canto do balão, nunca balão próprio. */
+  reacoes?: ReacaoNoBalao[];
   /** A mensagem citada por ESTA, quando houver — desenha o fio. */
   citada?: Message | null;
   /** QUEM está lendo a conversa: separa "Você" de "Atendente" (ver `rotuloDaAutoria`). */
@@ -56,7 +63,7 @@ interface Props {
 }
 
 export function MessageBubble({
-  message, searchMatch = false, debugCitations, onResponder, citada, viewerUserId,
+  message, searchMatch = false, debugCitations, onResponder, onEncaminhar, reacoes, citada, viewerUserId,
   onEditar, onApagar, onOcultar, onRestaurar, rascunho, inicioDoBloco = true, onReenviar,
 }: Props) {
   // Bolha que volta à tela com edição em curso reabre o editor com o rascunho.
@@ -107,7 +114,11 @@ export function MessageBubble({
     && agora - new Date(message.sent_at).getTime() <= 15 * 60 * 1000;
   const podeApagar = enviadaPeloAtendente && Boolean(onApagar);
   const podeOcultar = !isOutbound && !apagada && Boolean(ocultaNoCrm ? onRestaurar : onOcultar);
-  const temMenu = Boolean(onResponder || (podeEditar && onEditar) || podeApagar || podeOcultar);
+  // Encaminhar vale para qualquer mensagem com conteúdo; só não se encaminha o apagado.
+  const podeEncaminhar = Boolean(onEncaminhar) && !apagada;
+  // O anúncio que gerou ESTA mensagem (a ingestão grava em `metadata.anuncio`); só na recebida.
+  const anuncio = !isOutbound ? lerAnuncioDaMensagem(message.metadata?.anuncio) : null;
+  const temMenu = Boolean(onResponder || podeEncaminhar || (podeEditar && onEditar) || podeApagar || podeOcultar);
   const aiGenerated = isAiGeneratedMessage(message.metadata);
   const mostraCitacoes = isOutbound && aiGenerated && (debugCitations ?? false);
   const senderLabel = rotuloDaAutoria(message, viewerUserId, t);
@@ -165,10 +176,14 @@ export function MessageBubble({
           data-testid="message-bubble"
           data-tom={tom}
           data-falhou={isFailed || undefined}
-          className={classesDaBolha({
-            tom, saida: isOutbound, inicio: inicioDoBloco, falhou: isFailed,
-            busca: searchMatch, temMenu, modoMeta,
-          })}
+          className={cn(
+            classesDaBolha({
+              tom, saida: isOutbound, inicio: inicioDoBloco, falhou: isFailed,
+              busca: searchMatch, temMenu, modoMeta,
+            }),
+            // Espaço para a marca de reação, que fica metade para fora do balão.
+            Boolean(reacoes?.length) && "mb-3",
+          )}
         >
           {temMenu && (
             <DropdownMenu>
@@ -197,6 +212,11 @@ export function MessageBubble({
                 {onResponder && (
                   <DropdownMenuItem onSelect={() => onResponder(message)}>
                     <ArrowBendUpLeft size={16} aria-hidden />{t("Responder a esta mensagem")}
+                  </DropdownMenuItem>
+                )}
+                {podeEncaminhar && (
+                  <DropdownMenuItem onSelect={() => onEncaminhar?.(message)}>
+                    <ArrowBendUpRight size={16} aria-hidden />{t("Encaminhar")}
                   </DropdownMenuItem>
                 )}
                 {podeEditar && onEditar && (
@@ -229,6 +249,7 @@ export function MessageBubble({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {anuncio && <AnuncioCard anuncio={anuncio} compacto className="mb-1.5" />}
           {citada && <CitacaoNaBolha citada={citada} viewerUserId={viewerUserId} />}
           {editando ? (
             <EditorDaBolha
@@ -261,6 +282,22 @@ export function MessageBubble({
             falhou={isFailed}
             citacoes={mostraCitacoes ? extractCitations(message.metadata) : null}
           />
+          {reacoes?.length ? (
+            <span
+              role="img"
+              data-testid="message-reactions"
+              aria-label={reacoes
+                .map((r) => t(r.direction === "inbound" ? "Cliente reagiu com {emoji}" : "Atendente reagiu com {emoji}").replace("{emoji}", r.emoji))
+                .join(", ")}
+              className={cn(
+                "absolute -bottom-3 flex items-center gap-0.5 rounded-full border border-border bg-surface px-1.5 py-0.5 text-xs leading-none text-text shadow-sm",
+                isOutbound ? "right-2" : "left-2",
+              )}
+            >
+              {[...new Set(reacoes.map((r) => r.emoji))].join("")}
+              {reacoes.length > 1 && <span className="text-[10px] text-text-muted">{reacoes.length}</span>}
+            </span>
+          ) : null}
         </div>
         {/* `.fail-row`: embaixo da bolha que falhou, do lado de quem enviou. */}
         {onReenviar && <TentarDeNovo onReenviar={onReenviar} />}

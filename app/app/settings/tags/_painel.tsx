@@ -41,7 +41,7 @@ import { TABELA_EMPILHADA } from "@/components/pagina";
  * não-cromática que o design system já usa nos estados.
  */
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -117,15 +117,21 @@ export const CHAVES_COM_NOME_DE_ETIQUETA = [
 // O mapa das recusas (`ERRO_EM_PORTUGUES`) mora em `./_lote`: a barra em lote
 // responde as mesmas recusas, e duas cópias desalinham na primeira frase nova.
 
+const DESTINO_INEXISTENTE =
+  "Essa etiqueta não existe. Juntar só leva para uma etiqueta que já existe; para dar um nome novo, use Renomear.";
+
 export function PainelDeTags({
   tags: tagsDoVocabulario,
   idioma,
   sugestoes = null,
+  paginado = false,
 }: {
   tags: LinhaDeVocabulario[];
   idioma: Idioma;
   /** 9038: o inventário de sugestões da 9005 (`fn_tags_inventario`). */
   sugestoes?: InventarioDeTags | null;
+  /** #2855: a lista é uma página; o destino da junção é digitado e checado no servidor. */
+  paginado?: boolean;
 }) {
   const t = (texto: string) => traduzir(texto, idioma);
   // 9038: as sugestões sem uso entram na lista (ver `unirComSugestoes`).
@@ -171,10 +177,33 @@ export function PainelDeTags({
    * Compara com `destinos`, que já exclui a própria etiqueta: mudar só a caixa
    * ("cliente" → "Cliente") é renome, não junção.
    */
-  const destinoJaExiste =
-    acao === "renomear" &&
-    destino.trim().length > 0 &&
-    destinos.some((linha) => linha.tag.toLowerCase() === destino.trim().toLowerCase());
+  const nomeDigitado = destino.trim().toLowerCase();
+  // #2855 — com a lista paginada, o nome pode estar em OUTRA página: pergunta ao
+  // servidor pela mesma busca da tela (curado + em uso + regras). Serve ao aviso
+  // de renomear (#2801) e à junção, que só aceita destino que existe.
+  const { data: achadasNoServidor } = useQuery({
+    queryKey: ["tags-vocabulario-busca", nomeDigitado],
+    enabled: paginado && nomeDigitado.length > 0 && (acao === "renomear" || acao === "juntar"),
+    staleTime: 30_000,
+    queryFn: async ({ signal }): Promise<LinhaDeVocabulario[]> => {
+      const resposta = await fetch(
+        "/api/v1/tags/vocabulario?busca=" + encodeURIComponent(destino.trim()),
+        { signal },
+      );
+      if (!resposta.ok) throw new Error(`busca_do_destino_${resposta.status}`);
+      return ((await resposta.json()) as { data?: LinhaDeVocabulario[] }).data ?? [];
+    },
+  });
+  const outraEtiqueta = (linha: LinhaDeVocabulario) =>
+    linha.tag.toLowerCase() === nomeDigitado && linha.tag.toLowerCase() !== alvo?.tag.toLowerCase();
+  const nomeJaExiste =
+    nomeDigitado.length > 0 &&
+    (destinos.some(outraEtiqueta) || (achadasNoServidor ?? []).some(outraEtiqueta));
+  const destinoJaExiste = acao === "renomear" && nomeJaExiste;
+  // Só acusa depois que o servidor respondeu: enquanto a busca corre, não há
+  // como saber, e o servidor recusa de novo no POST (`destino_inexistente`).
+  const destinoDaJuncaoInexistente =
+    paginado && acao === "juntar" && achadasNoServidor !== undefined && nomeDigitado.length > 0 && !nomeJaExiste;
 
   /**
    * O que a tela relê depois de QUALQUER mudança no vocabulário: o mapa de
@@ -453,7 +482,7 @@ export function PainelDeTags({
             ))}
           </tbody>
         </table>
-        {tags.length >= TETO_DA_LISTA && (
+        {!paginado && tags.length >= TETO_DA_LISTA && (
           <p className="border-t border-border/60 p-3 text-sm text-muted-foreground">
             {t(
               "Mostrando as 500 primeiras etiquetas em ordem alfabética. Se a que você procura não está aqui, arrume primeiro as que aparecem.",
@@ -554,6 +583,17 @@ export function PainelDeTags({
           {acao === "juntar" ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="destino-da-juncao">{t("Etiqueta de destino")}</Label>
+              {paginado ? <>
+                <Input id="destino-da-juncao" list="destinos-da-juncao" value={destino}
+                  onChange={e=>setDestino(e.target.value)} maxLength={60}
+                  placeholder={t("Digite o nome exato da etiqueta de destino")}/>
+                <datalist id="destinos-da-juncao">{destinos.map(linha=><option key={linha.tag} value={linha.tag}/>)}</datalist>
+                {destinoDaJuncaoInexistente && (
+                  <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                    {t(DESTINO_INEXISTENTE)}
+                  </p>
+                )}
+              </> :
               <Escolha
                 id="destino-da-juncao"
                 className="h-9"
@@ -566,7 +606,7 @@ export function PainelDeTags({
                     {linha.tag}
                   </option>
                 ))}
-              </Escolha>
+              </Escolha>}
             </div>
           ) : acao === "definir_cor" ? (
             <div className="flex flex-col gap-3">
@@ -609,7 +649,7 @@ export function PainelDeTags({
           <div className="flex gap-2">
             <Button
               onClick={enviar}
-              disabled={ocupado || (acao !== "definir_cor" && destino.trim().length === 0)}
+              disabled={ocupado || destinoDaJuncaoInexistente || (acao !== "definir_cor" && destino.trim().length === 0)}
             >
               {ocupado ? t("Aplicando...") : t("Confirmar")}
             </Button>

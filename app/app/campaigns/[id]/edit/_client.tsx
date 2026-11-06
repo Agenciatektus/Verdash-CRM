@@ -31,7 +31,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Escolha } from "@/components/ui/escolha";
-import { useCampanha, useEditarCampanha, usePreviaDaAudiencia } from "@/hooks/campanhas/useCampanhas";
+import {
+  useCampanha,
+  useEditarCampanha,
+  useModelosDaCampanha,
+  usePreviaDaAudiencia,
+} from "@/hooks/campanhas/useCampanhas";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useT } from "@/hooks/i18n/useT";
 import { filtroDeAudienciaSchema, limparFiltroSalvo } from "@/lib/campanhas/audiencia";
@@ -51,6 +56,12 @@ function excluirMesclado(original: Record<string, unknown> | null, compra: typeo
   const novo = { ...original, ...criteriosDeCompra(compra) };
   return Object.values(novo).some((v) => v !== null && !(Array.isArray(v) && v.length === 0)) ? novo : null;
 }
+
+import {
+  ModeloDaCampanha,
+  variaveisIncompletas,
+  type EscolhaDoModelo,
+} from "../../_components/ModeloDaCampanha";
 
 export function EditarCampanha({ id }: { id: string }) {
   const t = useT();
@@ -94,6 +105,7 @@ export function EditarCampanha({ id }: { id: string }) {
   // O `excluir` gravado (pode ter tags/funil/silêncio via API): a tela só edita os 4 campos de compra.
   const [excluirOriginal, setExcluirOriginal] = useState<Record<string, unknown> | null>(null);
   const [carregado, setCarregado] = useState(false);
+  const [modelo, setModelo] = useState<EscolhaDoModelo | null>(null);
 
   const funis = useFunis();
   const etapas = useEtapas(funil || null);
@@ -120,6 +132,15 @@ export function EditarCampanha({ id }: { id: string }) {
     setPassos(c.passos ?? []);
     setSaidas(saidasDaTela(c.saidas));
     setSaidasMexidas(false);
+    setModelo(
+      c.provider_template_name && c.provider_template_language
+        ? {
+            name: c.provider_template_name,
+            language: c.provider_template_language,
+            variables: c.provider_template_variables ?? {},
+          }
+        : null,
+    );
     setFunil(c.pipeline_id ?? "");
     setEtapa(c.stage_id ?? "");
     setAgente(c.agent_id ?? "");
@@ -167,6 +188,10 @@ export function EditarCampanha({ id }: { id: string }) {
     .map(([nome, n]) => `${nome as string}: ${n as number}`)
     .join(", ");
 
+  // O que o número escolhido aceita: texto livre (QR) ou modelo aprovado (oficial).
+  // Antes dos retornos de carregamento: hook não pode ser condicional.
+  const doCanal = useModelosDaCampanha(canal);
+
   if (campanha.isLoading || !carregado) {
     return (
       <div className="space-y-3 p-6">
@@ -208,10 +233,23 @@ export function EditarCampanha({ id }: { id: string }) {
     );
   }
 
+  const ehOficial = doCanal.data?.modo === "template";
+  const providerDoCanal = (canais.data ?? []).find((c) => c.id === canal)?.provider ?? null;
+  const modeloEscolhido =
+    modelo && doCanal.data
+      ? (doCanal.data.modelos.find(
+          (m) => m.name === modelo.name && m.language === modelo.language,
+        ) ?? null)
+      : null;
+  const modeloPronto =
+    modelo !== null &&
+    modeloEscolhido !== null &&
+    variaveisIncompletas(modeloEscolhido, modelo.variables).length === 0;
+
   const podeSalvar =
     nome.trim() !== "" &&
     canal !== "" &&
-    texto.trim() !== "" &&
+    (ehOficial ? modeloPronto : texto.trim() !== "") &&
     // No modo CONTÍNUO o público é a etapa, e o recorte de contatos não é usado:
     // exigir critério ali prenderia o operador num filtro que a campanha ignora.
     (continua || temCriterio) &&
@@ -237,7 +275,11 @@ export function EditarCampanha({ id }: { id: string }) {
             id="e-canal"
             className="h-9 w-full"
             value={canal}
-            onValueChange={(valorEscolhido) => setCanal(valorEscolhido)}
+            onValueChange={(valorEscolhido) => {
+              setCanal(valorEscolhido);
+              // Cada número tem os próprios modelos: o escolhido no outro não vale aqui.
+              setModelo(null);
+            }}
           >
             {(canais.data ?? []).map((s) => (
               <option key={s.id} value={s.id}>
@@ -352,9 +394,19 @@ export function EditarCampanha({ id }: { id: string }) {
             onClick={() =>
               previa.mutate({
                 audience_filter: filtro,
-                message_body: texto,
-                message_variants: extras,
+                message_body: ehOficial ? "" : texto,
+                message_variants: ehOficial ? [] : extras,
                 campaign_id: id,
+                ...(ehOficial && modelo
+                  ? {
+                      modelo: {
+                        channel_session_id: canal,
+                        name: modelo.name,
+                        language: modelo.language,
+                        variables: modelo.variables,
+                      },
+                    }
+                  : {}),
               })
             }
           >
@@ -381,7 +433,9 @@ export function EditarCampanha({ id }: { id: string }) {
       <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Quem responder")}</h2>
         <p className="text-sm text-muted-foreground">
-          {t("Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.")}
+          {t(
+            "Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.",
+          )}
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -443,7 +497,16 @@ export function EditarCampanha({ id }: { id: string }) {
 
       <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Mensagem")}</h2>
-        <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+        {ehOficial ? (
+          <ModeloDaCampanha
+            channelSessionId={canal}
+            provider={providerDoCanal}
+            valor={modelo}
+            onChange={setModelo}
+          />
+        ) : (
+          <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+        )}
       </Card>
 
       <Card className="space-y-4 p-4">
@@ -485,8 +548,14 @@ export function EditarCampanha({ id }: { id: string }) {
             await salvar.mutateAsync({
               name: nome.trim(),
               channel_session_id: canal,
-              message_body: texto.trim(),
-              message_variants: extras,
+              ...(ehOficial && modelo
+                ? {
+                    message_mode: "template",
+                    provider_template_name: modelo.name,
+                    provider_template_language: modelo.language,
+                    provider_template_variables: modelo.variables,
+                  }
+                : { message_body: texto.trim(), message_variants: extras }),
               base_legal: baseLegal,
               lia_ref: liaRef.trim() || null,
               audience_filter: editados,

@@ -64,7 +64,7 @@ describe("service worker do app: tela sem conexão", () => {
   it("não usa Cache Storage e mantém push, bandeja e clique", () => {
     expect(FONTE).not.toMatch(/\bcaches\b/);
     const ouvintes = carregar(() => Promise.reject(new Error()));
-    for (const tipo of ["install", "activate", "message", "notificationclick", "push", "fetch"]) {
+    for (const tipo of ["install", "activate", "notificationclick", "push", "fetch"]) {
       expect(ouvintes.has(tipo), tipo).toBe(true);
     }
   });

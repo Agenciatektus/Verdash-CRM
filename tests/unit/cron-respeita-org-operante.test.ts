@@ -63,6 +63,7 @@ const SEM_FILTRO: Record<string, string> = {
   "fotos-orfas": "só apaga do Storage a foto que não é ponteiro de ninguém; limpeza, sem custo nem saída",
   "followup-sem-agente": "só abre aviso na Central sobre fluxo sem agente; sem custo nem saída",
   "handoff-devolucao": "devolve a conversa à IA; a IA só fala por evento, barrado pelo gate e pelo dispatcher",
+  "rodizio-devolucao": "devolve a conversa à fila e ao rodízio; não manda mensagem nenhuma, sem custo de modelo ou de canal",
   "lead-date-field-due": "só emite lead.date_field_due; o consumidor (automationRulesHandler) é 'pula'",
   "lead-time-triggers": "só emite lead.silent_for/stage_stale; o consumidor (automationRulesHandler) é 'pula'",
   "ia-plataforma-alerta": "mede o gasto e o saldo da chave de IA da instalação, não de uma organização; só avisa o dono",

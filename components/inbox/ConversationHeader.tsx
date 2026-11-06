@@ -15,13 +15,14 @@ import { useAutomaticoAtivo } from "@/hooks/ai/useAutomaticoAtivo";
 import { comandoDaConversa, ROTULO_DO_MOTIVO } from "@/lib/inbox/comando-da-conversa";
 import { SnoozeButton } from "@/components/inbox/SnoozeButton";
 import { DialButton } from "@/components/voice/DialButton";
+import { ReservarServicoNaConversa } from "@/components/agenda/ReservarServicoNaConversa";
 import { AlternarPainel } from "@/components/inbox/cabecalho/AlternarPainel";
 import { FaixaDeStatus } from "@/components/inbox/cabecalho/FaixaDeStatus";
 import { IdentidadeDaConversa } from "@/components/inbox/cabecalho/IdentidadeDaConversa";
 import { MaisAcoes } from "@/components/inbox/cabecalho/MaisAcoes";
 import { TransferirPopover } from "@/components/inbox/cabecalho/TransferirPopover";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
-import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { entrouPor } from "@/lib/contacts/entrou-por";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
@@ -105,7 +106,7 @@ export function ConversationHeader({
   const automaticoDaOrg = useAutomaticoAtivo();
 
   const c = conversation.contacts ?? null;
-  const displayName = rotuloDoContato(c, t);
+  const displayName = rotuloParaAEquipe(c, t);
   /**
    * POR ONDE ESTA CONVERSA ENTROU — o mesmo rótulo da lista e da tela de
    * canais (#2383). `null` quando não há canal, e aí o badge não existe.
@@ -288,6 +289,9 @@ export function ConversationHeader({
               )}
               {/* A chamada usa o telefone da ficha. Grupo não é uma pessoa para ligar. */}
               {!conversation.is_group && c?.id && <DialButton contactId={c.id} hasPhone={!!c.phone_number} />}
+              {!conversation.is_group && c?.id && activeOrg && ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent && (
+                <ReservarServicoNaConversa key={`${activeOrg.orgId}:${conversation.id}`} contactId={c.id} conversationId={conversation.id} contactName={displayName} />
+              )}
               {/* Videochamada (#2440): sem JITSI_SERVER_URL não renderiza. Segue a
                   MESMA régua do composer (janela de 24h, contato, encerrada). */}
               <VideoCallButton

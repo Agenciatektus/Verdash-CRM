@@ -198,7 +198,9 @@ describe("os elos que somem sem barulho", () => {
       "components/inbox/bolha/MetaDaBolha.tsx",
     ].map((arquivo) => readFileSync(arquivo, "utf8")).join("\n");
     expect(fonte).toMatch(/revoked_at/);
-    expect(fonte).toMatch(/Esta mensagem foi apagada/);
     expect(fonte).toMatch(/editada/);
+    expect(fonte).toMatch(/Esta mensagem foi apagada/);
+    const regua = readFileSync("lib/messaging/apagada.ts", "utf8");
+    expect(regua).toMatch(/Esta mensagem foi apagada pelo contato/);
   });
 });

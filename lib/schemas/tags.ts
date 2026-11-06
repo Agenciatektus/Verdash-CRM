@@ -328,3 +328,15 @@ export function erroDeCuradoria(code: string | undefined, message: string): Erro
   if (code === "55P03" || code === "40P01" || code === "40001") return "tente_de_novo";
   return "falha";
 }
+export const tagsPageQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  busca: z.string().trim().max(60).default(""),
+});
+export const tagsPageResultSchema = z.object({
+  total: z.number().int().nonnegative(),
+  items: z.array(z.object({
+    tag: z.string(), uso_em_contatos: z.number(), uso_em_leads: z.number(),
+    uso_em_conversas: z.number(), em_regras: z.number(),
+    cor: z.string().nullable(), descricao: z.string().nullable(), no_vocabulario: z.boolean(),
+  })),
+});

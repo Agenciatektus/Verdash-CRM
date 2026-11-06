@@ -73,12 +73,12 @@ const listaSchema = z.object({
   /** "abertas" = o que ainda pede ação. É o default da tela. */
   aberto: z.enum(["true", "false"]).optional(),
   /**
-   * De quem é a tarefa (o "Minhas" do celular, M3.2): "eu" (o usuário da sessão)
+   * De quem é a tarefa (o "Minhas" do celular, M3.2): "eu"/"me" (o usuário da sessão), "ninguem" (sem responsável)
    * ou o id de um membro da organização. É recorte de PERGUNTA, não de permissão:
    * só estreita a mesma consulta (mesma org, mesma RLS, mesmo limite), nunca
    * amplia o que o papel já vê.
    */
-  assigned_to: z.union([z.literal("eu"), z.string().uuid()]).optional(),
+  assigned_to: z.union([z.literal("eu"), z.literal("me"), z.literal("ninguem"), z.string().uuid()]).optional(),
   /**
    * Com `aberto=true`: traz também as ENCERRADAS desde este instante (a faixa
    * "Encerradas" da tela de Tarefas, recolhida por padrão). Sem isto, marcar
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   // deixa agent/viewer ler a linha de outro membro, e o filtro só ESTREITA a lista
   // que a pessoa já vê (mesma org, mesma RLS). Id de fora devolve vazio, como
   // membro sem tarefa, e a rota não diz se ele existe.
-  const responsavel = filtros.assigned_to === "eu" ? authz.user.id : (filtros.assigned_to ?? null);
+  const responsavel = filtros.assigned_to === "eu" || filtros.assigned_to === "me" ? authz.user.id : (filtros.assigned_to ?? null);
 
   // ⚠️ `organization_id` à mão mesmo com RLS ligada: é a regra do CLAUDE.md, e
   // ela não é redundante — o dia em que esta rota trocar para o admin client
@@ -131,7 +131,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (filtros.demanda_id) query = query.eq("demanda_id", filtros.demanda_id);
   if (filtros.due_from) query = query.gte("due_date", filtros.due_from);
   if (filtros.due_to) query = query.lte("due_date", filtros.due_to);
-  if (responsavel) query = query.eq("assigned_to", responsavel);
+  if (responsavel === "ninguem") query = query.is("assigned_to", null);
+  else if (responsavel) query = query.eq("assigned_to", responsavel);
   if (filtros.aberto === "true" && filtros.encerradas_desde) {
     // O instante passa pelo Zod (`datetime` com offset) antes de entrar no
     // filtro: nenhuma vírgula ou parêntese chega ao `or` do PostgREST.

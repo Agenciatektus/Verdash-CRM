@@ -215,17 +215,24 @@ describe("MANIFEST × arquivos de migration", () => {
     ).toEqual([]);
   });
 
-  it("nenhum número de migration é usado duas vezes", () => {
+  it("nenhum número de migration da faixa do upstream (0xxx) é usado duas vezes", () => {
     // Quatro waves em paralelo colidem em numeração; o merge renumera. Se duas
     // sobreviverem com o mesmo número, a ordem de aplicação vira loteria.
+    // Subida 1.90: a faixa 9xxx deixou de ser só do fork (o upstream também numera
+    // nela), então ali o número repetido só AVISA; a identidade é o timestamp, que o
+    // caso seguinte continua reprovando.
     const porNumero = new Map<string, string[]>();
     for (const f of nomesDeMigration()) {
       const num = /^(\d{4})_/.exec(f)?.[1];
       if (!num) continue;
       porNumero.set(num, [...(porNumero.get(num) ?? []), f]);
     }
-    const duplicados = [...porNumero.entries()]
-      .filter(([, fs]) => fs.length > 1)
+    const repetidos = [...porNumero.entries()].filter(([, fs]) => fs.length > 1);
+    for (const [num, fs] of repetidos.filter(([n]) => n.startsWith("9"))) {
+      console.warn(`NNNN ${num} repetido na faixa 9xxx (timestamps distintos): ${fs.join(", ")}`);
+    }
+    const duplicados = repetidos
+      .filter(([num]) => !num.startsWith("9"))
       .map(([num, fs]) => `${num}: ${fs.join(", ")}`);
     // A exceção da 0068 saiu daqui em 2026-08-06: a colisão foi CONSERTADA
     // (`0068_ai_pricing_backfill` → `0110_...`), não perdoada. Sem exceção nenhuma

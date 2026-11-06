@@ -23,6 +23,7 @@ import { ROLE_RANK } from "@/lib/auth/types";
 import { capabilitiesOf, transportaMensagem, type ChannelProvider } from "@/lib/channels/capabilities";
 import { montarCartoesDaPassagem, type CartaoDaPassagem } from "@/lib/escalacao/cartao-da-passagem";
 import { mensagemSemDado } from "@/lib/inbox/mensagem-sem-dado";
+import { separarReacoes } from "@/lib/inbox/reacoes-no-fio";
 import type { Message, Note } from "@/lib/types/messaging";
 import { useReenvioDoFio } from "./fio/useReenvioDoFio";
 
@@ -32,6 +33,8 @@ interface Props {
   provider?: string | null;
   /** Escolher uma mensagem para responder. Sobe até o composer. */
   onResponder?: (m: Message) => void;
+  /** Escolher uma mensagem para encaminhar a outra conversa (#2835). */
+  onEncaminhar?: (m: Message) => void;
   /**
    * Quem é o dono da conversa HOJE, e quem é o contato. O cartão da passagem
    * precisa dos dois para escolher o gesto: sem dono ele convida a assumir; com
@@ -80,7 +83,7 @@ export function mergeThreadItems(
   return items;
 }
 
-export function ChatThread({ conversationId, provider, onResponder, dono, contatoId, searchTerm = "", naoLidas = 0 }: Props) {
+export function ChatThread({ conversationId, provider, onResponder, onEncaminhar, dono, contatoId, searchTerm = "", naoLidas = 0 }: Props) {
   const t = useT();
   const activeOrg = useActiveOrg();
   const q = useMessagesRealtime(conversationId, activeOrg?.orgId ?? null);
@@ -117,7 +120,9 @@ export function ChatThread({ conversationId, provider, onResponder, dono, contat
     [passagens, currentUser.id, dono?.userId, dono?.nome],
   );
   // Ruído sem dado nenhum não entra no fio (fica no banco e no `porId`).
-  const visiveis = useMemo(() => messages.filter((m) => !mensagemSemDado(m)), [messages]);
+  // A reação não é balão (#2815): sai do fio e vira marca no balão alvo.
+  const { falas, reacoesPorAlvo } = useMemo(() => separarReacoes(messages), [messages]);
+  const visiveis = useMemo(() => falas.filter((m) => !mensagemSemDado(m)), [falas]);
   const items: ThreadItem[] = useMemo(() => mergeThreadItems(visiveis, notes, cartoes), [visiveis, notes, cartoes]);
   const paginas = q.data?.pages.length ?? 0;
 
@@ -130,11 +135,12 @@ export function ChatThread({ conversationId, provider, onResponder, dono, contat
   // Rascunho da edição por id: sobrevive à bolha sair da tela (e desmontar).
   // Ref, não estado: digitar não pode re-renderizar o fio inteiro.
   const rascunhos = useRef(new Map<string, string>());
-  const gestos = useRef({ editar, apagar, ocultar, restaurar, onResponder });
-  gestos.current = { editar, apagar, ocultar, restaurar, onResponder };
+  const gestos = useRef({ editar, apagar, ocultar, restaurar, onResponder, onEncaminhar });
+  gestos.current = { editar, apagar, ocultar, restaurar, onResponder, onEncaminhar };
   const acoes: AcoesDoFio = useMemo(
     () => ({
       responder: (m) => gestos.current.onResponder?.(m),
+      encaminhar: (m) => gestos.current.onEncaminhar?.(m),
       editar: (id, text) => gestos.current.editar.mutateAsync({ id, text }).then(() => undefined),
       apagar: (id) => gestos.current.apagar.mutateAsync(id).then(() => undefined),
       ocultar: (id) => gestos.current.ocultar.mutateAsync(id).then(() => undefined),
@@ -252,6 +258,8 @@ export function ChatThread({ conversationId, provider, onResponder, dono, contat
     porId,
     debugCitations: Boolean(debugCitations),
     temResponder: Boolean(onResponder),
+    temEncaminhar: Boolean(onEncaminhar),
+    reacoesPorAlvo,
     usuarioId: currentUser.id,
     canalAlteraEnviada,
     podeGerir: canManage,

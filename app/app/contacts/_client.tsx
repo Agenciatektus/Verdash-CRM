@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePedidoDeCriar } from "@/lib/mobile/usePedidoDeCriar";
 import { usePodeCriar } from "@/lib/mobile/usePodeCriar";
 import { useT } from "@/hooks/i18n/useT";
-import { Plus, DownloadSimple, UploadSimple, UsersThree } from "@/lib/ui/icons";
+import { Plus, DownloadSimple, UploadSimple, UsersThree, ArrowsClockwise } from "@/lib/ui/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,9 +21,11 @@ import { ContactsTable } from "@/components/contacts/ContactsTable";
 import { BarraDeContatosEmLote } from "@/components/contacts/BarraDeContatosEmLote";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { ImportContactsDialog } from "@/components/contacts/ImportContactsDialog";
+import { SyncPhoneContactsDialog } from "@/components/contacts/SyncPhoneContactsDialog";
 import { TAG_DE_CLIENTE } from "@/lib/contacts/cliente";
 import { queryDaExportacao, type FormatoDeExport } from "@/lib/contacts/exportar";
 import { roleAtLeast } from "@/lib/auth/types";
+import { ORIGEM_AGENDA_DO_CELULAR } from "@/lib/leads/origem-do-contato";
 import { type ModoDeEtiqueta } from "@/lib/inbox/marcador-da-conversa";
 import { useActiveOrg, usePermission } from "@/hooks/auth/AuthProvider";
 import { MergeDialog } from "@/components/contacts/MergeDialog";
@@ -48,6 +50,7 @@ const SOURCE_OPTIONS = [
   { value: "site", label: "Site (landing page)" },
   { value: "nuvemshop", label: "Nuvemshop" },
   { value: "import_csv", label: "Importado (CSV)" },
+  { value: ORIGEM_AGENDA_DO_CELULAR, label: "Agenda do celular" },
   // Os dois valores que a atribuição de anúncio grava em `contacts.source`
   // (`PlataformaDeAnuncio` em lib/leads/atribuicao-de-anuncio.ts). Sem eles, o
   // contato que veio de um clique em anúncio existe no banco e não é
@@ -83,6 +86,7 @@ export function ContactsListClient() {
   const podeCriar = usePodeCriar();
   usePedidoDeCriar(() => setCreateOpen(true), podeCriar);
   const [importOpen, setImportOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const [duplicadosOpen, setDuplicadosOpen] = useState(false);
 
   useEffect(() => {
@@ -207,6 +211,12 @@ export function ContactsListClient() {
             <Button variant="outline" className="shrink-0" onClick={() => setImportOpen(true)}>
               <UploadSimple size={16} weight="bold" aria-hidden />
               <span>{t("Importar CSV")}</span>
+            </Button>
+            {/* O lado de cá do mesmo gesto (#2736): a base que a equipe já tem mora na
+                agenda do celular pareado, e ela não passa por CSV nenhum. */}
+            <Button variant="outline" className="shrink-0" onClick={() => setSyncOpen(true)}>
+              <ArrowsClockwise size={16} weight="bold" aria-hidden />
+              <span>{t("Sincronizar agenda")}</span>
             </Button>
             {/* A porta de VOLTA do mesmo dado (#2759): CSV e vCard num menu, para o
                 cabeçalho não dobrar de largura no celular. */}
@@ -364,6 +374,7 @@ export function ContactsListClient() {
 
       <NewContactDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
+      <SyncPhoneContactsDialog open={syncOpen} onOpenChange={setSyncOpen} />
       <MergeDialog open={duplicadosOpen} onOpenChange={setDuplicadosOpen} />
     </Pagina>
   );

@@ -27,13 +27,15 @@
  * doença que esta rota cura é exatamente estados distintos colapsados num só.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { lerAnuncioDaMensagem, lerAnuncioDoContato, mesmoAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
 import { prospectEnrichmentSchema } from "@/lib/prospecting/schema";
+import { lerPersonalizacao } from "@/lib/prospecting/personalizar";
 import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { camposDoFunil, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
+import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { motivoDaPerdaObrigatorio } from "@/lib/leads/motivo-da-perda";
 import { motivosDoFunil } from "@/lib/leads/motivos-de-perda-do-funil";
 import { createClient } from "@/lib/supabase/server";
@@ -103,7 +105,7 @@ export async function GET(
   // contato da outra passando o id dele, e o `createAdminClient()` abaixo — que
   // ignora RLS — leria o enriquecimento daquela organizacao com esse escopo.
   const { data: contactScope, error: scopeError } = await supabase.from("contacts")
-    .select("organization_id, is_anonymized")
+    .select("organization_id, is_anonymized, source_metadata")
     .eq("id", contactId)
     .eq("organization_id", authz.org.orgId)
     .maybeSingle();
@@ -114,20 +116,40 @@ export async function GET(
   const enrichment = await (async () => {
     if (contactScope.is_anonymized) return { enrichment: null, enrichment_error: false };
     try {
-      const result = await createAdminClient().from("prospecting_candidates")
+      const admin = createAdminClient();
+      const candidato = await admin.from("prospecting_candidates")
         .select("data, created_at")
         .eq("organization_id", authz.org.orgId).eq("contact_id", contactId)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (result.error) return { enrichment: null, enrichment_error: true };
-      if (!result.data) return { enrichment: null, enrichment_error: false };
-      const parsed = prospectEnrichmentSchema.safeParse(result.data.data);
-      return parsed.success
-        ? { enrichment: { ...parsed.data, collected_at: result.data.created_at }, enrichment_error: false }
-        : { enrichment: null, enrichment_error: true };
+      if (candidato.error) return { enrichment: null, enrichment_error: true };
+      if (!candidato.data) return { enrichment: null, enrichment_error: false };
+      const parsed = prospectEnrichmentSchema.safeParse(candidato.data.data);
+      if (!parsed.success) return { enrichment: null, enrichment_error: true };
+      // Personalização só quando há auditoria para personalizar: sem `site`
+      // não há vocabulário a sobrescrever, e a query a mais sairia de graça
+      // em todo painel aberto (é o caminho quente do inbox).
+      let personalizacao = null;
+      if (parsed.data.site) {
+        const organizacao = await admin.from("organizations")
+          .select("settings")
+          .eq("id", contactScope.organization_id)
+          .maybeSingle();
+        if (!organizacao.error) {
+          personalizacao = lerPersonalizacao(
+            (organizacao.data as { settings?: unknown } | null)?.settings,
+          );
+        }
+      }
+      return {
+        enrichment: { ...parsed.data, collected_at: candidato.data.created_at },
+        enrichment_error: false,
+        personalizacao,
+      };
     } catch {
       return { enrichment: null, enrichment_error: true };
     }
   })();
+  const anuncios = await anunciosDoContato(supabase, contactId, contactScope);
   const [leads, orders, activities, demandas, fatos, historico] = await Promise.all([
     supabase
       .from("crm_leads")
@@ -223,6 +245,7 @@ export async function GET(
       })),
       demandas: demandas.data ?? [],
       fatos: fatos.data ?? [], historico: historico.data ?? [],
+      ...anuncios,
     },
     { requestId },
   );
@@ -235,6 +258,44 @@ interface EtapaDoResumo {
   is_lost: boolean;
 }
 
+/**
+ * De qual anúncio a pessoa veio, para o painel ao lado da conversa.
+ *
+ * Dois anúncios, porque são duas perguntas: o de ORIGEM (primeiro toque, o que
+ * o contato guarda e nunca reescreve) e o MAIS RECENTE que ela clicou, quando é
+ * outro — numa loja com vários produtos, quem chegou pelo anúncio de um e
+ * voltou pelo de outro está falando do segundo.
+ *
+ * Auxiliar e por isso fora do `Promise.all` de cima: a leitura da mensagem que
+ * falha vira "sem anúncio mais recente", nunca um painel inteiro em erro. E
+ * contato anonimizado não mostra anúncio nenhum.
+ */
+async function anunciosDoContato(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  contactId: string,
+  contato: { organization_id: string; is_anonymized: boolean | null; source_metadata: unknown },
+) {
+  if (contato.is_anonymized) return { anuncio_de_origem: null, anuncio_mais_recente: null };
+  const origem = lerAnuncioDoContato(contato.source_metadata);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("anuncio:metadata->anuncio, created_at")
+    .eq("contact_id", contactId)
+    .eq("organization_id", contato.organization_id)
+    .eq("direction", "inbound")
+    .not("metadata->anuncio", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const linha = error ? null : (data as { anuncio: unknown; created_at: string } | null);
+  const recente = linha ? lerAnuncioDaMensagem(linha.anuncio) : null;
+  const outro = recente && !(origem && mesmoAnuncio(origem, recente));
+  return {
+    anuncio_de_origem: origem,
+    anuncio_mais_recente: outro ? { ...recente, recebido_em: linha!.created_at } : null,
+  };
+}
+
 function comCamposDoFunil(row: Record<string, unknown>, etapasPorFunil: Map<string, EtapaDoResumo[]>) {
   const { crm_pipelines, crm_stages, ...lead } = row;
   const settings = settingsDoEmbed(crm_pipelines);
@@ -245,7 +306,7 @@ function comCamposDoFunil(row: Record<string, unknown>, etapasPorFunil: Map<stri
     // 9044: o funil pode dispensar o motivo de perda. A MESMA régua da rota
     // `/lose` (`motivoDaPerdaObrigatorio`): só `false` explícito dispensa.
     motivo_de_perda_obrigatorio: motivoDaPerdaObrigatorio(settings),
-    field_defs: camposDoFunil(settings),
+    field_defs: camposPorEscopo(camposDoFunil(settings), "negocio"),
     funil_nome: nomeDoEmbed(crm_pipelines),
     etapa_nome: nomeDoEmbed(crm_stages),
     etapas_do_funil: etapasDoEmbed(crm_pipelines),

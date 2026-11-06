@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { audit } from "@/lib/audit";
 import { sincronizarSaudeDaConexao } from "@/lib/channels/health";
 import { marcarConversaComMensagem } from "@/lib/channels/marcar-conversa";
+import { gravarReacaoDeMensagem } from "@/lib/channels/reacao";
 import { aplicarEfeitosPosEntrada } from "@/lib/channels/pos-entrada";
 import { ORIGEM_DO_WHATSAPP_OPERADOR } from "@/lib/channels/origem-do-negocio";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
@@ -30,7 +31,7 @@ import { devolverAtendimentoAoAgente } from "@/lib/escalacao/retomada";
 import { getWahaClient } from "@/lib/waha/client";
 import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
-import { estamparAtribuicaoDoContato } from "@/lib/leads/atribuicao-de-anuncio";
+import { estamparAtribuicaoDoContato, metadataDoAnuncio } from "@/lib/leads/atribuicao-de-anuncio";
 import { extrairEEstamparAtribuicaoGoogle } from "@/lib/plataformas-de-anuncio/google/atribuicao";
 import { extrairAtribuicaoWaha } from "@/lib/waha/atribuicao-de-anuncio";
 import { criarIngestDeGrupoDb, gravarMensagemDeGrupo } from "@/lib/grupos/ingest";
@@ -48,8 +49,10 @@ import { nomeDeArquivoLimpo } from "@/lib/messaging/media/nome-de-arquivo";
 import {
   ehNumeroInternoDeAviso,
   registrarMensagemIgnorada,
+  type ChatIdentidade,
 } from "@/lib/escalacao/numero-interno-de-aviso";
 import { rpc } from "@/lib/supabase/rpc";
+import { consumirRespostaDoSuporteNoWhatsApp } from "@/lib/escalacao/resposta-whatsapp-ao-caso";
 
 export type Admin = ReturnType<typeof createAdminClient>;
 
@@ -362,12 +365,12 @@ export function resolveMessageType(p: WahaPayload): string {
   return "text";
 }
 
-function notifyNameOf(p: WahaPayload): string | null {
+export function notifyNameOf(p: WahaPayload): string | null {
   return p._data?.notifyName ?? p._data?.pushName ?? null;
 }
 
 /** Corpo textual: WAHA nem sempre preenche `body` em cartões de contato NOWEB. */
-function bodyOf(p: WahaPayload): string | null {
+export function bodyOf(p: WahaPayload): string | null {
   if (p.body) return p.body;
   const msg = p._data?.message;
   if (!msg || typeof msg !== "object") return null;
@@ -398,6 +401,16 @@ function bodyOf(p: WahaPayload): string | null {
  */
 export function telefoneAlternativoDe(p: WahaPayload): string | null {
   return telefoneDoJid(p._data?.key?.remoteJidAlt ?? p._data?.key?.participantAlt ?? null);
+}
+
+/**
+ * Quem escreveu, para o corte do número de avisos: o `@lid` leva junto o
+ * telefone de `telefoneAlternativoDe`. Sem ele, o número cadastrado em modo
+ * privacidade não é reconhecido — o transporte resolve o destino do aviso por
+ * telefone, e o `destino_jid` gravado nunca termina em `@lid`.
+ */
+export function identidadeDoRemetente(p: WahaPayload, parsed: ChatIdentity): ChatIdentidade {
+  return parsed.kind === "lid" ? { ...parsed, phone: telefoneAlternativoDe(p) } : parsed;
 }
 
 /**
@@ -701,6 +714,20 @@ function textoNaoVazio(v: unknown): string | null {
 }
 
 /**
+ * O payload é de REAÇÃO, mesmo quando chega por `message.any`?
+ *
+ * O WAHA emite `message.any` para QUALQUER mensagem nova, e o payload de uma
+ * reação é um desses — com `type: "reaction"` e o miolo `reaction` do fio
+ * (#2797). Sem este reconhecimento, o caminho normal gravaria uma linha SEM
+ * emoji e SEM alvo (medido: a prova `ingest-reacao.test.ts` falhava com DUAS
+ * linhas para uma reação) e ainda carimbaria a conversa. A linha certa é a do
+ * ramo `message.reaction`, ligada ao alvo.
+ */
+export function ehReacao(p: WahaPayload): boolean {
+  return p.type === "reaction" || objetoSimples(p.reaction) !== null;
+}
+
+/**
  * O `contextInfo` do Baileys — o id cru da citada e a mensagem citada inteira.
  *
  * O formato varia: `extendedTextMessage.contextInfo` é o caso do texto (o
@@ -806,12 +833,34 @@ async function resolverMensagemCitada(
   return (porSufixo as { id: string } | null)?.id ?? null;
 }
 
+/**
+ * A forma em que a ENTRADA grava `messages.external_id`: o id completo do webhook
+ * (`false_<chat>_<id>`). Fonte única, usada por `handleInbound` e pelo importador
+ * de histórico: as duas trilhas gravam a MESMA string, senão a unique não recusa
+ * a segunda linha e a mensagem duplica.
+ */
+export function externalIdDeEntrada(p: WahaPayload): string | null {
+  return p.id ?? null;
+}
+
+/**
+ * A forma em que a SAÍDA (eco do celular) grava `messages.external_id`: o bare id
+ * (#196, #1855). Fonte única, ver `externalIdDeEntrada`.
+ */
+export function externalIdDeSaida(p: WahaPayload): string | null {
+  return p.id ? bareWaMessageId(p.id) : null;
+}
+
 async function handleInbound(
   admin: Admin,
   session: Session,
   p: WahaPayload,
   requestId: string,
 ): Promise<void> {
+  // Reação não é mensagem: o ramo `message.reaction` do roteador grava a linha
+  // LIGADA ao alvo (#2797). Ver `ehReacao` — sem este corte o `message.any`
+  // gravaria a linha cega e carimbaria a conversa.
+  if (ehReacao(p)) return;
   const chatId = p.from ?? "";
   const parsed = parseChatId(chatId);
   if (parsed.kind === "group") {
@@ -840,11 +889,14 @@ async function handleInbound(
   // dispara o pedido de rodízio pelo banco. Cortar depois já teria criado
   // contato, conversa e uma "conversa do suporte" na fila de um atendente — e o
   // "cancelar" que alguém da equipe digitasse bloquearia esse contato.
-  if (await ehNumeroInternoDeAviso(admin, session.organization_id, parsed)) {
-    await registrarMensagemIgnorada(admin, session.organization_id, {
+  if (await consumirRespostaDoSuporteNoWhatsApp(admin, {
+    organizationId: session.organization_id,
+    channelSessionId: session.id,
+    identidade: identidadeDoRemetente(p, parsed),
       direction: "inbound",
-      sessionId: session.id,
-    });
+    texto,
+    externalId: p.id,
+  })) {
     return;
   }
 
@@ -893,7 +945,7 @@ async function handleInbound(
       conversation_id: conversationId,
       channel_session_id: session.id,
       contact_id: contactId,
-      external_id: p.id,
+      external_id: externalIdDeEntrada(p),
       type: resolveMessageType(p),
       direction: "inbound",
       status: "delivered",
@@ -912,6 +964,9 @@ async function handleInbound(
         // resolvida, a citada no banco é a fonte da verdade — uma edição
         // posterior mudaria o que a tela mostra, e a cópia ficaria velha.
         ...(citacao?.texto && !citadaId ? { reply_to_body: citacao.texto } : {}),
+        // O anúncio DESTA mensagem vai junto — o contato guarda só o primeiro, e
+        // quem volta por outro anúncio precisa deixar rastro. Ver `metadataDoAnuncio`.
+        ...metadataDoAnuncio(atribuicao),
         // Nome original do anexo (#2613). Só quando há nome: a chave nunca é
         // gravada vazia, e gravação é de linha NOVA (o INSERT é o único caminho
         // que escreve `metadata` aqui), então nada do que já está é sobrescrito.
@@ -1190,6 +1245,10 @@ async function handleOutboundFromUserPhone(
   p: WahaPayload,
   requestId: string,
 ): Promise<void> {
+  // Idem `handleInbound`: o eco de uma reação que o OPERADOR tirou pelo celular
+  // também chega por `message.any` com `fromMe`, e a linha certa é a do ramo
+  // `message.reaction` (#2797).
+  if (ehReacao(p)) return;
   // De onde sai o chat, em ordem de confiança:
   //   1. `to`  — o WEBJS manda; é o destinatário explícito.
   //   2. o id  — `{fromMe}_{chatId}_{bareId}` carrega o chat em qualquer engine.
@@ -1269,7 +1328,7 @@ async function handleOutboundFromUserPhone(
   //
   // Mesmo par de candidatos que o `handleAck` usa — cobre NOWEB (bare) e WEBJS
   // (full) sem depender do engine.
-  const bare = bareWaMessageId(p.id);
+  const bare = externalIdDeSaida(p);
   const idCandidates = bare === p.id ? [p.id] : [p.id, bare];
   const { data: jaRegistrada } = await admin
     .from("messages")
@@ -1441,6 +1500,8 @@ async function handleOutboundFromUserPhone(
     // Pelo tipo RESOLVIDO (P2 do Cassio na #202): cobre motor que manda `type:"text"`
     // e mídia sem legenda do NOWEB, que não traz `type`.
     midia: resolveMessageType(p) !== "text",
+    // Composto que o webhook entregou e cauda que o envio grava (marcarEnviada).
+    ids: p.id ? [...new Set([p.id, bareWaMessageId(p.id)])] : [],
   });
   let comandoAplicado: typeof comando = null;
   if (!ehEco) {
@@ -1708,18 +1769,27 @@ async function handleMessageEdited(
  *
  * A linha NÃO é removida: sumir com ela apagaria o contexto das vizinhas — uma
  * resposta passaria a responder ao nada — e o histórico de quem atendeu. O
- * corpo também não é limpo aqui: quem decide o que mostrar é a tela, e apagar o
- * texto no banco impediria o próprio atendente de entender, depois, o que tinha
- * sido combinado antes do arrependimento.
+ * corpo também não é limpo aqui: quem decide o que MOSTRAR é a régua da tela
+ * (`lib/messaging/apagada.ts`), e apagar o texto no banco destruiria o registro
+ * do que foi combinado — que é justamente o que o pedido de LGPD precisa
+ * alcançar.
+ *
+ * A revogação que chega por AQUI é a que ninguém mais registra: quem apaga no
+ * aplicativo não passa por tela nenhuma, então sem esta trilha um pedido de
+ * LGPD/RGPD pergunta "quando e como esta mensagem foi apagada" e não há
+ * resposta. Vai para a auditoria o EVENTO (ids, direção e o fato de o conteúdo
+ * estar preservado) — nunca o corpo, que `api_audit_log` guardaria por 5 anos
+ * fora do alcance da cascata de anonimização.
  */
 async function handleMessageRevoked(
   admin: Admin,
   session: Session,
   p: WahaPayload,
+  requestId: string,
 ): Promise<void> {
   const alvo = bareWaMessageId(p.revokedMessageId ?? "");
   if (!alvo) return;
-  await alterarComAutoria(admin, session, p, alvo, "apagar", null);
+  await alterarComAutoria(admin, session, p, alvo, "apagar", null, requestId);
 }
 
 /**
@@ -1735,6 +1805,7 @@ async function alterarComAutoria(
   alvo: string,
   acao: "editar" | "apagar",
   texto: string | null,
+  requestId?: string,
 ): Promise<void> {
   // A apagada do WAHA traz o chat em `after` (a protocolMessage de quem apagou),
   // não no topo (upstream 1.85); o topo vem primeiro para não regredir num engine
@@ -1763,8 +1834,102 @@ async function alterarComAutoria(
     acao,
     texto,
   });
-  if (!r.aplicada && r.motivo !== `${acao}_sem_original`) {
+  if (!r.aplicada && r.motivo !== `${acao}_sem_original` && r.motivo !== "apagar_ja_apagada") {
     logger.warn("[waha] alteração de mensagem recusada", { sessionId: session.id, motivo: r.motivo });
+  }
+  // Trilha do EVENTO (nunca o corpo, que fica preservado): quem apaga no aplicativo
+  // não passa por tela nenhuma, e o pedido de LGPD pergunta "quando e como" (upstream #3279).
+  if (r.aplicada && acao === "apagar") {
+    await audit({
+      action: "message.revoked_in_channel",
+      organizationId: session.organization_id,
+      resourceType: "message",
+      resourceId: r.messageId,
+      requestId,
+      metadata: {
+        conversation_id: r.conversationId,
+        direction: deMim ? "outbound" : "inbound",
+        external_id: alvo,
+        conteudo_preservado: true,
+      },
+    });
+  }
+}
+
+/**
+ * Quem REAGIU — a chave que a remoção usa para apagar SÓ o gesto deste autor.
+ */
+function autorDaReacao(p: WahaPayload): string | null {
+  // Em GRUPO o autor vem no `participant` (a mesma doutrina de
+  // `remetenteDoGrupo`: sender é o participant, nunca o `from`, que em grupo é
+  // o próprio grupo). No 1:1 ele é o `from` — e, em `fromMe`, o NOWEB manda o
+  // CHAT em `from`, não o operador. O outro autor de uma conversa é sempre o
+  // MESMO número conectado, então a etiqueta `me` o identifica sem depender de
+  // `me.id`, que o payload do webhook não traz.
+  if (p.fromMe === true) return "me";
+  return primeiroTexto(p.participant, p.from);
+}
+
+/**
+ * `message.reaction` — a reação vira linha LIGADA ao alvo, e nada mais (#2797).
+ *
+ * O que esta função DELIBERADAMENTE não faz: não chama `markConversation`
+ * (last_message_at, janela de 24h, prévia, contador de não lidas), não chama
+ * `aplicarEfeitosPosEntrada` (opt-out, lead, despacho do agente) e não audita
+ * `message.received`. Um 👍 não é fala: carimbá-lo como mensagem nova é o
+ * defeito medido — o cliente que reagia à proposta era cobrado pelo follow-up
+ * de silêncio. Ver `lib/channels/reacao.ts`, o contrato comum dos dois canais.
+ *
+ * Falha de banco NÃO vira descarte: sobe como transitória, a rota devolve 503
+ * e o WAHA reentrega — a reentrega é segura porque a idempotência é pela chave
+ * externa da própria reação.
+ */
+async function handleReaction(admin: Admin, session: Session, p: WahaPayload): Promise<void> {
+  const miolo = objetoSimples(p.reaction);
+  const alvoId = textoNaoVazio(miolo?.messageId);
+  const externalId = textoNaoVazio(p.id);
+  const autor = autorDaReacao(p);
+  if (!externalId || !alvoId || !autor) {
+    // Sem alvo não há o que ligar — descarte visível, nunca linha cega.
+    logger.warn("waha.ingest: reação sem id de alvo ou sem autor — descartada", {
+      organization_id: session.organization_id,
+      external_id: externalId,
+      alvo: alvoId,
+    });
+    return;
+  }
+
+  // O chat do alvo, para montar as formas em que o `external_id` dele pode
+  // estar gravado: o envio grava a CAUDA, o eco do próprio aparelho traz o
+  // composto, e o chat pode vir em outro formato (`@lid` × `@c.us`) — o mesmo
+  // par de candidatos do `handleAck` e da citação, mais o sufixo `_<cauda>`.
+  const chat = p.to ?? chatIdFromWaMessageId(externalId) ?? p.from ?? "";
+  const cauda = bareWaMessageId(alvoId);
+  const desfecho = await gravarReacaoDeMensagem(admin as unknown as SupabaseClient, {
+    organizationId: session.organization_id,
+    channelSessionId: session.id,
+    externalId,
+    alvoExternalId: alvoId,
+    candidatosDoAlvo: wahaEchoExternalIds(alvoId, chat),
+    // Mesmo teto da resolução da citada: abaixo de 16 caracteres o LIKE
+    // casaria outra mensagem por coincidência em vez de achar esta.
+    sufixoDoAlvo: cauda.length >= 16 ? `_${cauda}` : null,
+    // `text` vazio é a REMOÇÃO do gesto — o caso que apaga a linha anterior.
+    emoji: typeof miolo?.text === "string" ? miolo.text.trim() : null,
+    author: autor,
+    direction: p.fromMe === true ? "outbound" : "inbound",
+    sentAt: dataDoTimestamp(p.timestamp, new Date().toISOString()),
+    sentVia: "external_device",
+    canal: "waha",
+  });
+
+  if (desfecho.status === "falha") {
+    lancarFalhaDeIngestao("messages.insert reaction", {
+      // `?? undefined` porque `ErroDoBanco.code` é opcional e não-anulável —
+      // `null` não compila no slot, e o `?? ""` de lá trataria igual.
+      code: desfecho.codigo ?? undefined,
+      message: desfecho.motivo,
+    });
   }
 }
 
@@ -1792,7 +1957,9 @@ export async function dispatchWahaEvent(
   } else if (eventType === "message.edited") {
     await handleMessageEdited(admin, session, payload);
   } else if (eventType === "message.revoked") {
-    await handleMessageRevoked(admin, session, payload);
+    await handleMessageRevoked(admin, session, payload, requestId);
+  } else if (eventType === "message.reaction") {
+    await handleReaction(admin, session, payload);
   } else if (eventType === "session.status" || eventType === "state.change") {
     await handleSessionStatus(admin, session, payload);
   }

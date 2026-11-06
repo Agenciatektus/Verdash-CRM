@@ -193,15 +193,15 @@ gate() { ( cd "$1" && bash scripts/checar-colisao-de-migration.sh "${2:-origin/m
 migrar() { printf 'select 9;\n' > "$1/supabase/migrations/$2"; }
 commit() { git -C "$1" add -A >/dev/null && git -C "$1" commit -q -m "$2"; }
 
-echo "1. o instrumento está vivo: colisão real de NNNN reprova nomeando número e arquivos"
+echo "1. o instrumento está vivo: colisão real de NNNN AVISA (subida 1.90) nomeando número e arquivos"
 c="$TMP/c1"; clonar "$c"; git -C "$c" switch -q -c fix/colide
 migrar "$c" "20260916120000_0262_colide.sql"; commit "$c" "migration com NNNN tomado"
 saida="$(gate "$c")"; code=$?
-assert_exit "$code" 1 "NNNN já tomado na base reprova"
+assert_exit "$code" 0 "NNNN já tomado na base avisa, não reprova (o timestamp é a identidade)"
 assert_contains "$saida" "NNNN=0262" "acusa QUAL número"
 assert_contains "$saida" "20260916120000_0262_colide.sql" "acusa QUAL arquivo do PR"
 assert_contains "$saida" "20260101120000_0262_existente.sql" "acusa QUAL arquivo da base já ocupava o número"
-assert_contains "$saida" "::error file=supabase/migrations/20260916120000_0262_colide.sql::" "anota no arquivo do PR, inline no diff"
+assert_contains "$saida" "::warning file=supabase/migrations/20260916120000_0262_colide.sql::" "anota no arquivo do PR, inline no diff"
 
 echo "2. NNNN livre passa"
 c="$TMP/c2"; clonar "$c"; git -C "$c" switch -q -c fix/livre
@@ -259,7 +259,7 @@ assert_contains "$saida" "andou depois do fork" "diz o que houve"
 # (b) a árvore que o CI mede: base mergeada, como no merge ref do pull_request
 git -C "$c" fetch -q origin main && git -C "$c" merge -q --no-edit FETCH_HEAD
 saida="$(gate "$c")"; code=$?
-assert_exit "$code" 1 "número disputado reprova na árvore do merge (o defeito da issue #285)"
+assert_exit "$code" 0 "número disputado avisa na árvore do merge (timestamps distintos; subida 1.90)"
 assert_contains "$saida" "NNNN=0268" "acusa o número disputado"
 assert_contains "$saida" "0268_lembrete.sql" "acusa o arquivo do PR"
 assert_contains "$saida" "0268_rascunho.sql" "acusa o arquivo que entrou pela main"
@@ -283,7 +283,7 @@ c="$TMP/c9"; clonar "$c"; git -C "$c" switch -q -c fix/gemeas
 migrar "$c" "20260916190000_0272_um.sql"; migrar "$c" "20260916200000_0272_dois.sql"
 commit "$c" "dois arquivos com o mesmo NNNN"
 saida="$(gate "$c")"; code=$?
-assert_exit "$code" 1 "NNNN repetido entre adições do mesmo PR reprova"
+assert_exit "$code" 0 "NNNN repetido entre adições do mesmo PR avisa (timestamps distintos; subida 1.90)"
 assert_contains "$saida" "NNNN=0272 aparece em 2 arquivos deste PR" "diz QUANTOS e quais"
 assert_contains "$saida" "0272_um.sql" "nomeia o primeiro arquivo"
 assert_contains "$saida" "0272_dois.sql" "nomeia o segundo arquivo"
@@ -485,7 +485,7 @@ echo "    ACRESCENTA a ela é DELE — herdar o número da main não faz um PR s
 c="$TMP/c23"; clonar "$c"; git -C "$c" switch -q -c fix/colide-com-a-main
 migrar "$c" "20260917200000_0262_colide.sql"; commit "$c" "PR com o 0262 que a main já tem"
 saida="$(gate_prs "7" "$c")"; code=$?
-assert_exit "$code" 1 "colisão com a MAIN continua reprovando"
+assert_exit "$code" 0 "colisão de NNNN com a MAIN avisa (timestamps distintos; subida 1.90)"
 assert_contains "$saida" "NNNN=0262 já existe em 'origin/main'" "e acusa a main, que é quem tem"
 # A asserção mira a LINHA da atribuição, não o nome do PR: "PR aberto #7" solto também casa com
 # o ::notice legítimo do teto (o #7 ACRESCENTA o 0276) — e foi por ele que a primeira versão

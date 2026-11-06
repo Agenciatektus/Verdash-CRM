@@ -3,27 +3,23 @@
  *
  * Código MOVIDO de `executarTurnoDoAgente` (inbound-turn.ts) sem mudança de regra,
  * ordem, texto de log ou número de awaits. Resolve o agente (roteador, ou o já
- * resolvido/preview), desvia o assistido para o rascunho, para no pausado, adia
- * fora do horário de atendimento (o aviso sai antes; `JobSettledError` é lançado
- * aqui mesmo, como antes), conta o turno da condução, grava a decisão do roteador
- * e aplica o destino do card pela intenção. As paradas voltam como `Passo`: só o
- * orquestrador faz o `return`.
+ * resolvido/preview), desvia o assistido para o rascunho, para no pausado, grava a
+ * decisão do roteador (uma por job, #3143) e aplica o destino do card pela
+ * intenção. A prévia com assunto comercial restrito para aqui (#2877). O horário
+ * do agente e a contagem da condução foram para `desvios-deterministicos.ts`
+ * (v1.90: depois das detecções e do filtro de palavra-chave). As paradas voltam
+ * como `Passo`: só o orquestrador faz o `return`.
  */
 import { setExecutionAgentOperation, currentExecutionBoundary } from '@/lib/atendimento/fronteira-server';
-import { MAX_TURNOS_POR_CONDUCAO } from '@/lib/cadencia/conducao/settings';
-import { contarTurno, encerrarConducaoEPassarParaHumano } from '@/lib/cadencia/conducao/turno';
+import { contemAssuntoComercialRestrito } from '@/lib/escalacao/assunto-comercial';
 
-import { claimOfJob } from '../../queue/claim';
-import { rescheduleJob } from '../../queue/queue';
-import { msAteAJanelaAbrir } from '../janela-de-atendimento';
-import { enviaAvisoForaDoHorario, portasDeProducao } from '../aviso-fora-do-horario';
 import { resolveConversationTurn, type TurnAgentResolution } from '../resolve-turn-agent';
 import type { TurnPreview } from '../preview';
 // Valores lidos só dentro da função (nunca na carga do módulo): o ciclo de import é seguro.
 import {
-  JobSettledError,
-  avisoAoLeadDoTurno,
+  decisaoDeRoteamentoDoJobJaGravada,
   deteccoesDeterministicasDoAssistido,
+  inboundsNaoRespondidos,
 } from '../inbound-turn';
 import type { ContextoDoTurno, Passo } from './portoes-de-entrada';
 
@@ -39,8 +35,26 @@ export interface SaidaDoRoteamento {
 
 export async function resolverRoteamentoDoTurno(
   c: ContextoDoTurno,
+  e: { restricaoComercial: boolean },
 ): Promise<Passo<SaidaDoRoteamento>> {
-  const { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob } = c;
+  const { deps, job, pool, input, preview, tenantId, leadId, runLog, liveJob } = c;
+
+  // A prévia faz a mesma passagem do handler (`escalarComercialAntesDoModelo`), mas
+  // só PROPÕE: nada é enviado nem silenciado no Testar. O turno real já passou por
+  // ela antes de escolher o agente (#2877).
+  if (
+    preview &&
+    e.restricaoComercial &&
+    inboundsNaoRespondidos(preview.context.context.messages).some(contemAssuntoComercialRestrito)
+  ) {
+    preview.result.proposals.push({ tool: 'crm_request_human_handoff', arguments: {
+      reason: 'Valores e negociação: atendimento exclusivamente humano.',
+    } });
+    preview.result.impediments.push({ code: 'commercial_requires_human',
+      message: 'Valores e negociação: a IA não pode responder. Atendimento humano necessário.' });
+    runLog.info('assunto comercial restrito: prévia propõe a passagem sem chamar o redator');
+    return { seguir: false, motivo: 'previa_comercial_restrito' };
+  }
 
   const routed = preview
     ? { config: preview.agent, routerId: null, intentName: null, confidence: null, outcome: 'preview' }
@@ -51,6 +65,9 @@ export async function resolverRoteamentoDoTurno(
         inbound: liveJob().kind === 'inbound_turn',
       }, { log: runLog, jev: deps.jev });
   const agentConfig = routed.config;
+  // O traço grava o agente que o turno RESOLVEU: follow-up e resposta de caso
+  // não passam `resolvedAgent`, e sem isto a linha ficaria sem agente nem fontes.
+  if (input.tracoDoTurno !== undefined) input.tracoDoTurno.desfecho.config = agentConfig;
   if (!preview && input.conducao && agentConfig?.operationMode === 'assisted') {
     // Defensivo: o handler só manda condução AUTOMÁTICA para cá com agente
     // automático. Rascunho aqui sairia sem a condução — não gera nada.
@@ -131,95 +148,33 @@ export async function resolverRoteamentoDoTurno(
       intent: routed.intentName,
     });
   }
-  // Horário de funcionamento da versão publicada (spec da tela: TriggerEditor).
-  // Vale SÓ para o turno inbound: a janela do lojista é sobre QUANDO ele atende
-  // quem chega, e adiar por ela um follow-up já prometido ao lead atrasaria uma
-  // promessa que não é dele. O que segura o follow-up é a janela anti-ban logo
-  // acima (`pacing/engine.ts`), que vale para os dois.
-  //
-  // Adia, não descarta: o job volta a 'pending' na abertura, SEM consumir
-  // attempts (`rescheduleJob`) — quem escreveu 22h é atendido às 8h. O throw é
-  // o contrato de `JobSettledError`: o run já dispôs do job, main.ts no-opa.
-  if (!preview && liveJob().kind === 'inbound_turn' && agentConfig?.janelaDeAtendimento != null) {
-    const esperaMs = msAteAJanelaAbrir(agentConfig.janelaDeAtendimento, clock());
-    if (esperaMs !== null) {
-      // O AVISO DE FORA DO HORÁRIO (#1926) — ANTES do adiamento, para sair na
-      // hora em que a mensagem chegou. É resposta a quem escreveu primeiro (o
-      // pacing lê a janela `resposta*` e o aviso CONTA no ledger); as réguas de
-      // opt-out, teto de envio e LGPD continuam valendo — a ordem e os vetores
-      // moram em `aviso-fora-do-horario.ts`. Qualquer erro aqui só PERDE um
-      // aviso: o turno é adiado de qualquer forma, e a resposta não pode morrer
-      // por causa de um recado.
-      try {
-        const aviso = await enviaAvisoForaDoHorario(
-          portasDeProducao(pool, deps.crmCfg.supabase, runLog),
-          {
-            organizationId: tenantId,
-            conversationId: input.conversationId,
-            contactId: leadId,
-            channelSessionId: input.channelSessionId,
-            texto: agentConfig.avisoForaDoHorario ?? null,
-            janela: agentConfig.janelaDeAtendimento,
-            agora: clock(),
-          },
-        );
-        runLog.info(
-          aviso.enviar
-            ? 'aviso de fora do horário enviado'
-            : 'aviso de fora do horário não enviado',
-          { motivo: aviso.enviar ? 'enviado' : aviso.motivo },
-        );
-      } catch (err) {
-        runLog.warn('aviso de fora do horário falhou — o turno segue adiado para a abertura', {
-          error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
-        });
-      }
-      await rescheduleJob(pool, liveJob().id, ctx.workerId, {
-        acquiredAt: claimOfJob(liveJob())?.acquired_at,
-        delayMs: esperaMs,
-        reason:
-          'fora do horário de funcionamento do agente — turno adiado para a abertura da janela',
-      });
-      runLog.info(
-        'turno adiado — fora do horário de funcionamento configurado na versão publicada',
-        {
-          agent_id: agentConfig.agentId,
-          espera_ms: esperaMs,
-          janela: `${agentConfig.janelaDeAtendimento.start}-${agentConfig.janelaDeAtendimento.end}`,
-        },
-      );
-      throw new JobSettledError(
-        'fora do horário de funcionamento — job reagendado para a abertura da janela',
-      );
-    }
-  }
-
-  // CONDUÇÃO DA CADÊNCIA: cada turno conta. Depois dos adiamentos (janela
-  // anti-ban e horário do agente), para o job reagendado não contar duas vezes.
-  // Passou do teto, a IA para e uma pessoa assume.
-  if (!preview && input.conducao) {
-    const turnos = await contarTurno(pool, tenantId, input.conducao.id);
-    if (turnos === null) {
-      runLog.info('condução da cadência encerrada no meio-tempo — turno não executado', {
-        conducao_id: input.conducao.id,
-      });
-      return { seguir: false, motivo: 'conducao_encerrada' };
-    }
-    if (turnos > MAX_TURNOS_POR_CONDUCAO) {
-      await encerrarConducaoEPassarParaHumano(
-        pool,
-        input.conducao,
-        'teto_de_turnos',
-        runLog,
-        avisoAoLeadDoTurno(deps, pool, liveJob(), input.channelSessionId, input.conversationId, runLog),
-      );
-      return { seguir: false, motivo: 'conducao_no_teto_de_turnos' };
-    }
-  }
+  // O horário de funcionamento do agente e a contagem da condução moram em
+  // `desvios-deterministicos.ts` desde a v1.90 (#2679): rodam DEPOIS das
+  // detecções determinísticas e do filtro de palavra-chave.
 
   // Fase 3: grava a decisão de roteamento e a aderência da conversa ao agente.
   // Fire-and-forget — falha de telemetria nunca derruba a resposta ao lead.
+  //
+  // #3143 — UM TURNO, UMA DECISÃO DE ROTEAMENTO. O turno adiado pela JANELA DO
+  // AGENTE (o gate em `desvios-deterministicos.ts`, depois do filtro de
+  // palavra-chave) volta como a MESMA linha de `job_queue` (`rescheduleJob`), e a
+  // reexecução resolve o turno outra vez. A decisão da PRIMEIRA passagem é
+  // REUSADA: não grava de novo nem reaplica o destino do card. A guarda é de
+  // TELEMETRIA e degrada ABERTO: se a leitura falhar, grava como antes.
+  let decisaoJaGravada = false;
   if (!preview && routed.routerId !== null) {
+    try {
+      decisaoJaGravada = await decisaoDeRoteamentoDoJobJaGravada(
+        pool,
+        tenantId,
+        liveJob().id,
+        liveJob().created_at,
+      );
+    } catch (err) {
+      runLog.warn('não consegui conferir a decisão de roteamento deste job — gravando como antes', {
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
+      });
+    }
     try {
       if (agentConfig !== null) {
         await pool.query(
@@ -234,27 +189,31 @@ export async function resolverRoteamentoDoTurno(
       // decidiu mora em `llm_calls` do mesmo `job_id` (purpose `intent_router`,
       // `origem_da_escolha = 'jev'`); o único leitor desta tabela
       // (`app/api/v1/ai/evolution`) conta roteamento, não quem o fez.
-      await pool.query(
-        `insert into ai_router_decisions
-           (organization_id, router_id, conversation_id, intent_name, confidence, agent_id, outcome, job_id)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [
-          tenantId,
-          routed.routerId,
-          input.conversationId,
-          routed.intentName,
-          routed.confidence,
-          agentConfig?.agentId ?? null,
-          routed.outcome,
-          liveJob().id,
-        ],
-      );
+      if (!decisaoJaGravada) {
+        await pool.query(
+          `insert into ai_router_decisions
+             (organization_id, router_id, conversation_id, intent_name, confidence, agent_id, outcome, job_id)
+           values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            tenantId,
+            routed.routerId,
+            input.conversationId,
+            routed.intentName,
+            routed.confidence,
+            agentConfig?.agentId ?? null,
+            routed.outcome,
+            liveJob().id,
+          ],
+        );
+      }
     } catch (err) {
       runLog.warn('decisão do router não gravada', {
         error: (err instanceof Error ? err.message : String(err)).slice(0, 120),
       });
     }
   }
-  await aplicarDestinoDoCardDaIntencao(c, { destinoPipelineId, destinoStageId, routed, agentConfig });
+  // No turno reexecutado depois do adiamento pela janela do agente o destino NÃO
+  // é reaplicado: a passagem anterior já moveu o card (#3143).
+  if (!decisaoJaGravada) await aplicarDestinoDoCardDaIntencao(c, { destinoPipelineId, destinoStageId, routed, agentConfig });
   return { seguir: true, valor: { routed, agentConfig, agentOperation } };
 }

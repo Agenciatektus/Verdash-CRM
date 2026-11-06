@@ -21,7 +21,7 @@ import {
   TRANSPARENCIA_SYSTEM_BLOCK,
   blocosDeAgendaResidentes,
   latestCheckpoint,
-  loadInboundBodyForJob,
+  loadInboundForJob,
 } from '../inbound-turn';
 import type { ContextoDoTurno } from './portoes-de-entrada';
 
@@ -87,7 +87,7 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
   // juntos, o pico chega a 32 leituras sobre 10 conexões (default do pg, knob
   // DB_POOL_MAX). O pg enfileira e nenhuma destas leituras segura conexão, então
   // o pior caso é espera de fila no pico, não erro nem deadlock.
-  const [playbook, [skills, currentInboundText], orgMemory, [previous, leadState]] =
+  const [playbook, [skills, inboundDoJob], orgMemory, [previous, leadState]] =
     await Promise.all([
       (async () => {
         const prospectingContext =
@@ -109,7 +109,7 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
           await loadSkills(pool, tenantId),
           input.inboundMessageId === undefined
             ? null
-            : await loadInboundBodyForJob(pool, {
+            : await loadInboundForJob(pool, {
                 tenantId,
                 conversationId: input.conversationId,
                 inboundMessageId: input.inboundMessageId,
@@ -125,6 +125,10 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
           preview?.kind === 'sandbox' ? null : await getLeadState(pool, tenantId, leadId),
         ] as const)(),
     ]);
+  // A mensagem canônica do job: o TEXTO que este turno responde e, num grupo,
+  // QUEM a escreveu (#2729). As duas saem da mesma linha, numa leitura só.
+  const currentInboundText = inboundDoJob === null ? null : inboundDoJob.body;
+  const currentInboundSender = inboundDoJob === null ? null : inboundDoJob.sender;
   const skillIndex = renderSkillIndex(skills);
   const systemWithMemory = composeSystemPrompt({
     playbookPrompt: playbook.prompt,
@@ -168,6 +172,7 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
     turnContextKnobs,
     skills,
     currentInboundText,
+    currentInboundSender,
     previous,
     leadState,
     system,

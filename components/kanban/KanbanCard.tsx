@@ -5,6 +5,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { Lead } from "@/lib/types/leads";
+import type { Stage } from "@/lib/kanban/types";
 import { resolveCardState, type CardInput } from "@/lib/kanban/card-state";
 import { canalDoCard, iniciaisDoCard, linhaDeBaixo, nomeDoCard } from "@/lib/kanban/identidade-do-card";
 import { tempoNaEtapa } from "@/lib/kanban/tempo-na-etapa";
@@ -53,6 +54,9 @@ interface KanbanCardProps {
   compacto?: boolean;
   /** `crm_stages.expected_duration_hours` — o limite do "Parado há X dias". */
   limiteDaEtapa?: number | null;
+  /** Repassados ao menu de ações ("Mover para…"). */
+  etapas?: Stage[];
+  onMoverPara?: (lead: Lead, stageId: string) => void;
 }
 
 function formatValor(cents: number | null, currency: string | null): string | null {
@@ -85,6 +89,8 @@ export function KanbanCard({
   onOpen,
   compacto = false,
   limiteDaEtapa = null,
+  etapas,
+  onMoverPara,
 }: KanbanCardProps) {
   const t = useT();
   const value = formatValor(card.valueCents, card.currency);
@@ -242,7 +248,12 @@ export function KanbanCard({
               )}
             />
             <div className="self-start">
-              <KanbanCardActions lead={lead} pipelineId={pipelineId} />
+              <KanbanCardActions
+                lead={lead}
+                pipelineId={pipelineId}
+                etapas={etapas}
+                onMoverPara={onMoverPara}
+              />
             </div>
           </div>
 

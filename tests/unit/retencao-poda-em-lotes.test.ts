@@ -399,9 +399,9 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 17 drenos: 15 pelo rpc (com a poda do bus da Tektus, 9021/9057) + a mídia +
-    // a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(17);
+    // 18 drenos: 16 pelo rpc (inclui a poda do bus da Tektus, 9021/9057, o aviso de agendamento, 0753, e a
+    // telemetria, o ritmo, as cópias e os checkpoints do upstream 1.90) + a mídia + a décima poda (o DELETE do admin).
+    expect(r.falhas).toHaveLength(18);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -455,8 +455,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 15 drenos do rpc falham nesta rodada (14 + a poda do bus da Tektus).
-    expect(r.falhas).toHaveLength(15);
+    // Só os 16 drenos do rpc falham nesta rodada (15 + a poda do bus da Tektus).
+    expect(r.falhas).toHaveLength(16);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 });
@@ -599,6 +599,9 @@ describe("houveEfeito — as duas direções", () => {
     avisos_de_caso_apagados: 0,
     lotes_avisos_de_caso: 0,
     avisos_de_caso_tem_resto: false,
+    avisos_de_agendamento_apagados: 0,
+    lotes_avisos_de_agendamento: 0,
+    avisos_de_agendamento_tem_resto: false,
     retencao_aviso_de_caso_dias: RETENCAO_AVISO_DE_CASO_DIAS_PADRAO,
     // Oitava poda (migration 0408): o candidato de prospecção vencido.
     prospeccao_apagada: 0,
@@ -717,6 +720,7 @@ describe("houveEfeito — as duas direções", () => {
     // As seis anteriores já mostram que esquecer o predicado é o modo de falha
     // natural aqui — e ele é mudo: a rodada apaga e não deixa registro.
     expect(houveEfeito({ ...base, avisos_de_caso_apagados: 1 })).toBe(true);
+    expect(houveEfeito({ ...base, avisos_de_agendamento_apagados: 1 })).toBe(true);
   });
 
   it("...e apagou evento do bus → TAMBÉM audita (migration 9021)", () => {

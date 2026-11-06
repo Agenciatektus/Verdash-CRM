@@ -3,6 +3,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
+import { roleAtLeast } from "@/lib/auth/types";
 import { useBulkConversations, type AcaoEmLote } from "@/hooks/inbox/useBulkConversations";
 import { useSelecaoEmLote } from "@/hooks/inbox/useSelecaoEmLote";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
@@ -31,6 +32,9 @@ import { InboxKeyboardShortcuts } from "./InboxKeyboardShortcuts";
 import { useAtalhosPessoais } from "@/hooks/inbox/useAtalhosPessoais";
 
 import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
+import { EncaminharDialog } from "./EncaminharDialog";
+import { useEncaminharMensagem } from "@/hooks/inbox/useEncaminharMensagem";
+import type { Message as ConversationMensagem } from "@/lib/types/messaging";
 import { OpenConversationProvider } from "@/hooks/notifications/OpenConversationContext";
 // ADR-05: ícone de feature sai do mapa canônico, nunca do pacote direto.
 import { CaretLeft, ChatCircle } from "@/lib/ui/icons";
@@ -255,6 +259,12 @@ export function InboxLayout({
   const colunasRegulaveis = useLargurasDasColunas(user?.id);
   const cartaoRef = useRef<HTMLDivElement>(null);
   /**
+   * A mensagem escolhida para ENCAMINHAR (#2835). Quem escolhe é o fio (dentro
+   * do `PainelDaConversa`) e quem mostra o destino é o diálogo daqui, que tem a
+   * lista de conversas. `null` = diálogo fechado.
+   */
+  const [encaminhando, setEncaminhando] = useState<ConversationMensagem | null>(null);
+  /**
    * O rascunho sugerido (#1611) vale para a conversa da URL e só enquanto ela
    * está aberta: sair dela — clique, atalho ou voltar do navegador — o descarta
    * de vez. Sem isto o texto escrito para um cliente ficava no campo do próximo,
@@ -269,6 +279,7 @@ export function InboxLayout({
     ultimoIdNaUrl.current = idNaUrl;
     // O histórico do navegador também troca a conversa, sem carregar a página inteira.
     setSelectedId(idNaUrl);
+    setEncaminhando(null);
   }, [idNaUrl]);
 
   /**
@@ -401,7 +412,17 @@ export function InboxLayout({
   // aparece. (A rota ainda valida por conta própria: este portão é de tela,
   // a fonte da regra é a API.)
   const podeAgirEmLote = usePermission("inbox.reply");
+  // O mesmo critério da rota `usable-for-rag` (#3006), como no CRMSidePanel.
+  const podeMarcarExemplo =
+    (user.is_platform_admin && !user.support) || roleAtLeast(activeOrg?.role, "agent");
   const selecao = useSelecaoEmLote();
+  // Encaminhar (#2835): a execução reusa o caminho de envio do Inbox (ver o hook).
+  const encaminhar = useEncaminharMensagem();
+  // As conversas já carregadas são o universo de destinos, sem busca nova.
+  const conversasDaLista = useMemo(
+    () => listQ.data?.pages.flatMap((p) => p.data) ?? [],
+    [listQ.data],
+  );
   const lote = useBulkConversations();
 
   const rodarLote = useCallback(
@@ -441,6 +462,8 @@ export function InboxLayout({
   const handleSelect = useCallback((id: string | null) => {
     if (id === selectedId) return;
     setSelectedId(id);
+    // O destino do encaminhamento não pode sobreviver à troca de conversa.
+    setEncaminhando(null);
     // ?id= é o formato já usado pelos atalhos do CRM. A History API mantém a
     // seleção instantânea sem pedir um novo Server Component a cada clique.
     const params = new URLSearchParams(searchParams.toString());
@@ -509,7 +532,7 @@ export function InboxLayout({
         // próprio `<main>` quando há painel de chamada (a mesma conta do padding
         // dele), e o `pb-2` (`--space-2`) quando não há. Sem respiro em cima: o cartão encosta no
         // topo e na barra lateral, como o `.work` do protótipo.
-        "relative grid h-[calc(100dvh-3.5rem-var(--respiro-do-main,max(var(--space-2),var(--rodape-ocupado,0px))))] w-full grid-cols-1 overflow-hidden rounded-xl border border-border bg-surface pele-cartao largo:grid-cols-[300px_minmax(0,1fr)]",
+        "relative grid h-[calc(100dvh-var(--faixas-de-cima,0px)-3.5rem-var(--respiro-do-main,max(var(--space-2),var(--rodape-ocupado,0px))))] w-full grid-cols-1 overflow-hidden rounded-xl border border-border bg-surface pele-cartao largo:grid-cols-[300px_minmax(0,1fr)]",
         // No celular a altura sai da casca do app: o topo que está na tela (nenhum com
         // a conversa aberta, que tem barra própria) e o respiro de baixo do `<main>`,
         // que no celular já soma a barra inferior e a área segura. Com painel de chamada
@@ -604,6 +627,7 @@ export function InboxLayout({
                     )
                 : undefined
             }
+            podeMarcarExemplo={podeMarcarExemplo}
           />
         </div>
       </div>
@@ -715,6 +739,7 @@ export function InboxLayout({
               conversation={selectedConversation}
               searchTerm={ferramentas.termoDaBusca}
               onAbrirConversa={handleSelect}
+              onEncaminhar={setEncaminhando}
               // O aviso é DA conversa da URL: trocar de conversa dentro da inbox
               // não pode deixar um texto sugerido no campo de outra pessoa.
               rascunho={rascunhoVivo}
@@ -773,6 +798,27 @@ export function InboxLayout({
         {...atalhosPessoais}
       />
       <ShortcutsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <EncaminharDialog
+        open={encaminhando !== null}
+        onOpenChange={(aberto) => {
+          if (!aberto) {
+            setEncaminhando(null);
+            // Diálogo fechado, intenção zerada: reabrir depois tem de poder
+            // encaminhar de novo, com chave nova.
+            encaminhar.limparIntencao();
+          }
+        }}
+        conversas={conversasDaLista}
+        conversationIdAtual={selectedConversation?.id ?? null}
+        enviando={encaminhar.isPending}
+        onEscolher={(destino) => {
+          if (!encaminhando) return;
+          encaminhar.mutate(
+            { id: encaminhando.id, conversationIdDestino: destino },
+            { onSuccess: () => setEncaminhando(null) },
+          );
+        }}
+      />
     </div>
     </OpenConversationProvider>
   );

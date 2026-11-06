@@ -237,7 +237,7 @@ describe("a organização ativa leva moeda e país ao cliente", () => {
     const fonte = readFileSync("lib/auth/server.ts", "utf8");
     // `foto_path` entrou com a foto da organização (9061); o que importa aqui é
     // que país, moeda e fuso continuam na MESMA leitura do vínculo.
-    expect(fonte).toMatch(/organizations\(display_name, locale, timezone, currency, country, status, suspended_kind(, foto_path)?\)/);
+    expect(fonte).toMatch(/organizations(!user_organizations_organization_id_fkey)?\(display_name, locale, timezone, currency, country, status, suspended_kind(, foto_path)?\)/);
     expect(fonte).toContain("currency: org?.currency ?? null");
     expect(fonte).toContain("country: org?.country ?? null");
   });

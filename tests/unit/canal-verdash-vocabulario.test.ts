@@ -44,15 +44,19 @@ describe("capabilities do canal hospedado", () => {
       // hospedado ainda não implementa `editMessage`: prometer na tela seria
       // oferecer um botão que o envio recusa (capability nova do upstream v1.69).
       alteraMensagemEnviada: false,
+      // A agenda do celular (`contacts/all`, #2736) é do canal por QR; o hospedado não a lê.
+      phonebook: false,
     });
   });
 
   it("é igual ao canal por QR porque é o MESMO WhatsApp por baixo, não por cópia", () => {
     // Capability descreve o que a plataforma permite, não quem hospeda a
     // conexão. Divergir aqui afirmaria uma diferença que não existe.
-    // Única diferença declarada: `alteraMensagemEnviada` (ver o caso acima) —
-    // é do ADAPTER, não da plataforma, e some quando o adapter implementar a edição.
-    expect({ ...capabilitiesOf(VERDASH), alteraMensagemEnviada: true }).toEqual(CHANNEL_CAPABILITIES.waha);
+    // Diferenças declaradas: `alteraMensagemEnviada` e `phonebook` (ver o caso acima) —
+    // são do ADAPTER, não da plataforma, e somem quando o adapter implementar a edição e a agenda.
+    expect({ ...capabilitiesOf(VERDASH), alteraMensagemEnviada: true, phonebook: true }).toEqual(
+      CHANNEL_CAPABILITIES.waha,
+    );
   });
 
   it("banRisk continua ARMADO — e aqui o número em risco é o principal do cliente", () => {
