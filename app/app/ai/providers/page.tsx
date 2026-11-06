@@ -50,7 +50,7 @@ export default async function ProvedoresPage() {
     <PainelDeProvedores
       antesDosPontos={
         error ? (
-          <p role="alert" className="max-w-2xl rounded-md border border-destructive/40 p-4 text-sm text-destructive">
+          <p role="alert" className="rounded-md border border-destructive/40 p-4 text-sm text-destructive">
             {traduzir(ERRO_DE_LEITURA, idioma)}
           </p>
         ) : (
