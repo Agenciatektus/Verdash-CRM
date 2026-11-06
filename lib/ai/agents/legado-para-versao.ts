@@ -39,16 +39,7 @@
  * recuperação legada (`LegacyRecovery` + `/reconcile`).
  */
 import type { VersionInput } from "@/lib/ai/agents/validation";
-
-/**
- * Provedor adotado quando o `model` legado não traz barra.
- *
- * É o default do produto (todo o `AGENT_MODELS` é `anthropic/...`, e
- * `provedorDaInstalacao` cai em `"anthropic"`), não um chute: a coluna nasceu
- * com `DEFAULT 'anthropic/claude-sonnet-4-6'`, então na prática este ramo só
- * alcança `model` gravado por código antigo sem a barra.
- */
-const PROVEDOR_PADRAO = "anthropic";
+import { provedorNaturalDoModelo } from "@/lib/ai/par-provedor-modelo";
 
 /**
  * Do formato legado (`ai_agents.system_prompt` + `ai_agents.model`) ao `version`
@@ -61,11 +52,16 @@ const PROVEDOR_PADRAO = "anthropic";
 export function corpoLegadoParaVersao(
   origem: { system_prompt: string | null; model?: string | null },
 ): Partial<VersionInput> {
-  const bruto = origem.model?.trim() || `${PROVEDOR_PADRAO}/claude-sonnet-4-6`;
+  // Sem modelo, nada é inventado (era `anthropic/claude-sonnet-4-6` até
+  // 06/11/2026): provider e model vazios fazem a validação da versão RECUSAR.
+  // Id sem barra: o provedor sai do próprio nome (`claude-…` → anthropic).
+  const bruto = origem.model?.trim() || "";
   const corte = bruto.indexOf("/");
   return {
     system_prompt: origem.system_prompt?.trim() || "",
-    provider: (corte > 0 ? bruto.slice(0, corte) : PROVEDOR_PADRAO) as VersionInput["provider"],
+    provider: (corte > 0
+      ? bruto.slice(0, corte)
+      : (provedorNaturalDoModelo(bruto) ?? "")) as VersionInput["provider"],
     model: corte > 0 ? bruto.slice(corte + 1) : bruto,
     credential_id: null,
     channel_session_id: null,
