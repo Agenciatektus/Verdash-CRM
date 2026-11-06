@@ -3,7 +3,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { traduzir } from "@/lib/i18n/dicionario";
+import { traduzir } from "@/lib/i18n/traducao";
 import type { Idioma } from "@/lib/i18n/idiomas";
 
 export function ReprocessarClique({ clickId, idioma }: { clickId: string; idioma: Idioma }) {

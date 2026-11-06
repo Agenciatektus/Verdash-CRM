@@ -15,6 +15,8 @@ async function rodar(total: number) {
   const responder = (c: Cadeia): Resposta => {
     if (c.tabela === "cobranca_planos") return { data: [] };
     if (c.tabela === "organizations") return { data: [] };
+    // Fork: a rodada também lê `platform_config` (uma linha, maybeSingle); a paginação é só a das assinaturas.
+    if (c.tabela !== "cobranca_assinaturas") return { data: null };
     leituras.push(c);
     const ordenada = c.passos.some((p) => p.metodo === "order" && p.args[0] === "organization_id");
     // sem ordem, cada página sai numa ordem diferente: é o que o Postgres não promete manter
@@ -59,7 +61,8 @@ describe("rodada: a régua passa por toda assinatura, mesmo além de 1.000", () 
     const avisadas = new Set<string>();
     const rpc = (nome: string, args: Record<string, unknown>): Resposta => {
       if (nome === "fn_cobranca_reconciliaveis") return { data: [] };
-      if (nome === "fn_gasto_de_ia_do_mes") return { data: 85 };
+      // Fork (9098): a régua do teto é o gasto pago pela chave da INSTALAÇÃO.
+      if (nome === "fn_gasto_de_ia_da_instalacao_do_mes") return { data: 85 };
       if (nome === "fn_cobranca_avisar_teto_de_ia") avisadas.add(args.p_org as string);
       return { data: true };
     };

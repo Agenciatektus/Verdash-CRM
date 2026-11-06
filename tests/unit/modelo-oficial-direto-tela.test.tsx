@@ -209,7 +209,8 @@ describe("tela do canal oficial direto — gestão de modelo", () => {
 
     fireEvent.click(screen.getByTestId("btn-criar-modelo"));
     const form = document.querySelector('[data-formulario-do-modelo="criar"]') as HTMLElement;
-    expect((within(form).getByLabelText("Idioma") as HTMLSelectElement).value).toBe("en");
+    // O Idioma é o `Escolha` do DS: o valor mora no <select> escondido, que leva o data-testid.
+    expect((within(form).getByTestId("idioma-do-modelo") as HTMLSelectElement).value).toBe("en");
   });
 
   it("⭐ modelo de OUTRA conexão aparece sem Editar nem Apagar", () => {

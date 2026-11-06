@@ -132,6 +132,7 @@ export function FormularioDaDefinicao({
             value={idioma}
             onValueChange={setIdioma}
             aria-label={t("Idioma")}
+            data-testid="idioma-do-modelo"
             disabled={!!editando}
             className="w-56"
           >
