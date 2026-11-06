@@ -819,6 +819,24 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
     expect(chamadas.filter((c) => c.rota === "GET /disputes")).toHaveLength(2);
   });
 
+  it("listarPagamentos: falha em /disputes (403 ou 500) não derruba o lote; a disputada sai contestada e a outra segue paga", async () => {
+    for (const falha of [{ status: 403, corpo: { error: { type: "invalid_request_error" } } }, { status: 500, corpo: {} }]) {
+      const { adaptador } = montar({
+        "GET /invoices": { corpo: { data: ["ch_d", "ch_ok"].map((ch) => ({
+          id: `in_${ch}`, amount_paid: 9_900, currency: "brl", status_transitions: { paid_at: 1_700_000_000 },
+          payments: { data: [{ payment: { type: "charge", charge: ch } }] },
+        })) } },
+        "GET /charges": { corpo: { data: [
+          { id: "ch_d", status: "succeeded", amount_refunded: 0, disputed: true },
+          { id: "ch_ok", status: "succeeded", amount_refunded: 0, disputed: false },
+        ] } },
+        "GET /disputes": falha,
+      });
+      const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
+      expect(lidos?.map((p) => [p.cobrancaRef, p.contestado])).toEqual([["ch_d", true], ["ch_ok", false]]);
+    }
+  });
+
   it("listarPagamentos: forma inesperada vira ErroDoProvedor, nunca ZodError", async () => {
     const { adaptador } = montar({ "GET /invoices": { corpo: { data: [{ id: "in_1" }] } }, "GET /charges": { corpo: { data: [] } } });
     await expect(adaptador.listarPagamentos?.({ clienteRef: "cus_x" })).rejects.toBeInstanceOf(ErroDoProvedor);

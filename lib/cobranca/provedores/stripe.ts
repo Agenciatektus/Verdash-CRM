@@ -723,8 +723,13 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
     const contestadas = new Set<string>();
     for (const c of new Set(porRef.values())) {
       if (!c.disputed) continue;
-      const disputas = ler(listaDe(z.object({ status: z.string() })), await chamar("GET", `/disputes?charge=${encodeURIComponent(c.id)}&limit=10`)).data;
-      if (disputas.length === 0 || disputas.some((d) => d.status !== "won")) contestadas.add(c.id);
+      // Falha segura: chave restrita sem Disputes ou 5xx não derruba o lote; a cobrança fica contestada.
+      try {
+        const disputas = ler(listaDe(z.object({ status: z.string() })), await chamar("GET", `/disputes?charge=${encodeURIComponent(c.id)}&limit=10`)).data;
+        if (disputas.length === 0 || disputas.some((d) => d.status !== "won")) contestadas.add(c.id);
+      } catch {
+        contestadas.add(c.id);
+      }
     }
     return faturas.flatMap((f) => {
       const pagaEm = f.status_transitions.paid_at;
