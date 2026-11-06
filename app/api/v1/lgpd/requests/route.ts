@@ -111,6 +111,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (status) dataQuery = dataQuery.eq("status", status);
   if (type) dataQuery = dataQuery.eq("request_type", type);
   if (urgent) dataQuery = dataQuery.not("status", "in", "(completed,failed)").lt("due_at", corte);
+  // "Em alerta" e "No prazo" vivem do corte em diante (ou sem prazo): filtrar no
+  // banco impede que o histórico vencido, primeiro na ordem, ocupe o teto.
+  if (balde === "warning" || balde === "ok") dataQuery = dataQuery.or(`due_at.gte.${corte},due_at.is.null`);
 
   const { data: rows, error: dbErr } = await dataQuery;
   if (dbErr) {

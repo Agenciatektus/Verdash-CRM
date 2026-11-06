@@ -16,23 +16,26 @@ vi.mock("@/lib/auth/require-role", () => ({
 
 type Linha = { id: string; status: string; due_at: string | null; received_at: string };
 let linhas: Linha[] = [];
+let filtrosEq: Array<[string, unknown]> = [];
 
-/** Dublê do PostgREST: devolve as linhas na ordem do banco e respeita range/limit. */
+/** Dublê do PostgREST: devolve as linhas na ordem do banco e respeita range/limit/or. */
 function consulta() {
   let recorte: [number, number] | null = null;
   let teto: number | null = null;
   let soContagem = false;
+  let desdeOCorte: string | null = null;
   const q = {
     select: (_c: string, o?: { head?: boolean }) => ((soContagem = !!o?.head), q),
-    eq: () => q,
+    eq: (col: string, v: unknown) => (filtrosEq.push([col, v]), q),
     not: () => q,
     lt: () => q,
+    or: (expr: string) => ((desdeOCorte = /due_at\.gte\.([^,]+),due_at\.is\.null/.exec(expr)?.[1] ?? null), q),
     order: () => q,
     range: (a: number, b: number) => ((recorte = [a, b]), q),
     limit: (n: number) => ((teto = n), q),
     then: (ok: (r: unknown) => void) => {
       if (soContagem) return ok({ count: linhas.length });
-      let data = linhas;
+      let data = desdeOCorte ? linhas.filter((l) => l.due_at === null || l.due_at >= desdeOCorte!) : linhas;
       if (recorte) data = data.slice(recorte[0], recorte[1] + 1);
       if (teto !== null) data = data.slice(0, teto);
       return ok({ data, error: null });
@@ -57,6 +60,7 @@ async function listar(qs: string) {
 
 describe("balde da LGPD antes da página", () => {
   beforeEach(() => {
+    filtrosEq = [];
     // Na ordem do banco (prazo crescente): o ok vem antes do warning.
     linhas = [
       { id: "ok-1", status: "received", due_at: dia(14), received_at: dia(-1) },
@@ -70,6 +74,19 @@ describe("balde da LGPD antes da página", () => {
     expect(r.data.map((l) => l.id)).toEqual(["alerta-1"]);
     expect(r.meta.total).toBe(1);
     expect(r.meta.has_more).toBe(false);
+    expect(filtrosEq).toContainEqual(["organization_id", "org-1"]);
+  });
+
+  it("histórico vencido além do teto não esconde o pedido em alerta", async () => {
+    const vencidos = Array.from({ length: 2000 }, (_, i) => ({
+      id: `velho-${i}`,
+      status: "completed",
+      due_at: dia(-400),
+      received_at: dia(-420),
+    }));
+    linhas = [...vencidos, ...linhas];
+    const r = await listar("sla_bucket=warning&page=1&limit=25");
+    expect(r.data.map((l) => l.id)).toEqual(["alerta-1"]);
   });
 
   it("only_count com balde conta só o balde", async () => {
