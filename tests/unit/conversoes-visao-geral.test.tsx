@@ -45,7 +45,9 @@ function abrir(pendencias: unknown[]) {
 
 describe("aba Visão geral de Conversões", () => {
   it("com pendência: avisa com a contagem e leva à lista", () => {
-    abrir([pendencia]);
+    const { container } = abrir([pendencia]);
+    // O alvo da âncora existe na mesma aba.
+    expect(container.querySelector("#pendencias")).not.toBeNull();
     const aviso = screen.getByRole("status");
     expect(aviso.textContent).toContain("1");
     expect(within(aviso).getByRole("link", { name: "Ver pendência" }).getAttribute("href")).toBe("#pendencias");
