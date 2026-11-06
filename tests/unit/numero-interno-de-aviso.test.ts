@@ -52,7 +52,13 @@ function fakeDb(linha: Record<string, unknown> | null) {
     },
   };
   return {
-    db: { from: () => builder } as unknown as SupabaseClient,
+    // `organizations` (flag 9231, desligada aqui) não conta como leitura do aviso.
+    db: {
+      from: (t: string) =>
+        t === "organizations"
+          ? { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }
+          : builder,
+    } as unknown as SupabaseClient,
     leituras: () => leituras,
   };
 }
@@ -129,7 +135,7 @@ describe("lerNumeroInternoDeAviso — a leitura quente", () => {
   it("organização sem configuração devolve vazio e não casa nada", async () => {
     const { db } = fakeDb(null);
     expect(await lerNumeroInternoDeAviso(db, ORG)).toEqual({
-      destino: null, jid: null, respostaWhatsappHabilitada: false, sessaoId: null,
+      destino: null, jid: null, respostaWhatsappHabilitada: false, sessaoId: null, conexoesDaPropriaOrg: [],
     });
     expect(await ehNumeroInternoDeAviso(db, ORG, { kind: "phone", phone: "+5531998966398", lid: null })).toBe(
       false,

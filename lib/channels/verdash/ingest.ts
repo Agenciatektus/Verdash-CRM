@@ -52,6 +52,7 @@ import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual
 
 import { estamparAtribuicaoDoContato } from "@/lib/leads/atribuicao-de-anuncio";
 import { aplicarEfeitosPosEntrada } from "../pos-entrada";
+import { ignoraConexaoDaPropriaOrg } from "@/lib/escalacao/numero-interno-de-aviso";
 import { extrairAtribuicaoVerdash } from "./atribuicao-de-anuncio";
 
 import { aplicarAlteracaoDeMensagem } from "../alteracao-de-mensagem";
@@ -149,6 +150,9 @@ export async function ingestVerdashInbound(
     // MESMA pessoa virar um segundo contato.
     return { status: "ignored", reason: "sem_identidade_utilizavel" };
   }
+
+  // 9231: aviso vindo de outra conexão da própria org não vira contato nem IA.
+  if (await ignoraConexaoDaPropriaOrg(admin, input, msg)) return { status: "ignored", reason: "conexao_da_propria_org" };
 
   const contactId = await upsertContact(admin, input.organizationId, msg, identity);
   if (!contactId) return { status: "ignored", reason: "contato_nao_resolvido" };

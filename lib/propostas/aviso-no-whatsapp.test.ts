@@ -202,7 +202,7 @@ describe("aplicaAvisoDeProposta", () => {
       detail: "destino_da_propria_organizacao",
     });
     // A pergunta é feita sobre o número RESOLVIDO, não o da empresa.
-    expect(destinoEhDaPropriaOrganizacao).toHaveBeenCalledWith("org-1", "+5531988887777");
+    expect(destinoEhDaPropriaOrganizacao).toHaveBeenCalledWith("org-1", "+5531988887777", expect.any(String)); // + o canal que envia (9231 da dev)
     expect(envia).not.toHaveBeenCalled();
     expect(audita).toHaveBeenCalledWith(
       expect.objectContaining({

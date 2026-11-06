@@ -613,7 +613,7 @@ async function entrega_(
   // O destino pode ter voltado a ser número de uma conexão ATIVA da própria
   // organização depois de salvo (conexão reativada) — a mesma pergunta do
   // aviso de caso, feita de novo no envio.
-  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, destino)) {
+  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, destino, canal.id)) {
     return await condena(deps, orgId, entrega, "destino_da_propria_organizacao", agora);
   }
 

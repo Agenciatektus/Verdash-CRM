@@ -211,9 +211,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     // `ai_agent_versions` e só aparecia no turno, longe da tela que mostra o
     // provedor geral. Agora o par sai do MESMO ponto único que confere a
     // execução (`lib/ai/par-provedor-modelo.ts`): o padrão da organização
-    // quando ele se sustenta, a compatibilidade EXPLÍCITA do provedor depois
-    // (a Anthropic do legado, e só ela), o catálogo do provedor efetivo em
-    // seguida — e, sem par sustentável, a criação é RECUSADA aqui, antes de
+    // quando ele se sustenta, o catálogo do provedor efetivo em seguida (sem
+    // Claude de compatibilidade desde 06/11/2026) — e, sem par sustentável, a criação é RECUSADA aqui, antes de
     // qualquer insert.
     const par = await resolverParEfetivo({
       modeloInformado: parseLegado.data.model,

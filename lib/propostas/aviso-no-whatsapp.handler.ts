@@ -75,7 +75,8 @@ export const avisoDePropostaNoWhatsAppHandler: EventHandler = {
               return nomeDoContato(data as { name: string | null; display_name: string | null } | null);
             },
             carregaCanal: (orgId, canalId) => doCaso.carregaCanal(orgId, canalId),
-            destinoEhDaPropriaOrganizacao: (orgId, telefone) => doCaso.destinoEhDaPropriaOrganizacao(orgId, telefone),
+            destinoEhDaPropriaOrganizacao: (orgId, telefone, remetenteId) =>
+              doCaso.destinoEhDaPropriaOrganizacao(orgId, telefone, remetenteId),
             registraJidDoAviso: (orgId, jid) => doCaso.registraJidDoAviso(orgId, jid),
             marcaDaOrganizacao: (orgId) => doCaso.marcaDaOrganizacao(orgId),
           },

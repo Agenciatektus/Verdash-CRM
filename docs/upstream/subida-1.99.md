@@ -28,7 +28,7 @@ select count(*) from crm_leads l
 ```
 
 ### Objetos redefinidos pelos dois lados → migration `9238`
-`20261106200000_9238_integracao_da_subida_1_99.sql` roda por último.
+`20261106200000_9238_integracao_da_subida_1_99.sql` roda depois de toda migration que mexe nesses objetos (a 9231 da dev, posterior, não mexe).
 
 | objeto | upstream | fork | versão integrada |
 |---|---|---|---|

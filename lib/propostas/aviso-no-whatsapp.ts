@@ -54,7 +54,7 @@ export interface AvisoDePropostaDb {
   nomeDoContato(orgId: string, contactId: string): Promise<string | null>;
   carregaCanal(orgId: string, channelSessionId: string): Promise<CanalDoAviso | null>;
   /** A mesma pergunta do aviso de caso: o destino é uma conexão ATIVA desta organização? */
-  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string): Promise<boolean>;
+  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string, remetenteId: string): Promise<boolean>;
   registraJidDoAviso(orgId: string, jid: string): Promise<void>;
   marcaDaOrganizacao(orgId: string): Promise<{ nome: string; idioma: Idioma }>;
 }
@@ -178,7 +178,7 @@ export async function aplicaAvisoDeProposta(deps: AvisoDePropostaDeps, row: Even
   // O destino agora pode vir do WhatsApp de uma pessoa (#3803), que nenhuma
   // checagem de configuração viu na hora do envio. Mesma guarda do aviso de
   // caso: número conectado desta organização fecha o laço robô-com-robô.
-  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, destino.telefone)) {
+  if (await deps.db.destinoEhDaPropriaOrganizacao(orgId, destino.telefone, canalId)) {
     return falha("destino_da_propria_organizacao");
   }
 

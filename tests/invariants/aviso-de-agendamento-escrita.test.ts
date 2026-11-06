@@ -226,6 +226,35 @@ describe("0707 — fn_definir_aviso_de_agendamento é a única porta", () => {
     expect(erro).toMatch(/aviso_de_agendamento_numero_da_propria_org/i);
   });
 
+  it("9231: com a exceção da plataforma, OUTRA conexão ativa da org é aceita; a remetente nunca", () => {
+    const OUTRA = "07070000-2222-4000-8000-000000009231";
+    sql(`do $s$ begin
+      insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, phone_number)
+        values ('${OUTRA}', '${ORG_A}', 'agenda-9231-b', '\\x00'::bytea, '+5521977357727');
+      exception when unique_violation then null; end $s$;`);
+    sql(`update public.channel_sessions set phone_number = '+5522981356551' where id = '${SESSAO_A}';`);
+    try {
+      // CONTROLE NEGATIVO: sem a flag, segue recusado.
+      expect(erroDe(`${comoMembro(ADMIN_A)}\n${definir(ORG_A, false, SESSAO_A, "+5521977357727")}`)).toMatch(
+        /aviso_de_agendamento_numero_da_propria_org/i,
+      );
+      sql(`update public.organizations set aviso_para_conexao_propria = true where id = '${ORG_A}';`);
+      expect(sql(`${comoMembro(ADMIN_A)}\n${definir(ORG_A, false, SESSAO_A, "+5521977357727")}`)).toContain(
+        "trocou_numero",
+      );
+      // Remetente e destino na MESMA conexão: recusado mesmo com a flag.
+      expect(erroDe(`${comoMembro(ADMIN_A)}\n${definir(ORG_A, false, SESSAO_A, "+5522981356551")}`)).toMatch(
+        /aviso_de_agendamento_numero_da_propria_org/i,
+      );
+    } finally {
+      // Volta ao "usa o número do aviso de caso" antes de soltar a conexão OUTRA.
+      sql(`${comoMembro(ADMIN_A)}\n${definir(ORG_A, true, null, null)}`);
+      sql(`update public.organizations set aviso_para_conexao_propria = false where id = '${ORG_A}';
+        update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';
+        delete from public.channel_sessions where id = '${OUTRA}';`);
+    }
+  });
+
   it("número que JÁ É CLIENTE exige confirmação, nas duas grafias do nono dígito", () => {
     sql(`update public.contacts set phone_number = '+553193333222' where id = '${CONTATO_A}';`);
     const erro = erroDe(`${comoMembro(ADMIN_A)}\n${definir(ORG_A, false, SESSAO_A, "+5531993333222")}`);

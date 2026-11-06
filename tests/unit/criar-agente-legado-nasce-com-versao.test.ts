@@ -134,16 +134,17 @@ describe("POST /api/v1/ai/agents — Modo A (corpo legado, sem `version`)", () =
     expect(versao.agent_id).toBe(gravado("ai_agents").id);
   });
 
-  it("sem `model` no corpo, mantém o default que o Modo A sempre gravou", async () => {
+  it("sem `model` e sem provedor na organização, RECUSA: não inventa Claude (06/11/2026)", async () => {
     const res = await (
       await import("@/app/api/v1/ai/agents/route")
     ).POST(post({ name: "Tobias", system_prompt: "Você é o Tobias, atendente da loja." }));
 
-    expect(res.status, await res.clone().text()).toBe(201);
-    // Antes do #2296: `input.model ?? "anthropic/claude-sonnet-5"`. Não o
-    // DEFAULT da coluna (`claude-sonnet-4-6`) que a ponte usa sem `model`.
-    expect(gravado("ai_agents").model).toBe("anthropic/claude-sonnet-5");
-    expect(gravado("ai_agent_versions").model).toBe("claude-sonnet-5");
+    // Antes: `anthropic/claude-sonnet-5` fixo (20x o preço de um modelo barato).
+    expect(res.status, await res.clone().text()).toBe(422);
+    expect(await res.clone().text()).toContain("não tem provedor de IA configurado");
+    // Nada foi criado: nem o agente, nem a versão.
+    expect(gravados.ai_agents ?? []).toHaveLength(0);
+    expect(gravados.ai_agent_versions ?? []).toHaveLength(0);
   });
 
   it("o formato da resposta do corpo legado continua sendo a linha do agente", async () => {
@@ -165,17 +166,18 @@ describe("POST /api/v1/ai/agents — Modo A (corpo legado, sem `version`)", () =
     expect(data.version).toBeUndefined();
   });
 
-  it("model legado sem barra cai no provedor padrão, sem inventar modelo", () => {
+  it("model legado sem barra usa o provedor do próprio nome; sem model, nada é inventado", () => {
     // A rota não deixa isto chegar nela (o `agentCreateSchema` recusa model
     // fora do enum com 422), mas a ponte é compartilhada com a DUPLICAÇÃO, que
     // lê `ai_agents.model` direto do banco — onde o valor antigo sem barra
-    // existe. Nela, sem barra = provedor padrão, nunca um modelo inventado.
+    // existe. Nela, sem barra = provedor do nome; sem model = vazio (a
+    // validação da versão recusa), nunca um Claude inventado (06/11/2026).
     expect(
       corpoLegadoParaVersao({ system_prompt: "Prompt longo o bastante.", model: "claude-sonnet-4-6" }),
     ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-4-6" });
     expect(
       corpoLegadoParaVersao({ system_prompt: "Prompt longo o bastante.", model: null }),
-    ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-4-6" });
+    ).toMatchObject({ provider: "", model: "" });
   });
 
   it("audita como criação de mcp_agent, marcando o formato do corpo", async () => {

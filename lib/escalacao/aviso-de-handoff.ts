@@ -108,7 +108,7 @@ export async function aplicaAvisoHandoff(deps: AvisoHandoffDeps, row: EventRow):
   const canal = await deps.db.carregaCanal(row.organization_id, config.channel_session_id);
   if (!canal || canal.archived_at || canal.desativado || !canal.aceitaMensagemLivre) return cancelar('canal_indisponivel');
   if (canal.status !== 'WORKING') return resposta('retry', 'canal_desconectado', new Date(agora.getTime() + 300_000));
-  if (await deps.db.destinoEhDaPropriaOrganizacao(row.organization_id, config.telefone_destino)) return cancelar('destino_circular');
+  if (await deps.db.destinoEhDaPropriaOrganizacao(row.organization_id, config.telefone_destino, canal.id)) return cancelar('destino_circular');
   if (!(await deps.transporte.configurado(row.organization_id, canal))) return cancelar('canal_sem_chave');
   const destino = await deps.transporte.resolveDestino(row.organization_id, canal, config.telefone_destino);
   if (!destino) return cancelar('destino_invalido');
