@@ -39,7 +39,8 @@ export function Pagina({
       data-largura={largura}
       className={cn(
         "flex w-full flex-col gap-5 p-6 mb:-mx-6 mb:-mt-6 mb:w-auto mb:gap-3 mb:p-0",
-        largura === "leitura" && "*:w-full *:max-w-3xl",
+        // Só o teto: `*:w-full` venceria o `w-fit` de um botão filho direto.
+        largura === "leitura" && "*:max-w-3xl",
         className,
       )}
     >

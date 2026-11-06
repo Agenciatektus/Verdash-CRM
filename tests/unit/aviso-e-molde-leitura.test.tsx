@@ -27,6 +27,7 @@ describe("Pagina largura=leitura", () => {
   it("limita cada filho a 768px; o molde total não limita (controle)", () => {
     const { container, rerender } = render(<Pagina largura="leitura"><p>x</p></Pagina>);
     expect(container.firstElementChild).toHaveClass("*:max-w-3xl");
+    expect(container.firstElementChild, "*:w-full venceria o w-fit de um filho").not.toHaveClass("*:w-full");
     rerender(<Pagina><p>x</p></Pagina>);
     expect(container.firstElementChild).not.toHaveClass("*:max-w-3xl");
   });

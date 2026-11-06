@@ -1,5 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 
+import { useT } from "@/hooks/i18n/useT";
 import { CheckCircle, Info, Warning, WarningCircle, X } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +30,7 @@ export function Aviso({
   children,
   acao,
   onDispensar,
-  rotuloDispensar = "Dispensar",
+  rotuloDispensar,
   className,
 }: {
   tom?: TomDoAviso;
@@ -40,6 +43,7 @@ export function Aviso({
   rotuloDispensar?: string;
   className?: string;
 }) {
+  const t = useT();
   const { classe, Icone } = TOM[tom];
   return (
     <div
@@ -57,7 +61,7 @@ export function Aviso({
         <button
           type="button"
           onClick={onDispensar}
-          aria-label={rotuloDispensar}
+          aria-label={rotuloDispensar ?? t("Dispensar")}
           className="-m-1 shrink-0 self-center rounded-md p-1 text-muted-foreground hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
         >
           <X size={16} aria-hidden />
