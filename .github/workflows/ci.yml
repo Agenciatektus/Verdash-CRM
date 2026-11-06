@@ -264,13 +264,15 @@ jobs:
       # 06/10/2026 com --extendedDiagnostics: a dev usa 4,24 GB, e uma PR que
       # acrescentou 2% (4,34 GB) morreu com "heap out of memory" (exit 134) sem
       # erro de tipo nenhum. 6 GB dá folga sem passar da RAM do runner.
+      # Subida 1.95 (06/11/2026): a junção com o upstream passou de 6 GB a frio
+      # (tipos +7% sobre a dev); 8 GB cabe nos 16 GB do runner.
       - name: Typecheck
         if: matrix.parte == 1
         # O script `typecheck` do package.json carrega o MESMO teto (via
         # `node --max-old-space-size`, que vale no Windows também, onde
         # NODE_OPTIONS não se escreve igual). Trocar aqui pede trocar lá.
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm typecheck
 
       # Na parte 2, não na 1: o porquê e a conta estão no cabeçalho do job.
