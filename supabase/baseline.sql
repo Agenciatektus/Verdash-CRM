@@ -73870,6 +73870,9 @@ create table if not exists public.cobranca_pagamentos (
 
 create index if not exists cobranca_pagamentos_org_pago_em_idx
   on public.cobranca_pagamentos (organization_id, pago_em desc);
+-- O webhook de disputa acha a empresa por aqui (a Dispute não traz o cliente).
+create index if not exists cobranca_pagamentos_cobranca_ref_idx
+  on public.cobranca_pagamentos (provedor, cobranca_ref) where cobranca_ref is not null;
 
 comment on table public.cobranca_pagamentos is
   'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9230). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
