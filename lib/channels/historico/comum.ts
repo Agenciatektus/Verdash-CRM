@@ -47,7 +47,7 @@ export interface FonteDeHistorico {
   paginaDeConversas(
     session: string,
     opts: { limit: number; offset: number },
-  ): Promise<{ conversas: Array<{ chatId: string; ultimaEm: number | null; posicao: number }>; lidas: number }>;
+  ): Promise<{ conversas: Array<{ chatId: string; ultimaEm: number | null; posicao: number }>; lidas: number; semTelefone?: number[] }>;
   paginaDeMensagens(
     session: string,
     chatId: string,

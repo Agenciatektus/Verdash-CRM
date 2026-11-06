@@ -103,7 +103,14 @@ export interface CursorDaImportacao {
    * é da passada de conferência, que não grava.
    */
   conferida?: boolean;
+  /** Fonte adiou a MESMA posição `n` vezes seguidas (lista vazia sob carga); no limite, a conversa é pulada. */
+  adiamentos?: { chave: string; n: number };
+  /** Conversas sem telefone (Instagram do Izzy), contadas uma vez: `ate` é a maior posição já contada. */
+  semTelefone?: { n: number; ate: number };
 }
+
+/** Adiamentos seguidos na mesma posição antes de desistir da conversa (senão a importação não conclui nunca). */
+const ADIAMENTOS_MAXIMOS = 5;
 
 export interface OpcoesDaRodada {
   /**
@@ -177,11 +184,13 @@ export async function rodarUmaRodada(
   if (imp.status !== "rodando") throw new Error("importacao_nao_esta_rodando");
 
   const cursorSalvo = imp.cursor ?? {};
-  const cursor: Required<CursorDaImportacao> = {
+  const cursor: CursorDaImportacao & Required<Omit<CursorDaImportacao, "adiamentos" | "semTelefone">> = {
     indiceConversa: cursorSalvo.indiceConversa ?? 0,
     offsetMensagens: cursorSalvo.offsetMensagens ?? 0,
     desde: cursorSalvo.desde ?? Math.floor(Date.now() / 1000) - imp.dias * SEGUNDOS_POR_DIA,
     conferida: cursorSalvo.conferida ?? false,
+    adiamentos: cursorSalvo.adiamentos,
+    semTelefone: cursorSalvo.semTelefone,
   };
   const irParaConversa = (posicao: number) => {
     cursor.indiceConversa = posicao;
@@ -273,6 +282,10 @@ export async function rodarUmaRodada(
         offset: offsetDaPagina,
       });
       if (pagina.lidas === 0) return await encerrar("concluida", { erro: null });
+      for (const pos of pagina.semTelefone ?? []) {
+        const c = cursor.semTelefone ?? { n: 0, ate: -1 };
+        if (pos > c.ate) cursor.semTelefone = { n: c.n + 1, ate: pos };
+      }
 
       for (const conversa of pagina.conversas) {
         if (conversa.posicao < cursor.indiceConversa) continue;
@@ -399,6 +412,15 @@ export async function rodarUmaRodada(
     // Fonte pediu espera (limite de chamadas, servidor sob carga): não é erro, a próxima rodada retoma.
     if (err instanceof FonteAdiada) {
       Object.assign(desta, { ...firmes, gravadas: desta.gravadas });
+      // Só o "vazio sob carga" conta (429 é espera legítima): na 5ª vez na mesma posição, larga a conversa.
+      if (err.message === "izzy_vazio_sob_carga") {
+        const chave = `${cursor.indiceConversa}:${cursor.offsetMensagens}:${cursor.conferida}`;
+        const n = cursor.adiamentos?.chave === chave ? cursor.adiamentos.n + 1 : 1;
+        if (n >= ADIAMENTOS_MAXIMOS) {
+          desta.ignoradas += 1;
+          irParaConversa(cursor.indiceConversa + 1);
+        } else cursor.adiamentos = { chave, n };
+      }
       return await encerrar("rodando");
     }
     // `gravadas` fica: o insert aconteceu, e a refeita não o conta de novo.
