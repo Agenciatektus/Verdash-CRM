@@ -108,9 +108,6 @@ export type InboxKind =
   // A proposta rascunhada pela IA precisa de revisão de uma pessoa — a Central
   // acompanha até resolver.
   | 'proposta_pronta_para_revisao'
-  // (migration 9043) A tarefa chegou na hora (`lib/tarefas/aviso-de-tarefa.ts`):
-  // o cron `task-due-reminder` abre o aviso e manda o push só ao responsável.
-  | 'task_due'
   // (migration 0501) A organização voltou de uma suspensão e há conversas que
   // receberam mensagem enquanto ela estava parada. A IA não respondeu e não vai
   // responder sozinha, então quem abre o Inbox é uma pessoa. Nasce sem referência.
@@ -127,6 +124,8 @@ export type InboxKind =
   // kinds, e não um: quem lê a Central decide pelo rótulo se ainda dá tempo de
   // concluir ou se já é reagendamento — e o cron que os emite decide qual dos
   // dois dispara pela MESMA lista (`lib/tarefas/preferencia-de-lembrete.ts`).
+  // O nosso cron `task-due-reminder` (migration 9043, `lib/tarefas/aviso-de-tarefa.ts`)
+  // abre o mesmo kind `task_due` quando a tarefa chega na hora.
   | 'task_due'
   | 'task_overdue'
   | 'other';

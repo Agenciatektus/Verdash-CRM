@@ -150,7 +150,10 @@ describe("9030: a linha não troca de organização", () => {
   it("CONTROLE: sem a trigger a RLS sozinha deixava mover os três", () => {
     expect(tenta(`${SEM_TRIGGER}
 ${como(AG_AB)}`, MOVE_CONVERSA)).toBe("n=1");
-    expect(tenta(`${SEM_TRIGGER}
+    // Desde o atendimento conjunto (0661, subida 1.95) a restritiva de mensagem também
+    // exige a conversa na MESMA org da linha. Ela sai junto, para o controle medir só a
+    // policy permissiva de messages, que é o que a trigger protege.
+    expect(tenta(`${SEM_TRIGGER} drop policy message_participant_reply_is_not_history_update on public.messages;
 ${como(VW_AB)}`, MOVE_MENSAGEM)).toBe("n=1");
     expect(tenta(`${SEM_TRIGGER}
 ${como(MIX)}`, MOVE_LEAD)).toBe("n=1");

@@ -37,9 +37,11 @@ export interface AttendantAvailability {
    * `is_available` + jornada (`estaDePlantao`), e nada aqui desliga a chave.
    */
   present: boolean;
+  /** Setor do atendente (migration 0801). `null` = sem setor. */
+  sector_id: string | null;
 }
 
-const ATTENDANTS_KEY = ["team", "attendants"] as const;
+export const ATTENDANTS_KEY = ["team", "attendants"] as const;
 /**
  * Chave própria do "meu estado". Começa com a do roster de propósito: um
  * `invalidateQueries(ATTENDANTS_KEY)` alcança as duas, mas o PATCH invalida as

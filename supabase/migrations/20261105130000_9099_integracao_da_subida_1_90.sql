@@ -82,7 +82,6 @@ alter table public.agent_inbox_items
     'canal_pausado',
     'cobranca',
     'email_de_login_trocado',
-    'task_due',
     'task_overdue',
     'other'
   ));

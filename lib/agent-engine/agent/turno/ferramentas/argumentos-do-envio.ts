@@ -17,6 +17,7 @@ import type { EstadoDoTurno } from '../estado-do-turno';
 import type { DependenciasDoEnvio } from './guardrails-do-envio';
 // Valor lido só dentro das funções (nunca na carga do módulo): o ciclo de import é seguro.
 import { eTurnoDeResposta, ferramentasDeAgendaDoAgente, temFerramentaDeAgenda } from '../../inbound-turn';
+import { registroDoTurno } from '../estado-do-turno';
 
 export function montarArgumentosDoEnvio(
   c: ContextoDoTurno,
@@ -89,6 +90,8 @@ export function montarArgumentosDoEnvio(
       disponivel: followupDisponivel(),
       agendadoNesteTurno: estado.followupAgendadoNesteTurno,
     },
+    // #3333: o MESMO coletor que a ponte das tools alimenta neste turno.
+    registro: registroDoTurno(agentConfig, estado),
     ...(deps.knobs.disclosureMode !== undefined
       ? { disclosureMode: deps.knobs.disclosureMode }
       : {}),

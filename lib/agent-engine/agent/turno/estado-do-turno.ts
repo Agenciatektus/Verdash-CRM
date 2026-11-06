@@ -12,6 +12,9 @@ import type { ChannelSendResult } from '../../channel-adapter';
 import type { LeadStage } from '../lead-state';
 import type { citationsFromHits } from '../search-knowledge';
 import { criarTravaDeDuplicata } from '../near-dup';
+import { criarEfeitoDasEscrituras } from '@/lib/ai/runtime/efeito-das-escritas';
+import { ferramentasDeRegistroDoAgente } from '../../guardrails/registro-sem-efeito';
+import type { GateContext } from '../../guardrails/before-send';
 
 export interface EstadoDoTurno {
   // Estado do RUN — vive só neste closure (isolamento por construção, acc 3).
@@ -38,6 +41,15 @@ export interface EstadoDoTurno {
   // equipe. Os dois dizem que o silêncio foi decisão — só sem eles o motor pede a
   // correção do turno que terminou sem falar com o cliente (ver depois da chamada principal).
   tentativasDeEnvio: number;
+  /** Veto que manda PARAR (stop/LGPD): a correção do turno mudo não é pedida (`VETOS_IRREVOGAVEIS`). */
+  vetoIrrevogavel: boolean;
+  /**
+   * O predicado único do efeito (#3333): a ponte das tools MCP anota o desfecho de cada
+   * escrita, e o gate `registro_sem_efeito` pergunta no envio se a ação anunciada aconteceu.
+   */
+  efeitos: ReturnType<typeof criarEfeitoDasEscrituras>;
+  /** Duração dos classificadores auxiliares do turno, em ms (métrica do traço, #1099). */
+  classificadoresMs: number;
   passouParaAEquipe: boolean;
   // F3-11: estágio que o MODELO confirmou via update_lead_state neste turno (a máquina
   // F2-10 é a única porta). Comparado com a sugestão do classificador no fim → divergência.
@@ -99,6 +111,9 @@ export function criarEstadoDoTurno(): EstadoDoTurno {
     dupTrava: criarTravaDeDuplicata(),
     turnoDescartado: false,
     tentativasDeEnvio: 0,
+    vetoIrrevogavel: false,
+    efeitos: criarEfeitoDasEscrituras(),
+    classificadoresMs: 0,
     passouParaAEquipe: false,
     confirmedStage: null,
     outOfTablePromiseAttempted: false,
@@ -112,4 +127,16 @@ export function criarEstadoDoTurno(): EstadoDoTurno {
     pendingCitations: [],
     runError: null,
   };
+}
+
+/**
+ * O `registro` do contexto do gate (#3333), no molde do `agenda`: o veto só nomeia
+ * ferramenta de registro que o agente TEM, e lê o MESMO coletor que a ponte alimenta.
+ */
+export function registroDoTurno(
+  agentConfig: { toolIds: readonly string[] } | null,
+  estado: EstadoDoTurno,
+): NonNullable<GateContext['registro']> {
+  const ferramentas = agentConfig === null ? [] : ferramentasDeRegistroDoAgente([...agentConfig.toolIds]);
+  return { active: ferramentas.length > 0, ferramentas, efeitos: estado.efeitos };
 }
