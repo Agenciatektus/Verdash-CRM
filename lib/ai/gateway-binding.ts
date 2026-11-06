@@ -174,7 +174,13 @@ export async function resolverModeloDoPonto(
   // da chave da Tektus. A assinatura ChatGPT NÃO entra: o worker de sentimento
   // não a executa (binding `openai-assinatura` é recusado), então ela segue pelo
   // Flash-Lite da instalação até o worker aprender a usá-la.
+  //
+  // SÓ para ponto que já pediu o par da organização (`naFaltaUsarOPadraoDaOrganizacao`,
+  // como o sentimento): os demais (ex.: `bot_respond`, o agente respondendo o
+  // cliente) receberiam `null` e ficariam MUDOS; eles seguem como antes, com o
+  // padrão do ponto na chave da instalação.
   const chavePropriaDiretaQueNaoExecutaOId =
+    opcoes.naFaltaUsarOPadraoDaOrganizacao === true &&
     daOrg !== null &&
     daOrg.apiKey !== null &&
     daOrg.provider !== null &&
