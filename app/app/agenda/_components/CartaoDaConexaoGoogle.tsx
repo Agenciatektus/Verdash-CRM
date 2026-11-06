@@ -33,6 +33,7 @@ export function CartaoDaConexaoGoogle({
   contaConectada,
   enderecoDeRetorno,
   linkDeConfiguracao,
+  chaveDoAviso = "agenda:aviso-google-dispensado",
 }: {
   configurado: boolean;
   /**
@@ -44,13 +45,15 @@ export function CartaoDaConexaoGoogle({
   /** O que falta, PELO NOME — para a tela dizer em vez de só esconder o botão. */
   falta: string[];
   contaConectada?: string | null;
+  /** Onde guardar o "dispensado": por organização e usuário (ver `_client.tsx`). */
+  chaveDoAviso?: string;
   /** O endereço EXATO que o Google exige registrado. Ver o bloco no JSX. */
   enderecoDeRetorno?: string;
 }) {
   const t = useT();
   const router = useRouter();
   const [desconectando, setDesconectando] = React.useState(false);
-  const [dispensado, dispensar] = useDispensado("agenda:aviso-google-dispensado");
+  const [dispensado, dispensar] = useDispensado(chaveDoAviso);
 
   if (!configurado) {
     return (

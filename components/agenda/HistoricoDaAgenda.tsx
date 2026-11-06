@@ -164,7 +164,7 @@ export function HistoricoDaAgenda({
               role="tab"
               data-testid={`aba-${a.id}`}
               aria-selected={aba === a.id}
-              ligado={aba === a.id}
+              ligado={null}
               onClick={() => setAba(a.id)}
             >
               <span>{t(a.rotulo)}</span>

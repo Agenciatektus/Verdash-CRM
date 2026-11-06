@@ -31,6 +31,7 @@ import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel"
 import { useVinculoDaMarcacao } from "@/lib/agenda/vinculo-da-marcacao";
 import { Button } from "@/components/ui/button";
 import { BotaoDaTela, PaginaCheia } from "@/components/pagina";
+import { useDispensado } from "@/hooks/useDispensado";
 import { visaoPadraoDaLargura } from "@/lib/agenda/visao-padrao";
 import { BarraDaAgenda } from "./_components/BarraDaAgenda";
 import { FaixaDeDias } from "./_components/FaixaDeDias";
@@ -80,6 +81,7 @@ export function AgendaClient({
   fusoDeApresentacao,
   hojeNaOrganizacao,
   usuarioId,
+  orgId,
   googleConfigurado,
   contaConectada,
   enderecoDeRetorno,
@@ -104,6 +106,8 @@ export function AgendaClient({
   hojeNaOrganizacao: string;
   /** Id de quem está logado — a única fonte para o rótulo "Você". */
   usuarioId: string;
+  /** Org ativa: escopa o "dispensar" do aviso do Google (opcional nos testes). */
+  orgId?: string;
   googleConfigurado: boolean;
   contaConectada?: string | null;
   enderecoDeRetorno?: string;
@@ -137,6 +141,8 @@ export function AgendaClient({
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
+  const chaveDoAviso = `agenda:aviso-google-dispensado:${orgId ?? ""}:${usuarioId}`;
+  const [avisoDispensado] = useDispensado(chaveDoAviso);
   const router = useRouter();
   const [marcando, setMarcando] = React.useState(false);
   // O compromisso criado NESTA abertura do painel. Serve para levar a grade até
@@ -493,6 +499,7 @@ export function AgendaClient({
         falta={faltaNoGoogle}
         linkDeConfiguracao={linkDeConfiguracaoDoGoogle}
         contaConectada={contaConectada}
+        chaveDoAviso={chaveDoAviso}
         enderecoDeRetorno={enderecoDeRetorno}
       />
 
@@ -589,6 +596,8 @@ export function AgendaClient({
         tipos={tiposIniciais}
         tipoId={tipo?.id ?? null}
         onEscolherTipo={escolherTipo}
+        // Dispensado o aviso, o link de conectar continua à mão (único caminho do OAuth).
+        conectarGoogle={googleConfigurado && !contaConectada && avisoDispensado}
       />
       <FaixaDeDias
         ancora={ancora}

@@ -1094,7 +1094,7 @@ export function GradeDaAgenda({
                 agendamentos={agendamentos}
                 pessoas={pessoas}
                 onAbrir={onAbrirAgendamento}
-                destacado={visao === "semana" && chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)}
+                destacado={(visao === "semana" || visao === "tres") && chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)}
                 soNoDesktop={visao === "semana" && !isSameDay(d, ancora)}
                 interacao={interacao}
                 proposta={proposta}

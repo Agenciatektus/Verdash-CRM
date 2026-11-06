@@ -7,7 +7,7 @@ import { HorariosLivresPorServico } from "@/components/agenda/HorariosLivresPorS
 import type { Pessoa, VisaoDaAgenda } from "@/components/agenda/tipos";
 import { Button } from "@/components/ui/button";
 import { CLASSES_DA_OPCAO_DO_SEGMENTO, CLASSES_DO_SEGMENTO } from "@/components/ui/tabs";
-import { CaretLeft, CaretRight } from "@/lib/ui/icons";
+import { CaretLeft, CaretRight, GoogleLogo } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -38,6 +38,7 @@ export function BarraDaAgenda({
   tipos,
   tipoId,
   onEscolherTipo,
+  conectarGoogle = false,
 }: {
   periodo: string;
   visao: VisaoDaAgenda;
@@ -52,6 +53,7 @@ export function BarraDaAgenda({
   tipos: Array<{ id: string; nome: string; duracaoMin: number }>;
   tipoId: string | null;
   onEscolherTipo: (id: string) => void;
+  conectarGoogle?: boolean;
 }) {
   const t = useT();
   return (
@@ -90,6 +92,14 @@ export function BarraDaAgenda({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {conectarGoogle && (
+            <Button variant="outline" size="sm" data-testid="conectar-google-compacto" asChild>
+              <a href="/api/v1/agenda/google/connect">
+                <GoogleLogo size={16} weight="bold" aria-hidden />
+                <span>{t("Conectar Google")}</span>
+              </a>
+            </Button>
+          )}
           <HorariosLivresPorServico tipos={tipos} tipoId={tipoId} onEscolher={onEscolherTipo} />
           <div data-testid="alternador-de-visao" className={cn(CLASSES_DO_SEGMENTO, "w-fit")}>
             {OPCOES.map((o) => {

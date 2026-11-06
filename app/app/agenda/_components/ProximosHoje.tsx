@@ -41,7 +41,7 @@ export function ProximosHoje({
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
         <h2 className="text-sm font-semibold">{t("Próximos hoje")}</h2>
-        <Chip data-testid="ver-todos" onClick={onVerTodos}>
+        <Chip data-testid="ver-todos" ligado={null} onClick={onVerTodos}>
           {t("Ver todos")}
           <span className="tabular-nums opacity-70">{futuros.length}</span>
         </Chip>

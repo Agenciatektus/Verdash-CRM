@@ -2,6 +2,8 @@
 
 import { useT } from "@/hooks/i18n/useT";
 
+import * as React from "react";
+
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Chip } from "@/components/ui/chip";
@@ -22,13 +24,18 @@ export function HorariosLivresPorServico({
   onEscolher: (id: string) => void;
 }) {
   const t = useT();
+  const [aberto, setAberto] = React.useState(false);
   if (tipos.length < 2) return null;
+  const ativo = tipos.find((o) => o.id === tipoId);
   return (
-    <Popover>
+    <Popover open={aberto} onOpenChange={setAberto}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" data-testid="horarios-livres">
           <Clock size={16} aria-hidden />
-          <span>{t("Horários livres")}</span>
+          <span>
+            {t("Horários livres")}
+            {ativo ? `: ${ativo.nome}` : ""}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -44,7 +51,10 @@ export function HorariosLivresPorServico({
               key={opcao.id}
               data-testid={`tipo-da-grade-${opcao.id}`}
               ligado={opcao.id === tipoId}
-              onClick={() => onEscolher(opcao.id)}
+              onClick={() => {
+                onEscolher(opcao.id);
+                setAberto(false);
+              }}
             >
               {opcao.nome}
             </Chip>

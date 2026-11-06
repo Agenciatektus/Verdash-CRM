@@ -29,6 +29,13 @@ export function FiltroDePessoas({
   className?: string;
 }) {
   const t = useT();
+  // Primeiro nome; se dois colegas repetem, acrescenta a inicial do sobrenome.
+  const primeiro = (n: string) => n.trim().split(/\s+/)[0] ?? n;
+  const rotulo = (p: Pessoa) => {
+    const repete = pessoas.some((o) => o.id !== p.id && primeiro(o.nome) === primeiro(p.nome));
+    const sobrenome = p.nome.trim().split(/\s+/)[1];
+    return repete && sobrenome ? `${primeiro(p.nome)} ${sobrenome[0]}.` : primeiro(p.nome);
+  };
   // Um filtro com uma opção só não é um filtro — é um enfeite que ocupa espaço
   // e sugere uma escolha inexistente. O produto já faz isso no alternador do
   // inbox ("só aparece com 2+"), e a regra vale igual aqui.
@@ -58,7 +65,7 @@ export function FiltroDePessoas({
           className="pl-1"
         >
           <AvatarDaPessoa pessoa={p} tamanho="sm" ativo={isolada === null || isolada === p.id} />
-          {p.nome.split(" ")[0]}
+          {rotulo(p)}
         </Chip>
       ))}
     </div>
