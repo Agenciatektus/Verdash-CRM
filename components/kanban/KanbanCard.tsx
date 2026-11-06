@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { cn } from "@/lib/utils";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
+import { rotuloDaRecorrencia } from "@/lib/leads/valor-recorrente";
 import type { Lead } from "@/lib/types/leads";
 import type { Stage } from "@/lib/kanban/types";
 import { resolveCardState, type CardInput } from "@/lib/kanban/card-state";
@@ -17,6 +18,7 @@ import { ConversaSlot } from "./ConversaSlot";
 import { ScoreSlot } from "./ScoreSlot";
 import { ContatoNoCard } from "./ContatoNoCard";
 import { AnuncioDoCard, EsperaDoLead, EtiquetasDoCard, ProximoPassoDoCard, ResponsavelDoCard, TempoDoCard } from "./PartesDoCard";
+import { ArquivosNoCard } from "./ArquivosNoCard";
 import { TarefasNoCard } from "./TarefasNoCard";
 
 /** Os dois gestos de seleção que o card sabe relatar. */
@@ -94,6 +96,20 @@ export function KanbanCard({
 }: KanbanCardProps) {
   const t = useT();
   const value = formatValor(card.valueCents, card.currency);
+  /**
+   * A MENSALIDADE, ao lado do valor único (fatia 1 da #3602): o card escreve
+   * "R$ 3.000 + R$ 500/mês". Os dois números aparecem — nunca a soma, que é
+   * exatamente o que a issue pediu para não fazer — e o negócio de valor único
+   * fica com a linha de sempre (o segundo trecho só existe quando há
+   * recorrência). `semCentavos` acompanha o valor único: o card nunca mostrou
+   * centavos, e a linha tem altura fixa.
+   */
+  const recorrente = rotuloDaRecorrencia(
+    card.recurringValueCents,
+    card.recurringPeriod,
+    card.currency ?? MOEDA_PADRAO,
+    { semCentavos: true, sufixo: t("/mês") },
+  );
   const state = resolveCardState(card, t);
   const { nome: nomeBruto, origem } = nomeDoCard(lead);
   const nome = nomeBruto || t("Sem nome");
@@ -257,8 +273,23 @@ export function KanbanCard({
             </div>
           </div>
 
-          {/* ② valor — só quando existe. */}
-          {value && <span className="text-[15px] leading-tight font-bold text-text tabular-nums">{value}</span>}
+          {/* ② valor — só quando existe. `card-valor` carrega o valor único E a
+              mensalidade (9028) no MESMO elemento. */}
+          {(value || recorrente) && (
+            <span
+              data-testid="card-valor"
+              className="text-[15px] leading-tight font-bold text-text tabular-nums"
+              title={recorrente ? `${value ?? ""} + ${recorrente}`.trim() : undefined}
+            >
+              {value}
+              {recorrente && (
+                <span className="ml-1 text-xs font-medium text-text-muted">
+                  {value ? "+ " : ""}
+                  {recorrente}
+                </span>
+              )}
+            </span>
+          )}
 
           {/* ③ a última mensagem (1 linha); o clique nela é o do card (dossiê). */}
           {!compacto && (
@@ -271,6 +302,9 @@ export function KanbanCard({
 
           {/* E-mail e links do contato; o telefone já está embaixo do nome. */}
           {!compacto && <ContatoNoCard lead={lead} semTelefone />}
+
+          {/* Os campos `file` do funil (#2829): contagem + o documento clicável. */}
+          {!compacto && <ArquivosNoCard lead={lead} />}
 
           {/* A faixa do agente — só quando há o que decidir ou medir. O
               "esfriando" não entra: o rodapé já diz "Parado há X dias". */}

@@ -1,5 +1,5 @@
 /**
- * Eventos de ESTADO do chat (`AppState`, `Archive`, `Pin`) do FZAP: espelham arquivado e
+ * Eventos de ESTADO do chat (`Archive`, `Pin`) do FZAP: espelham arquivado e
  * fixado do WhatsApp em `channel_session_group_directory`. Nunca viram mensagem.
  *
  * O FZAP não tem rota para LER arquivado/fixado, e o formato exato do evento é desconhecido:
@@ -11,7 +11,8 @@ import { logger } from "@/lib/logger";
 
 import { tipoDoEvento } from "./webhook";
 
-const TIPOS = new Set(["AppState", "Archive", "Pin"]);
+// Só os nomes assinados em `conectar.ts`; `AppState` cru não tem JID/Action e não é assinado.
+const TIPOS = new Set(["Archive", "Pin"]);
 
 export interface EstadoDeGrupo {
   jid: string;

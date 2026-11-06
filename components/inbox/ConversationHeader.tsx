@@ -132,6 +132,18 @@ export function ConversationHeader({
   const podeMarcarPessoal =
     (user.is_platform_admin && !user.support) ||
     (activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager);
+  /**
+   * ATENDIMENTO CONJUNTO (#2542): quem pode CONVIDAR é o dono da conversa ou um
+   * gestor+ — exatamente o gate da rota. A tela não oferece o que a rota recusa:
+   * um botão que devolve 403 é pior que um botão que não existe, porque a pessoa
+   * descobre o limite depois de escolher o colega na lista. Não é gate de
+   * SEGURANÇA (esse mora na rota, que revalida papel e organização): é o mesmo
+   * desenho de `podeMarcarPessoal`, que também espelha a régua do servidor.
+   */
+  const podeConvidar =
+    isMineAssigned ||
+    (user.is_platform_admin && !user.support) ||
+    (activeOrg != null && ROLE_RANK[activeOrg.role] >= ROLE_RANK.manager);
   const marcarPessoal = useMarkPersonalContact(c?.id ?? "");
   const desmarcarPessoal = useUnmarkPersonalContact(c?.id ?? "");
 

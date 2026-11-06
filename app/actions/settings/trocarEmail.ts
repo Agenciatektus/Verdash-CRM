@@ -29,6 +29,7 @@ import { z } from "zod";
 
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { audit } from "@/lib/audit";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { loadAuthUser, mfaEmDivida } from "@/lib/auth/server";
 import { semSmtpNaInstalacao } from "@/lib/email/estado";
 import { env } from "@/lib/env";
@@ -88,6 +89,9 @@ export async function trocarEmail(input: { email: string }): Promise<TrocarEmail
     console.error("[trocarEmail] updateUser falhou", { code: error.code ?? null, status: error.status ?? null });
     return { ok: false, error: "update_failed" };
   }
+
+  // O GoTrue já gravou o pedido (`new_email`) no usuário: o cache curto do `getUser` não pode servir o anterior.
+  invalidarUsuario(user.id);
 
   await audit({
     action: "profile.email_change_requested",

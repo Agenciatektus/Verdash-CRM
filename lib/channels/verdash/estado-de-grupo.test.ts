@@ -7,18 +7,19 @@ const evento = (type: string, event: Record<string, unknown>) => ({ type, event 
 
 describe("lerEstadoDeGrupo", () => {
   it("lê os formatos aceitos", () => {
-    expect(lerEstadoDeGrupo(evento("AppState", { JID: G, Action: { archived: true } }))).toEqual({ jid: G, archived: true });
+    expect(lerEstadoDeGrupo(evento("Archive", { JID: G, Action: { archived: true } }))).toEqual({ jid: G, archived: true });
     expect(lerEstadoDeGrupo(evento("Archive", { jid: G, Action: { Archived: false } }))).toEqual({ jid: G, archived: false });
     expect(lerEstadoDeGrupo(evento("Pin", { Chat: G, Action: { pinned: true } }))).toEqual({ jid: G, pinned: true });
     expect(lerEstadoDeGrupo(evento("Pin", { Chat: G, Pinned: false }))).toEqual({ jid: G, pinned: false });
   });
   it("formato desconhecido ou chat que não é grupo: null", () => {
-    expect(lerEstadoDeGrupo(evento("AppState", { Foo: "bar" }))).toBeNull();
+    expect(lerEstadoDeGrupo(evento("Archive", { Foo: "bar" }))).toBeNull();
     expect(lerEstadoDeGrupo(evento("Archive", { JID: "5511@s.whatsapp.net", Action: { archived: true } }))).toBeNull();
     expect(lerEstadoDeGrupo(evento("Archive", { JID: G }))).toBeNull();
   });
-  it("só AppState, Archive e Pin são eventos de estado", () => {
+  it("só Archive e Pin são eventos de estado (AppState cru não é assinado)", () => {
     expect(ehEventoDeEstado({ type: "Pin" })).toBe(true);
+    expect(ehEventoDeEstado({ type: "AppState" })).toBe(false);
     expect(ehEventoDeEstado({ type: "Message" })).toBe(false);
   });
 });
@@ -47,7 +48,7 @@ describe("aplicarEstadoDeGrupo", () => {
   });
   it("formato desconhecido: ignora sem tocar no banco", async () => {
     const { client, update } = admin(true);
-    const r = await aplicarEstadoDeGrupo(client, { ...base, payload: evento("AppState", { Sync: { x: 1 } }) });
+    const r = await aplicarEstadoDeGrupo(client, { ...base, payload: evento("Pin", { Sync: { x: 1 } }) });
     expect(r).toMatchObject({ status: "ignored", reason: "estado_formato_desconhecido" });
     expect(update).not.toHaveBeenCalled();
   });

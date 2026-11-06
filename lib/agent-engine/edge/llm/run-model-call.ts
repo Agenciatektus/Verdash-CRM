@@ -56,7 +56,7 @@ import {
   SQL_ORCAMENTO,
   type ChaveDeOrcamento,
 } from './orcamento';
-import { costCents, gravacaoDeUmaHora, provedorSemCustoPorToken } from './pricing';
+import { custoTerraPorPassos, costCents, gravacaoDeUmaHora, provedorSemCustoPorToken } from './pricing';
 import { custoDoModeloForaDoMotor } from './pricing-do-catalogo';
 import { chaveDeOrcamentoDaInstalacao } from '../../../instalacao/comportamento';
 import { cobrancaLigadaComMemo } from '../../../instalacao/modulos';
@@ -1197,7 +1197,9 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
   // Provedor de ASSINATURA (`openai-assinatura`) não cobra por token: grava 0,
   // com os tokens, e nem consulta preço — o id do modelo é o mesmo da API paga
   // e casaria o preço dela (`provedorSemCustoPorToken`, em `pricing.ts`).
-  let cost = provedorSemCustoPorToken(config.provider) ? 0 : costCents(model, usage, cfg.cacheTtl ?? '1h');
+  let cost = provedorSemCustoPorToken(config.provider)
+    ? 0
+    : (custoTerraPorPassos(model, result) ?? costCents(model, usage, cfg.cacheTtl ?? '1h'));
   let origemDoCusto: 'catalogo_da_instalacao' | undefined;
   if (cost === null) {
     cost = await custoDoModeloForaDoMotor(db, {

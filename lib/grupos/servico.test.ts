@@ -30,6 +30,7 @@ function deps(
     diretorio?: LinhaDoDiretorio[];
     agora?: string;
     falhaAoVivo?: boolean;
+    listaVazia?: boolean;
   } = {},
 ) {
   const linhas = new Map<
@@ -97,6 +98,7 @@ function deps(
     },
     listGroups: vi.fn(async () => {
       if (opts.falhaAoVivo) throw new Error("fzap_fora");
+      if (opts.listaVazia) return [];
       return [
         { chatId: G1, subject: "Cliente A", participantCount: 10, adminCount: 2, papel: "admin" as const, isAnnounce: true, tipo: "grupo" as const },
         { chatId: G2, subject: "Família" },
@@ -209,6 +211,25 @@ describe("listarGruposDoNumero: cache do diretório", () => {
     const r = await listarGruposDoNumero(d, { ...e, refresh: true });
     expect(r).toMatchObject({ desatualizado: true, atualizadoEm: "2026-09-23T11:00:00.000Z" });
     await expect(listarGruposDoNumero(deps({ falhaAoVivo: true }), e)).rejects.toThrow("fzap_fora");
+  });
+  it("refresh forçado a menos de 30 s da última busca não chama o FZAP de novo", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:59:45.000Z")] });
+    await listarGruposDoNumero(d, { ...e, refresh: true });
+    expect(d.listGroups).not.toHaveBeenCalled();
+  });
+  it("lista vazia com cache cheio não apaga o diretório", async () => {
+    const d = deps({ listaVazia: true, diretorio: [linha(G1, "2026-09-23T11:00:00.000Z", { archived: true })] });
+    const r = await listarGruposDoNumero(d, { ...e, refresh: true });
+    expect(d.db.gravarDiretorio).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ desatualizado: true });
+    expect(r.grupos[0]).toMatchObject({ chatId: G1, archived: true });
+  });
+  it("o corte do delete é o INÍCIO da busca (busca simultânea não apaga o que a outra gravou)", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:00:00.000Z")] });
+    await listarGruposDoNumero(d, { ...e, refresh: true });
+    const [, , , agoraIso, corteIso] = (d.db.gravarDiretorio as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect(corteIso).toBe("2026-09-23T12:00:00.000Z");
+    expect(corteIso <= agoraIso).toBe(true);
   });
 });
 

@@ -117,6 +117,8 @@ export function MessageBubble({
   // Encaminhar vale para qualquer mensagem com conteúdo; só não se encaminha o apagado.
   const podeEncaminhar = Boolean(onEncaminhar) && !apagada;
   // O anúncio que gerou ESTA mensagem (a ingestão grava em `metadata.anuncio`); só na recebida.
+  // O nome do agente de IA gravado no envio (#3649); antigo ou sem nome fica só "IA".
+  const nomeDoAgente = typeof message.metadata?.ai_actor_name === "string" ? message.metadata.ai_actor_name.trim() : "";
   const anuncio = !isOutbound ? lerAnuncioDaMensagem(message.metadata?.anuncio) : null;
   const temMenu = Boolean(onResponder || podeEncaminhar || (podeEditar && onEditar) || podeApagar || podeOcultar);
   const aiGenerated = isAiGeneratedMessage(message.metadata);
@@ -166,7 +168,11 @@ export function MessageBubble({
           // cada bolha ele repetia "Você" em toda fala e roubava a primeira linha.
           <p className={classesDoAutor(senderLabel === "IA" ? "ia" : "pessoa")}>
             {senderLabel === "IA" && <Robot size={12} weight="duotone" aria-hidden />}
-            {remetente ? rotuloDoRemetente(remetente) : senderLabel && t(senderLabel)}
+            {remetente
+              ? rotuloDoRemetente(remetente)
+              : senderLabel === "IA" && nomeDoAgente
+                ? `${t("IA")} · ${nomeDoAgente}`
+                : senderLabel && t(senderLabel)}
           </p>
         )}
         <div

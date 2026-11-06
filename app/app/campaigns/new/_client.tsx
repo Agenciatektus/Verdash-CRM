@@ -559,7 +559,17 @@ export function NovaCampanha() {
             onChange={setModelo}
           />
         ) : (
-          <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+          <>
+            <MensagemDaCampanha variantes={variantes} onChange={setVariantes} />
+            <div className="space-y-1 text-sm text-muted-foreground">
+              <p>{t('Para não depender do dado, ponha um texto de reserva: {{primeiro_nome|"aluno"}}.')}</p>
+              <p>
+                {t(
+                  "Quem não tiver o dado que a mensagem usa fica de fora, com o motivo na lista — mensagem com buraco não sai.",
+                )}
+              </p>
+            </div>
+          </>
         )}
       </Card>
 
