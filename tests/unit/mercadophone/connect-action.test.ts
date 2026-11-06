@@ -35,6 +35,6 @@ describe("connectMercadoPhone", () => {
   it("token válido grava provider mercadophone, healthy", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { totalItens: 0, itens: [] } }), { status: 200 })));
     expect(await connectMercadoPhone({ apiToken: "bom", webhookToken: "w" })).toEqual({ ok: true });
-    expect(upsert.mock.calls[0][0]).toMatchObject({ provider: "mercadophone", status: "healthy", organization_id: "o1" });
+    expect(upsert.mock.calls[0]![0]).toMatchObject({ provider: "mercadophone", status: "healthy", organization_id: "o1" });
   });
 });
