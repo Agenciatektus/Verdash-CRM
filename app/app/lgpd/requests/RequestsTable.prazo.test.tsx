@@ -20,17 +20,25 @@ const linha = (id: string, due: number, bucket: string) => ({
   sla_bucket: bucket,
 });
 
+const chamadas: Array<Record<string, unknown>> = [];
+let vazioComProxima = false;
+
 vi.mock("@/hooks/useLgpdRequests", () => ({
-  useLgpdRequests: () => ({
-    isLoading: false,
-    isError: false,
-    isFetching: false,
-    refetch: vi.fn(),
-    data: {
-      data: [linha("aaaa0001-0", -2, "overdue"), linha("bbbb0002-0", 12, "ok")],
-      meta: { total: 2, page: 1, limit: 25, has_more: false },
-    },
-  }),
+  useLgpdRequests: (f: Record<string, unknown>) => {
+    chamadas.push(f);
+    return {
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+      data: vazioComProxima
+        ? { data: [], meta: { total: 30, page: 1, limit: 25, has_more: true } }
+        : {
+            data: [linha("aaaa0001-0", -2, "overdue"), linha("bbbb0002-0", 12, "ok")],
+            meta: { total: 2, page: 1, limit: 25, has_more: false },
+          },
+    };
+  },
 }));
 
 import { RequestsTable } from "./RequestsTable";
@@ -43,14 +51,23 @@ describe("RequestsTable: coluna Prazo e filtro de urgentes", () => {
     expect(screen.getByText(/^12 dias$/).closest("[data-tom]")).toHaveAttribute("data-tom", "ok");
   });
 
-  it("'Ver só as urgentes' liga o chip e esconde o que não é urgente", () => {
+  it("'Ver só as urgentes' liga o chip e pede o filtro ao servidor (sem filtrar a página no cliente)", () => {
     render(<RequestsTable />);
-    expect(screen.getByText("cliente-bbbb")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Ver só as urgentes" }));
     expect(screen.getByRole("button", { name: "Urgentes" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText("cliente-bbbb")).not.toBeInTheDocument();
-    expect(screen.getByText("cliente-aaaa")).toBeInTheDocument();
-    // com o filtro ligado a ação some do aviso
+    expect(chamadas.some((c) => c.sla_bucket === "urgent" && c.limit === 25)).toBe(true);
+    // a lista é a que o servidor devolveu: nada some no cliente
+    expect(screen.getByText("cliente-bbbb")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ver só as urgentes" })).not.toBeInTheDocument();
+  });
+
+  it("página vazia com filtro ligado e próxima página não diz 'Nenhuma solicitação LGPD'", () => {
+    vazioComProxima = true;
+    render(<RequestsTable />);
+    fireEvent.click(screen.getByRole("button", { name: "Urgentes" }));
+    expect(screen.queryByText("Nenhuma solicitação LGPD")).not.toBeInTheDocument();
+    expect(screen.getByText("Nenhuma solicitação neste filtro")).toBeInTheDocument();
+    expect(screen.getByText("Há mais resultados na próxima página.")).toBeInTheDocument();
+    vazioComProxima = false;
   });
 });

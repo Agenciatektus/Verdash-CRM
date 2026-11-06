@@ -69,7 +69,7 @@ const TOM_DO_BUCKET: Record<SlaBucket, TomDoPrazo> = {
   ok: "ok",
 };
 
-// Chips de SLA. "urgent" junta vencido e crítico; a API filtra um balde só, então esse filtra aqui.
+// Chips de SLA. "urgent" junta vencido e crítico, em aberto; a API filtra no banco.
 type FiltroDeSla = SlaBucket | "urgent";
 const CHIPS_DE_SLA: { valor: FiltroDeSla; rotulo: string }[] = [
   { valor: "urgent", rotulo: "Urgentes" },
@@ -110,21 +110,19 @@ function fmtRelative(iso: string, t: (texto: string) => string): string {
 
 const ALL = "__ALL__";
 
-/** A contagem vem do `meta.total` de uma consulta de 1 linha (o filtro de status é do servidor). */
+/** A contagem vem do `meta.total` (consulta só de count, sem linhas): total da organização. */
 function ChipComContagem({
   status,
-  type,
   ligado,
   rotulo,
   onClick,
 }: {
   status?: LgpdRequestStatus;
-  type?: LgpdRequestType;
   ligado: boolean;
   rotulo: string;
   onClick: () => void;
 }) {
-  const total = useLgpdRequests({ status, type, limit: 1 }).data?.meta.total;
+  const total = useLgpdRequests({ status, onlyCount: true }).data?.meta.total;
   return (
     <Chip ligado={ligado} onClick={onClick}>
       {rotulo}
@@ -155,23 +153,20 @@ export function RequestsTable({
   const q = useLgpdRequests({
     status,
     type,
-    sla_bucket: slaFiltro === "urgent" ? undefined : slaFiltro,
+    sla_bucket: slaFiltro,
     page,
     limit: 25,
   });
-  const todas = q.data?.data ?? [];
-  const rows =
-    slaFiltro === "urgent"
-      ? todas.filter((r) => r.sla_bucket === "overdue" || r.sla_bucket === "critical")
-      : todas;
+  const rows = q.data?.data ?? [];
+  const filtrado = Boolean(status || type || slaFiltro);
   const meta = q.data?.meta;
 
   return (
     <div className="flex flex-col gap-4">
       {/* SLA Banner — shown based on full current page data */}
-      {!q.isLoading && todas.length > 0 && (
+      {!q.isLoading && rows.length > 0 && (
         <SlaBanner
-          requests={todas}
+          requests={rows}
           onVerUrgentes={
             slaFiltro === "urgent"
               ? undefined
@@ -186,7 +181,6 @@ export function RequestsTable({
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
         <ChipComContagem
-          type={type}
           ligado={!status && !slaFiltro}
           rotulo={t("Todas")}
           onClick={() => {
@@ -211,7 +205,6 @@ export function RequestsTable({
           <ChipComContagem
             key={st}
             status={st}
-            type={type}
             ligado={status === st}
             rotulo={t(STATUS_LABELS[st])}
             onClick={() => {
@@ -300,13 +293,20 @@ export function RequestsTable({
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center">
-                  <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
-                    <ShieldCheck size={32} weight="thin" aria-hidden />
-                    <p className="font-medium">{t("Nenhuma solicitação LGPD")}</p>
-                    <p className="text-xs">
-                      {t("Solicitações de dados e anonimizações aparecerão aqui.")}
-                    </p>
-                  </div>
+                  {filtrado ? (
+                    <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
+                      <p className="font-medium">{t("Nenhuma solicitação neste filtro")}</p>
+                      {meta?.has_more && <p className="text-xs">{t("Há mais resultados na próxima página.")}</p>}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
+                      <ShieldCheck size={32} weight="thin" aria-hidden />
+                      <p className="font-medium">{t("Nenhuma solicitação LGPD")}</p>
+                      <p className="text-xs">
+                        {t("Solicitações de dados e anonimizações aparecerão aqui.")}
+                      </p>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -334,7 +334,7 @@ export function RequestsTable({
                     <TableCell data-rotulo={t("Recebido")} className="whitespace-nowrap text-xs text-muted-foreground">
                       {fmtRelative(r.received_at, t)}
                     </TableCell>
-                    <TableCell className="mb:basis-full">
+                    <TableCell data-rotulo={t("Prazo")} className="mb:basis-full">
                       {terminal ? (
                         <span className="text-xs text-muted-foreground">—</span>
                       ) : (
@@ -345,7 +345,7 @@ export function RequestsTable({
                         />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-rotulo={t("Status")}>
                       <Badge variant={STATUS_VARIANT[r.status]}>
                         {t(STATUS_LABELS[r.status] ?? r.status)}
                       </Badge>
