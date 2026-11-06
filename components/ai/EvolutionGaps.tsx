@@ -92,7 +92,9 @@ export function montaLacunas(gaps: EvolutionPayload["gaps"]): Lacuna[] {
       // verbo "Ver", porque não existia lugar nenhum no produto para escrever
       // `agent_stage_hint` — o painel relatava uma lacuna e parava aí. Agora leva
       // à tela que a conserta, e o verbo diz o que se faz lá.
-      href: "/app/settings/tenant/pipelines",
+      href: p.pipeline_id
+        ? `/app/settings/tenant/pipelines?funil=${p.pipeline_id}`
+        : "/app/settings/tenant/pipelines",
       cta: "Escolher a etapa de cada passo",
     });
   }
