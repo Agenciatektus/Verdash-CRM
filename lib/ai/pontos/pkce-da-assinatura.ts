@@ -40,6 +40,22 @@ export interface TokensDoCodex {
   expires_at: number | null;
 }
 
+/**
+ * O vencimento escrito DENTRO do access_token (o `exp` do JWT), em epoch ms.
+ * Serve quando a resposta não trouxe `expires_in`: sem isto o `expires_at`
+ * ficava nulo e a renovação antecipada nunca decidia. Só lê; não valida
+ * assinatura (o token é nosso, saiu cifrado do banco).
+ */
+export function vencimentoDoJwt(token: unknown): number | null {
+  if (typeof token !== "string") return null;
+  try {
+    const carga = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown };
+    return typeof carga.exp === "number" ? carga.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 export type FetchDeToken = (url: string, init?: RequestInit) => Promise<Response>;
 const fetchDaPlataforma: FetchDeToken = (url, init) => fetch(url, init);
 
@@ -202,7 +218,7 @@ async function trocar(entrada: {
     ...(typeof dados.id_token === "string" ? { id_token: dados.id_token } : {}),
     ...(typeof dados.token_type === "string" ? { token_type: dados.token_type } : {}),
     ...(typeof dados.scope === "string" ? { scopes: dados.scope.split(/\s+/).filter(Boolean) } : {}),
-    expires_at: segundos === null ? null : Date.now() + segundos * 1000,
+    expires_at: segundos === null ? vencimentoDoJwt(dados.access_token) : Date.now() + segundos * 1000,
   };
 }
 

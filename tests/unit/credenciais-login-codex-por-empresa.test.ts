@@ -36,8 +36,10 @@ import {
 import {
   guardarLoginCodex,
   lerLoginCodex,
+  lerLoginCodexRenovandoSeProxima,
   renovarComTravaDeBanco,
 } from "@/lib/ai/credenciais/login-codex";
+import { renovarPorRefreshToken } from "@/lib/ai/pontos/pkce-da-assinatura";
 import { audit } from "@/lib/audit";
 import { CredentialUnavailableError, loadCredential } from "@/lib/ai/credentials";
 import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
@@ -62,6 +64,11 @@ vi.mock("@/lib/supabase/admin", () => ({
   isServiceRoleConfigured: () => true,
 }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => {}) }));
+// A ida à OpenAI: só a renovação é dublada; o resto do módulo é o de verdade.
+vi.mock("@/lib/ai/pontos/pkce-da-assinatura", async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  renovarPorRefreshToken: vi.fn(),
+}));
 vi.mock("@/lib/ai/provider-validators", () => ({
   validateProviderKey: vi.fn(async () => ({ ok: true, models: ["codex-mini"] })),
 }));
@@ -340,5 +347,110 @@ describe("lerLoginCodex: o módulo desligado cala a leitura", () => {
     const fake = admin();
     fake.linha = linhaValida();
     expect(await lerLoginCodex({ admin: fake as never, orgId: org })).toBeNull();
+  });
+});
+
+describe("token VENCIDO lido por dois ao mesmo tempo (o 401 do Salão, 05/11)", () => {
+  /** JWT só com `exp` — o formato do access_token do Codex. */
+  const jwt = (expMs: number, marca: string) =>
+    `h.${Buffer.from(JSON.stringify({ exp: Math.floor(expMs / 1000), marca })).toString("base64url")}.s`;
+
+  function linhaVencida() {
+    const vencido = { ...tokens, access_token: jwt(Date.now() - 60_000, "velho"), expires_at: Date.now() - 60_000 };
+    const c = encryptKey(JSON.stringify(vencido));
+    return {
+      id: credId,
+      organization_id: org,
+      provider: PROVEDOR_POR_ASSINATURA,
+      label: "Assinatura do ChatGPT",
+      is_active: true,
+      validated_at: new Date().toISOString(),
+      api_key_encrypted: bufToBytea(c.ciphertext),
+      api_key_iv: bufToBytea(c.iv),
+      api_key_tag: bufToBytea(c.tag),
+      updated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    };
+  }
+
+  it("quem perde a trava ESPERA o par novo; ninguém sai com o token vencido", async () => {
+    const fake = admin();
+    fake.linha = linhaVencida();
+    estado.fake = fake;
+    const novo = jwt(Date.now() + 60 * 60 * 1000, "novo");
+    vi.mocked(renovarPorRefreshToken).mockReset().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+      return { access_token: novo, refresh_token: "rt-novo", expires_at: Date.now() + 60 * 60 * 1000 };
+    });
+
+    const [a, b] = await Promise.all([
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+    ]);
+
+    expect(vi.mocked(renovarPorRefreshToken)).toHaveBeenCalledTimes(1);
+    expect(a?.access_token).toBe(novo);
+    expect(b?.access_token, "o perdedor da trava voltou com o token vencido").toBe(novo);
+  });
+
+  it("vencedor FALHA e solta a trava: quem espera sai logo, sem os 10 s inteiros", async () => {
+    const fake = admin();
+    fake.linha = linhaVencida();
+    estado.fake = fake;
+    vi.mocked(renovarPorRefreshToken).mockReset().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+      throw new Error("refresh_token_revoked");
+    });
+
+    const inicio = Date.now();
+    const [a, b] = await Promise.all([
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+    ]);
+
+    expect(Date.now() - inicio, "o perdedor esperou o tempo todo por um par que não viria").toBeLessThan(3_000);
+    expect(vi.mocked(renovarPorRefreshToken)).toHaveBeenCalledTimes(1);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+  });
+
+  it("conta desconectada DURANTE a espera: o token velho não sai, volta null (reserva)", async () => {
+    const fake = admin();
+    fake.linha = linhaVencida();
+    estado.fake = fake;
+    vi.mocked(renovarPorRefreshToken).mockReset().mockImplementation(async () => {
+      estado.modulo = false; // a leitura passa a não devolver o par
+      await new Promise((r) => setTimeout(r, 400));
+      throw new Error("desligado no meio");
+    });
+
+    const rs = await Promise.all([
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+    ]);
+
+    expect(rs, "o perdedor da trava mandou o token velho de uma conta desligada").toContain(null);
+  });
+
+  it("um token ainda longe de vencer NÃO gira o refresh_token", async () => {
+    const fake = admin();
+    const valido = { ...tokens, access_token: jwt(Date.now() + 50 * 60 * 1000, "vivo"), expires_at: Date.now() + 50 * 60 * 1000 };
+    const c = encryptKey(JSON.stringify(valido));
+    fake.linha = { ...linhaVencida(), api_key_encrypted: bufToBytea(c.ciphertext), api_key_iv: bufToBytea(c.iv), api_key_tag: bufToBytea(c.tag) };
+    vi.mocked(renovarPorRefreshToken).mockReset();
+
+    const lido = await lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org });
+
+    expect(lido?.access_token).toBe(valido.access_token);
+    expect(vi.mocked(renovarPorRefreshToken)).not.toHaveBeenCalled();
+  });
+
+  it("par gravado sem `expires_at`: o vencimento vem do `exp` do JWT", async () => {
+    const fake = admin();
+    const exp = Date.now() + 30 * 60 * 1000;
+    const semData = { ...tokens, access_token: jwt(exp, "x"), expires_at: null };
+    const c = encryptKey(JSON.stringify(semData));
+    fake.linha = { ...linhaVencida(), api_key_encrypted: bufToBytea(c.ciphertext), api_key_iv: bufToBytea(c.iv), api_key_tag: bufToBytea(c.tag) };
+    const lido = await lerLoginCodex({ admin: fake as never, orgId: org });
+    expect(lido?.expires_at).toBe(Math.floor(exp / 1000) * 1000);
   });
 });

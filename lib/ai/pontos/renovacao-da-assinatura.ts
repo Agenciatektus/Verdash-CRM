@@ -5,9 +5,12 @@
  * (o que fazer quando a assinatura falha). Três decisões, e só três:
  *
  *  1. **Proativa.** Renovar DEPOIS de o access_token vencer é deixar uma
- *     chamada de cliente cair para a reserva sem motivo. A janela é de
- *     aproximadamente 8 dias ANTES do fim — folga para a instalação ficar dias
- *     sem ninguém mexer nela, e o refresh_token do Codex tem validade longa.
+ *     chamada de cliente cair para a reserva sem motivo. A janela é de 5
+ *     minutos ANTES do fim. Medido em produção (05/11/2026, 4 empresas): o
+ *     access_token do Codex dura 1 HORA. A janela antiga, de 8 dias, era maior
+ *     que a vida do token e fazia TODA leitura renovar (o refresh_token girava a
+ *     cada chamada). Quem fica dias parada não perde nada: a primeira leitura
+ *     depois encontra o token vencido, que também está "dentro da janela".
  *  2. **Uma tentativa por janela.** `refresh_token_revoked` não é erro
  *     transitório: repetir é mandar o mesmo refresh_token sabidamente
  *     recusado. Quem decide isso agora é a TRAVA DE BANCO de
@@ -31,8 +34,8 @@ import { PROVEDOR_POR_ASSINATURA, decidirQuedaDoProvedor } from "./reserva-da-as
 import type { DecisaoDaQueda } from "./reserva-da-assinatura";
 import type { TokensDoCodex } from "./pkce-da-assinatura";
 
-/** A folga: renovar quando faltam 8 dias ou menos para o token vencer. */
-export const JANELA_DE_RENOVACAO_MS = 8 * 24 * 60 * 60 * 1000;
+/** A folga: renovar quando faltam 5 minutos ou menos (o token vive 1 hora). */
+export const JANELA_DE_RENOVACAO_MS = 5 * 60 * 1000;
 
 /**
  * Está na hora de renovar? `null` (provedor não disse quando vence) nunca decide

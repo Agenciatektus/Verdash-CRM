@@ -346,7 +346,7 @@ export async function resolveOrgLlmConfig(
   //
   // Este provedor lê o par de tokens da empresa pelo leitor próprio
   // (`lerLoginCodexRenovandoSeProxima`), que ainda renova antes de devolver
-  // quando a janela de 8 dias abriu — com `userId: null`, porque ninguém pediu
+  // quando faltam 5 minutos para vencer — com `userId: null`, porque ninguém pediu
   // aquela renovação. Sem linha utilizável (módulo da instalação fora, login
   // desconectado, envelope que não abre), a chamada NÃO morre: a RESERVA
   // assume, resolvendo o provedor `openai` pela escada de sempre (credencial

@@ -377,6 +377,8 @@ export interface RegistroDaResolucao {
   origem: string;
   /** Só quando o par foi recusado: o porquê, em PT-BR. */
   motivo?: string | undefined;
+  /** Resolveu, mas por um degrau de queda (ex.: a chave da instalação): o porquê. */
+  queda?: string | undefined;
 }
 
 /**
@@ -394,8 +396,12 @@ export function logarResolucaoDeModelo(log: Logador, registro: RegistroDaResoluc
     origem_da_configuracao: registro.origem,
     ...(registro.organization_id ? { organization_id: registro.organization_id } : {}),
     ...(registro.motivo ? { motivo: registro.motivo } : {}),
+    ...(registro.queda ? { queda: registro.queda } : {}),
   };
   if (registro.motivo) log.warn("ia: par provedor+modelo recusado antes da chamada", campos);
+  // Resolveu por degrau de queda (pode ser OUTRO provedor/processador que o da
+  // empresa): continua visível em warn, mas não se diz "recusado".
+  else if (registro.queda) log.warn("ia: par resolvido por degrau de queda", campos);
   else log.info("ia: par provedor+modelo validado", campos);
 }
 
