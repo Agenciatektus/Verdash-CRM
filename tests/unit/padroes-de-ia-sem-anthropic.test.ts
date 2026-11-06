@@ -146,12 +146,13 @@ describe("nenhum literal de modelo Claude fora das exceções", () => {
 const MIGRATIONS = path.join(RAIZ, "supabase", "migrations");
 const MIGRATIONS_DECLARADAS: Record<string, string> = {
   "20261104120000_9096_ia_padrao_barato_e_teto_que_para.sql":
-    "seed de org nova em openrouter + anthropic/claude-haiku-5.5 (US$0,10/0,50 por M, " +
-    "mesmo patamar do Flash-Lite). DECLARADA ao dono em 06/11/2026: trocar é decisão de produto, " +
-    "não de limpeza. Enquanto valer, está aqui, à vista.",
+    "HISTÓRICO: seed de org nova em openrouter + anthropic/claude-haiku-5.5. SUPERADO pela 9250 (06/11/2026): " +
+    "o seed EFETIVO é medido abaixo (`seedEfetivoDeOrgNova`), não por esta lista.",
   "20261105120000_9098_teto_de_ia_padrao_por_plano.sql":
-    "repete o seed da 9096 (openrouter + anthropic/claude-haiku-5.5 para org nova). Mesma decisão " +
-    "declarada ao dono em 06/11/2026.",
+    "HISTÓRICO: repete o seed da 9096 num backfill já executado. SUPERADO pela 9250 (06/11/2026).",
+  "20261106220000_9250_org_nova_sem_anthropic.sql":
+    "cita `anthropic/claude-haiku-5.5` SÓ no `where` do backfill, para LOCALIZAR e trocar o seed antigo; " +
+    "a função que ela cria não cita Claude (medido por `seedEfetivoDeOrgNova`).",
 };
 
 function migrationsNovasComClaude(): string[] {
@@ -176,5 +177,67 @@ describe("migration nova não semeia Claude escondido", () => {
       const sql = readFileSync(path.join(MIGRATIONS, nome), "utf8").replace(/--.*$/gm, "");
       expect(/claude-[\w.-]+/i.test(sql), nome).toBe(true);
     }
+  });
+});
+
+// ── O SEED EFETIVO de organização nova (o que de fato roda no INSERT) ────────
+//
+// A lista acima só declara migrations antigas. O que importa é a ÚLTIMA definição de
+// `fn_seed_org_llm_defaults`: a da cadeia de migrations (quem aplica a cadeia) e a do
+// apêndice do baseline (quem roda install.sh/update.sh). As duas não podem semear Claude.
+// 06/11/2026: a org nova nascia com `anthropic/claude-haiku-5.5` (9096) e ninguém via.
+
+// Reconhece TODAS as grafias que o Postgres aceita (P2 do Cassio na #553): com ou sem aspas
+// (`"public"."fn_x"` é a do pg_dump), com ou sem `public.`, espaço antes do `()`, qualquer
+// marcador de corpo (`$$`, `$fn$`...). Uma definição só entra no seed efetivo se for reconhecida.
+const DEFINICAO_DO_SEED =
+  /create\s+or\s+replace\s+function\s+(?:"?public"?\s*\.\s*)?"?fn_seed_org_llm_defaults"?\s*\(\s*\)[\s\S]*?\bas\s+(\$\w*\$)[\s\S]*?\1\s*;/gi;
+// Toda MENÇÃO a criar a função, reconhecida ou não: se houver mais menções do que definições
+// reconhecidas, a regex acima está cega para uma grafia e o teste reprova em vez de passar verde.
+const MENCAO_DO_SEED = /create\s+(?:or\s+replace\s+)?function\s+[^(;]{0,60}fn_seed_org_llm_defaults/gi;
+
+const semComentariosSql = (sql: string) => sql.replace(/--.*$/gm, "");
+
+function definicoesDoSeed(sql: string): string[] {
+  return [...semComentariosSql(sql).matchAll(DEFINICAO_DO_SEED)].map((m) => m[0]);
+}
+function mencoesCegas(sql: string): number {
+  return [...semComentariosSql(sql).matchAll(MENCAO_DO_SEED)].length - definicoesDoSeed(sql).length;
+}
+
+function ultimaDefinicaoDoSeed(sql: string): string | null {
+  const todas = definicoesDoSeed(sql);
+  return todas.length > 0 ? todas[todas.length - 1]! : null;
+}
+
+function seedEfetivoDeOrgNova(): { cadeia: string | null; baseline: string | null; cegas: string[] } {
+  const arquivos = readdirSync(MIGRATIONS).filter((n) => n.endsWith(".sql")).sort();
+  let cadeia: string | null = null;
+  const cegas: string[] = [];
+  for (const nome of arquivos) {
+    const sql = readFileSync(path.join(MIGRATIONS, nome), "utf8");
+    if (mencoesCegas(sql) > 0) cegas.push(nome);
+    const def = ultimaDefinicaoDoSeed(sql);
+    if (def !== null) cadeia = def; // ordem do nome = ordem de aplicação; a última vence
+  }
+  const sqlBaseline = readFileSync(path.join(RAIZ, "supabase", "baseline.sql"), "utf8");
+  if (mencoesCegas(sqlBaseline) > 0) cegas.push("supabase/baseline.sql");
+  return { cadeia, baseline: ultimaDefinicaoDoSeed(sqlBaseline), cegas };
+}
+
+describe("o seed efetivo de organização nova não é Anthropic", () => {
+  const { cadeia, baseline, cegas } = seedEfetivoDeOrgNova();
+
+  it("nenhuma definição da função escapa do reconhecimento (a trava não está cega)", () => {
+    expect(cegas).toEqual([]);
+  });
+
+  it.each([
+    ["cadeia de migrations", cadeia],
+    ["apêndice do baseline", baseline],
+  ])("%s: a última definição existe e semeia o padrão barato, sem Claude", (_onde, def) => {
+    expect(def, "a função de seed sumiu: org nova nasceria sem padrão de IA").not.toBeNull();
+    expect(def!).not.toMatch(/claude|anthropic/i);
+    expect(def!).toContain(DEFAULT_CLASSIFIER_MODEL);
   });
 });
