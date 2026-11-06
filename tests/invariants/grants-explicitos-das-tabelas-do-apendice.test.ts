@@ -388,21 +388,6 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     expect(aclMedido("postgres")).toEqual(aclEsperado());
   });
 
-  it("segredo NOVO não nasce legível: coluna com cara de segredo fica fora do SELECT por coluna", () => {
-    // A seção 5 da 9100 libera por EXCLUSÃO de três nomes; uma coluna secreta que o upstream
-    // criar nessas tabelas entraria legível calada (P2 do Cassio na #518). password_last4 é
-    // de propósito (a tela mostra os 4 últimos).
-    const cara = `c.relname in (${SELECT_POR_COLUNA_SQL}) and a.attnum > 0 and not a.attisdropped
-        and a.attname ~* '(password|secret|token|api_key|private)' and a.attname <> 'password_last4'`;
-    const total = sql(`select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
-        and c.relnamespace = 'public'::regnamespace where ${cara};`);
-    expect(Number(total), "controle: o filtro não acha nem o envelope da senha").toBeGreaterThan(0);
-    const legiveis = sql(`select coalesce(string_agg(c.relname || '.' || a.attname, ','), '')
-        from pg_attribute a join pg_class c on c.oid = a.attrelid and c.relnamespace = 'public'::regnamespace
-       where ${cara} and has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT');`);
-    expect(legiveis, "coluna de segredo legível por authenticated: ponha no filtro da seção 5 da 9100").toBe("");
-  });
-
   it("ordem de PRODUÇÃO: a 9037 depois da 9099 derruba coluna, a seção 5 da 9100 devolve", () => {
     // Em produção a 9037 (carimbo 20261029) roda depois da 9099 (--include-all); o `revoke all` dela
     // apaga o grant por coluna que a 9099 devolveu. A 9100 roda por último e devolve tudo menos a senha.
@@ -418,6 +403,26 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     const [senha, ilegiveis] = senhaLegivel("postgres").split("|");
     expect(senha, "authenticated lê o envelope da senha").toBe("");
     expect(ilegiveis, "coluna sem segredo ilegível depois da 9100").toBe("");
+    // Segredo NOVO não nasce legível: a seção 5 libera por EXCLUSÃO de três nomes, então uma coluna
+    // secreta que o upstream criar entraria legível calada (P2 do Cassio na #518). Mede aqui, com o
+    // grant comprovado acima (nenhuma coluna sem segredo ilegível). password_last4 é de propósito.
+    // Sem `key` solta: customer_key_column/customer_key_kind não são segredo.
+    const cara = `c.relname in (${SELECT_POR_COLUNA_SQL}) and a.attnum > 0 and not a.attisdropped
+        and a.attname ~* '(pass|pwd|secret|token|api_key|credential|private)' and a.attname <> 'password_last4'`;
+    const comCara = sql(`select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
+        and c.relnamespace = 'public'::regnamespace where ${cara};`);
+    expect(Number(comCara), "controle: o filtro não acha nem o envelope da senha").toBeGreaterThan(0);
+    const segredoLegivel = sql(`select coalesce(string_agg(c.relname || '.' || a.attname, ','), '')
+        from pg_attribute a join pg_class c on c.oid = a.attrelid and c.relnamespace = 'public'::regnamespace
+       where ${cara} and has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT');`);
+    expect(segredoLegivel, "coluna de segredo legível por authenticated: ponha no filtro da seção 5 da 9100").toBe("");
+    // Controle negativo: com um segredo liberado de propósito, a medida acusa.
+    const vazado = sql(`grant select (password_iv) on public.external_db_connections to authenticated;
+      select coalesce(string_agg(c.relname || '.' || a.attname, ','), '')
+        from pg_attribute a join pg_class c on c.oid = a.attrelid and c.relnamespace = 'public'::regnamespace
+       where ${cara} and has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT');
+      revoke select (password_iv) on public.external_db_connections from authenticated;`);
+    expect(vazado, "controle negativo: segredo liberado de propósito não foi acusado").toContain("password_iv");
   });
 
   it("⭐ o BLOCO do apêndice (extraído do baseline) devolve, depois do corte, exatamente o mapa", () => {
