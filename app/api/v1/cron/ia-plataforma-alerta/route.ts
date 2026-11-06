@@ -24,7 +24,7 @@ async function executar(req: NextRequest): Promise<Response> {
   const admin = createAdminClient();
   const resumo = await rodadaDoAlertaDaPlataforma({
     db: getRequestPool(),
-    enviar: async (org, texto) => (await criarEnviadorDeWhatsApp(admin))(org, texto),
+    enviar: async (org, texto) => (await criarEnviadorDeWhatsApp(admin, { permiteDestinoDaPropriaOrganizacao: true }))(org, texto),
     orgDoAviso: (process.env.AI_PLATAFORMA_ALERTA_ORG_ID ?? "").trim(),
     apiKey: (process.env.OPENROUTER_API_KEY ?? "").trim(),
     agora: new Date(),
