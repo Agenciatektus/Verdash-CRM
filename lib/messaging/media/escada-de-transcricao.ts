@@ -18,6 +18,13 @@
  * produção a chave do serviço da instalação estava morta (401) e, por vir
  * antes, derrubava 195 áudios de clientes que tinham Gemini válido.
  *
+ *  0. **ElevenLabs Scribe escolhido pela organização** — a única escolha que o
+ *     painel oferece neste ponto (menu de `transcricao_de_audio` em
+ *     `lib/ai/pontos/registro.ts`; o outro item é "Automático", a escada daqui
+ *     para baixo). Vem antes de tudo porque é escolha EXPLÍCITA de quem
+ *     administra a organização, para ESTE ponto. Sem chave do ElevenLabs
+ *     utilizável o degrau não existe e a escada segue — nunca um áudio mudo
+ *     por causa de uma escolha que não pode ser cumprida.
  *  A0. **OpenRouter da conversa, com credencial PRÓPRIA** (upstream #3382): o chat
  *     do `@ai-sdk/openai` recusa a parte `audio/ogg` antes de a chamada sair, então
  *     quem conversa pela OpenRouter transcreve na própria OpenRouter
@@ -68,6 +75,7 @@ import {
 import { env } from "@/lib/env";
 
 import type { TranscriptionProvider } from "@/lib/messaging/media/transcription";
+import { elevenLabsTranscriptionProvider } from "@/lib/messaging/media/transcription-elevenlabs";
 import {
   apiTranscriptionProvider,
   idiomasDaTranscricao,
@@ -103,6 +111,8 @@ export interface AnuncioDaTranscricao {
  * precisa de tradução: `tests/unit/i18n-provedores-e-pontos.test.ts` cobra.
  */
 export const MOTIVOS_DA_TRANSCRICAO = {
+  elevenlabsEscolhido:
+    "a organização escolheu o ElevenLabs (Scribe) para ouvir os áudios, com a chave do ElevenLabs dela",
   servicoDaInstalacao:
     "o serviço de transcrição configurado nesta instalação (TRANSCRIPTION_API_KEY) é o que ouve os áudios",
   chaveOpenai: "a chave OpenAI desta organização usa o padrão de transcrição de sempre",
@@ -292,6 +302,12 @@ export async function decidirTranscricao(
      * como antes (chamadas sem organização).
      */
     instalacaoServe?: () => Promise<boolean>;
+    /**
+     * Degrau 0. Thunk como `chaveOpenai`: só quem tem o binding do ponto sabe se a
+     * organização escolheu o Scribe, e a credencial só é LIDA nesse caso. `null` =
+     * não escolheu, ou escolheu sem chave utilizável.
+     */
+    elevenlabsEscolhido?: () => Promise<{ apiKey: string; modelId: string } | null>;
   },
   de = 0,
 ): Promise<DecisaoDeTranscricao> {
@@ -327,6 +343,17 @@ export async function decidirTranscricao(
     (servePromessa ??= entrada.instalacaoServe ? entrada.instalacaoServe() : Promise.resolve(true));
 
   const degraus: Array<() => Promise<DecisaoDeTranscricao | null>> = [
+    // 0 · ElevenLabs Scribe escolhido no painel (upstream 1.99) — escolha explícita para o ponto.
+    async () => {
+      const scribe = entrada.elevenlabsEscolhido ? await entrada.elevenlabsEscolhido() : null;
+      if (!scribe) return null;
+      return {
+        origem: "elevenlabs_escolhido",
+        transcriber: elevenLabsTranscriptionProvider({ apiKey: scribe.apiKey, model: scribe.modelId }),
+        motivo: MOTIVOS_DA_TRANSCRICAO.elevenlabsEscolhido,
+        anuncio: { provider: "elevenlabs", modelId: scribe.modelId },
+      };
+    },
     // A0 · OpenRouter da conversa com chave PRÓPRIA (#3382): o chat recusa `audio/ogg`,
     //      então a própria OpenRouter transcreve. Endpoint do painel (ou OPENROUTER_BASE_URL);
     //      o cadastrado passa pela recusa de destino interno do worker (`baseUrlDoDestino`).

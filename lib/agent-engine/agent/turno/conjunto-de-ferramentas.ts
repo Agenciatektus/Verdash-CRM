@@ -21,7 +21,8 @@ import { restringirAConducao } from '@/lib/cadencia/conducao/ferramentas';
 import { filtrarRawTools } from '@/lib/cadencia/conducao/presets';
 import { restringirConfigAConducao } from '@/lib/cadencia/conducao/turno';
 import { AGENDA_TOOL_NAMES, avisarCapacidadesAusentes } from '../inbound-turn';
-import { registroDoTurno, type EstadoDoTurno } from './estado-do-turno';
+import { colherDaFerramenta } from '../../guardrails/horario-da-agenda';
+import { horariosDaAgendaDoTurno, registroDoTurno, type EstadoDoTurno } from './estado-do-turno';
 import type { ContextoDoTurno } from './portoes-de-entrada';
 import type { SaidaDoRoteamento } from './roteamento';
 
@@ -122,7 +123,16 @@ export async function montarConjuntoDeFerramentas(
               ...mcpTool,
               execute: (async (...args: Parameters<typeof executeOriginal>) => {
                 estado.agendaToolCalledThisTurn = true;
-                return executeOriginal(...args);
+                const resultado = await executeOriginal(...args);
+                // #3596: colheita para o `horarioDaAgendaGate`, de QUALQUER tool de agenda.
+                // Pura e sem exceção — embalagem inesperada colhe nada.
+                const colheita = colherDaFerramenta(resultado);
+                const agenda = estado.agendaDoTurno;
+                if (colheita.fuso !== null) agenda.fuso = colheita.fuso;
+                for (const i of colheita.livres) agenda.livres.add(i);
+                if (colheita.marcou) agenda.marcou = true;
+                for (const i of colheita.marcados) agenda.marcados.add(i);
+                return resultado;
               }) as typeof mcpTool.execute,
             };
           } else {
@@ -215,6 +225,9 @@ export async function montarConjuntoDeFerramentas(
         registro: registroDoTurno(agentConfig, estado),
       }
     : null;
+  // #3596: a callback de contexto da prévia é SÍNCRONA — sem esperar aqui, a consulta
+  // que o contato JÁ tem ainda não foi lida quando o gate de horário confere.
+  if (preview) await estado.agendaDoTurno.leituraDosCompromissos;
   const previewTools =
     preview && previewContext
       ? applyPreviewPolicy(
@@ -235,6 +248,7 @@ export async function montarConjuntoDeFerramentas(
               ferramentas: previewContext.agenda?.ferramentas ?? [],
               toolCalledThisTurn: estado.agendaToolCalledThisTurn,
             },
+            horariosDaAgenda: horariosDaAgendaDoTurno(agentConfig, estado),
           }),
           // #2490 — a MESMA `prepararFotosDoProduto` do caminho de produção,
           // com a MESMA cópia por service role e a MESMA query no catálogo:

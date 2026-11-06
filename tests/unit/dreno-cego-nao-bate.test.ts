@@ -95,18 +95,18 @@ describe("drainEventLog distingue fila vazia de fila que não viu", () => {
 
 describe("o laço do worker só bate com o tick que viu a fila", () => {
   const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-  const knobs = { intervalMs: 2_000, idleIntervalMs: 2_000, batchSize: 50 };
+  const knobs = { intervalMs: 2_000, idleIntervalMs: 2_000, idleMaxMs: 2_000, staleSweepMs: 60_000, batchSize: 50 };
 
   async function batidas(admin: never): Promise<number> {
     vi.useFakeTimers();
     const set = vi.fn(async () => "OK");
     const controller = new AbortController();
-    const loop = runEventLogDrainLoop(knobs, log, controller.signal, {
+    const loop = runEventLogDrainLoop(knobs, log, controller.signal, { deps: {
       // O drainEventLog REAL, com o dublê do banco: é o caminho que o P1 apontou.
       drainEventLog,
       admin: admin as never,
       batimento: { get: vi.fn(), set },
-    });
+    } });
     await vi.advanceTimersByTimeAsync(30_000);
     controller.abort();
     await loop;

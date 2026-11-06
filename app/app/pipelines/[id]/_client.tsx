@@ -114,6 +114,8 @@ export function PipelinePageClient({
     [],
   );
   const nomeAtual = data?.pipeline.name ?? initialName;
+  // Funil ARQUIVADO (#1298) abre para OLHAR: quadro em leitura, sem criar, lote nem renomear.
+  const arquivado = (data?.pipeline as { is_archived?: boolean } | undefined)?.is_archived === true;
   // Um funil só = nada para trocar: o seletor seria ruído permanente.
   const podeTrocar = funis.length > 1;
 
@@ -128,7 +130,7 @@ export function PipelinePageClient({
       compacto={compacto}
       onCompacto={setCompacto}
       onNovo={() => setNewOpen(true)}
-      carregado={!!data}
+      carregado={!!data && !arquivado}
       celular={celular}
     />
   );
@@ -316,12 +318,13 @@ export function PipelinePageClient({
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
           leadInicial={searchParams.get("lead")}
-          podeRenomearEtapa={ROLE_RANK[role] >= ROLE_RANK.manager}
+          podeRenomearEtapa={!arquivado && ROLE_RANK[role] >= ROLE_RANK.manager}
           compacto={compacto}
+          somenteLeitura={arquivado}
           ordenar={ordem}
         />
       )}
-      {lote}
+      {!arquivado && lote}
     </div>
   );
 }

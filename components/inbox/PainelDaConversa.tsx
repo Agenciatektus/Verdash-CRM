@@ -167,6 +167,7 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
               })}
               // A barra de recursos lembra o recolhimento POR usuário (#3282).
               usuarioId={user.id}
+              onAbrirConversa={onAbrirConversa}
               contatoBloqueadoId={conversation.contacts?.is_blocked ? (conversation.contacts.id ?? null) : null}
               contactName={conversation.contacts?.name ?? null}
               contactDisplayName={conversation.contacts?.display_name}
