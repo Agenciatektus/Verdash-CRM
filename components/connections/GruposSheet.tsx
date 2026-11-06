@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Escolha } from "@/components/ui/escolha";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -29,23 +30,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/hooks/i18n/useT";
 
-interface Grupo {
-  chatId: string;
-  subject: string | null;
-  enabled: boolean;
-  enabledAt: string | null;
-  presente: boolean;
-  /**
-   * #2729 — a chave POR GRUPO "Permitir que a IA responda neste grupo".
-   * Opcional de propósito: um servidor que ainda não atualizou não manda a
-   * coluna, e "ausente" é a mesma coisa que desligada (a régua do servidor é
-   * `=== true`, falha fechada).
-   */
-  iaResponde?: boolean;
-}
+import { GrupoCartao } from "./GrupoCartao";
+import { filtrarGrupos, minutosDesde, type AbaDeGrupos, type FiltroDeTipo, type Grupo } from "./grupos-lista";
 
 const AVISO_DE_VOLUME =
   "A partir de agora, o WhatsApp deste número passa a enviar mensagens de todos os grupos para o sistema. Só os grupos ligados aparecem no chat; os outros são descartados.";
@@ -83,14 +72,6 @@ async function executarPutEmLote(
   return { concluidos, falhou: null };
 }
 
-/** Busca insensível a maiúscula/minúscula e a acento: "grupo sao" acha "Grupo São". */
-function normalizarBusca(s: string): string {
-  return s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-}
-
 export function GruposSheet({
   channelId,
   onClose,
@@ -104,6 +85,11 @@ export function GruposSheet({
   const [pendente, setPendente] = useState<Grupo | null>(null);
   const [salvando, setSalvando] = useState<string | null>(null);
   const [busca, setBusca] = useState("");
+  const [tipo, setTipo] = useState<FiltroDeTipo>("todos");
+  const [aba, setAba] = useState<AbaDeGrupos>("ativos");
+  const [atualizadoEm, setAtualizadoEm] = useState<string | null>(null);
+  const [desatualizado, setDesatualizado] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
   const [confirmarDesligarTodos, setConfirmarDesligarTodos] = useState(false);
   const [confirmarLigarTodos, setConfirmarLigarTodos] = useState<{
     alvos: Grupo[];
@@ -115,20 +101,37 @@ export function GruposSheet({
     acao: "ligar" | "desligar";
   } | null>(null);
 
-  const carregar = useCallback(async () => {
-    setErro(null);
-    const res = await fetch(`/api/v1/channel-sessions/${channelId}/groups`);
-    const j = (await res.json().catch(() => null)) as { data?: Grupo[] } | null;
-    if (!res.ok || !j?.data) {
-      setErro(
-        res.status === 502
-          ? t("O WhatsApp deste número não respondeu. Confira se ele está conectado e tente de novo.")
-          : t("Não consegui ler os grupos deste número."),
-      );
-      return;
+  const carregar = useCallback(
+    async (forcar = false) => {
+      setErro(null);
+      const res = await fetch(`/api/v1/channel-sessions/${channelId}/groups${forcar ? "?refresh=1" : ""}`);
+      const j = (await res.json().catch(() => null)) as {
+        data?: Grupo[];
+        meta?: { atualizado_em?: string | null; desatualizado?: boolean };
+      } | null;
+      if (!res.ok || !j?.data) {
+        setErro(
+          res.status === 502
+            ? t("O WhatsApp deste número não respondeu. Confira se ele está conectado e tente de novo.")
+            : t("Não consegui ler os grupos deste número."),
+        );
+        return;
+      }
+      setGrupos(j.data);
+      setAtualizadoEm(j.meta?.atualizado_em ?? null);
+      setDesatualizado(j.meta?.desatualizado === true);
+    },
+    [channelId, t],
+  );
+
+  async function atualizar() {
+    setAtualizando(true);
+    try {
+      await carregar(true);
+    } finally {
+      setAtualizando(false);
     }
-    setGrupos(j.data);
-  }, [channelId, t]);
+  }
 
   useEffect(() => {
     void carregar();
@@ -248,12 +251,12 @@ export function GruposSheet({
   const ligados = (grupos ?? []).filter((g) => g.enabled).length;
   const total = grupos?.length ?? 0;
 
-  const filtrados = useMemo(() => {
-    const alvo = normalizarBusca(busca);
-    return (grupos ?? []).filter((g) =>
-      normalizarBusca(g.subject ?? t("Grupo sem nome")).includes(alvo),
-    );
-  }, [grupos, busca, t]);
+  const filtrados = useMemo(
+    () => filtrarGrupos(grupos ?? [], { busca, tipo, aba, semNome: t("Grupo sem nome") }),
+    [grupos, busca, tipo, aba, t],
+  );
+  const algumArquivadoConhecido = (grupos ?? []).some((g) => g.archived != null);
+  const minutos = minutosDesde(atualizadoEm);
 
   // "Ligar todos" age sempre sobre os VISÍVEIS (respeitando a busca) que
   // ainda estão desligados — nunca sobre um já ligado nem sobre um que a
@@ -274,9 +277,16 @@ export function GruposSheet({
 
         <div className="flex flex-col gap-2 pb-2 pt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <Button variant="outline" size="sm" onClick={() => void carregar()}>
-              {t("Atualizar lista")}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={atualizando} onClick={() => void atualizar()}>
+                {t("Atualizar")}
+              </Button>
+              {minutos !== null && (
+                <span className="text-xs text-muted-foreground">
+                  {minutos < 1 ? t("Atualizado agora") : `${t("Atualizado há")} ${minutos} ${t("min")}`}
+                </span>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               {alvosParaLigar.length > 0 && (
                 <Button
@@ -312,6 +322,12 @@ export function GruposSheet({
           {grupos && (
             <p className="text-sm text-muted-foreground">
               {ligados} {t("de")} {total} {t("ligados")}
+            </p>
+          )}
+
+          {desatualizado && (
+            <p className="text-xs text-muted-foreground" role="status">
+              {t("Não consegui falar com o WhatsApp agora. Esta é a última lista salva.")}
             </p>
           )}
 
@@ -382,56 +398,40 @@ export function GruposSheet({
           )}
 
           {grupos && grupos.length > 0 && (
-            <Input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder={t("Buscar grupo")}
-              aria-label={t("Buscar grupo")}
-            />
+            <div className="flex flex-col gap-2">
+              <Input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder={t("Buscar grupo")}
+                aria-label={t("Buscar grupo")}
+              />
+              <Escolha aria-label={t("Tipo")} value={tipo} onValueChange={(v) => setTipo(v as FiltroDeTipo)}>
+                <option value="todos">{t("Todos os tipos")}</option>
+                <option value="grupo">{t("Grupos")}</option>
+                <option value="comunidade">{t("Comunidades")}</option>
+                <option value="grupo_da_comunidade">{t("Grupos de comunidade")}</option>
+              </Escolha>
+              <Tabs value={aba} onValueChange={(v) => setAba(v as AbaDeGrupos)}>
+                <TabsList variante="segmento">
+                  <TabsTrigger value="ativos">{t("Ativos")}</TabsTrigger>
+                  <TabsTrigger value="arquivados">{t("Arquivados no WhatsApp")}</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ul className="space-y-2">
             {filtrados.map((g) => (
-              <li key={g.chatId} className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-sm">{g.subject ?? t("Grupo sem nome")}</span>
-                    {!g.presente && (
-                      <p className="text-xs text-muted-foreground">
-                        {t("O número saiu deste grupo. Desligue a chave se não precisar mais dela.")}
-                      </p>
-                    )}
-                  </div>
-                  <Switch
-                    aria-label={g.subject ?? t("Grupo sem nome")}
-                    checked={g.enabled}
-                    disabled={salvando === g.chatId || progresso !== null}
-                    onCheckedChange={(v) => alternar(g, v)}
-                  />
-                </div>
-                {/* #2729 — a segunda chave, a da IA, só em grupo LIGADO: fora
-                    da fila não há mensagem nossa na inbox, logo não há nada
-                    para a IA responder — uma chave que não liga nada seria
-                    mentira na tela (e o servidor recusa com 409
-                    `grupo_desligado`). O texto fica ao lado para as duas
-                    chaves da linha não parecerem uma só. */}
-                {g.enabled && (
-                  <div className="flex items-center gap-2 pl-1">
-                    <Switch
-                      aria-label={t("Permitir que a IA responda neste grupo")}
-                      checked={g.iaResponde === true}
-                      disabled={salvando === g.chatId || progresso !== null}
-                      onCheckedChange={(v) => void alternarIa(g, v)}
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      {t("Permitir que a IA responda neste grupo")}
-                    </span>
-                  </div>
-                )}
-              </li>
+              <GrupoCartao
+                key={g.chatId}
+                g={g}
+                bloqueado={salvando === g.chatId || progresso !== null}
+                onLigar={alternar}
+                onIa={(x, v) => void alternarIa(x, v)}
+              />
             ))}
           </ul>
           {grupos?.length === 0 && (
@@ -440,7 +440,11 @@ export function GruposSheet({
             </p>
           )}
           {grupos && grupos.length > 0 && filtrados.length === 0 && (
-            <p className="text-sm text-muted-foreground">{t("Nenhum grupo encontrado")}</p>
+            <p className="text-sm text-muted-foreground">
+              {aba === "arquivados" && !algumArquivadoConhecido
+                ? t("Os arquivados aparecem aqui quando você arquiva ou desarquiva um grupo no WhatsApp.")
+                : t("Nenhum grupo encontrado")}
+            </p>
           )}
         </div>
       </SheetContent>
