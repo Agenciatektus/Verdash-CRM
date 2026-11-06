@@ -48,9 +48,7 @@ export function AgendaInterativa({
   pessoas,
   agendamentos,
   recorte,
-  tipos,
   tipo,
-  onEscolherTipo,
   onMarcarEm,
   onAbrirAgendamento,
   className,
@@ -76,27 +74,6 @@ export function AgendaInterativa({
    * errado.
    */
   tipo: { id: string; duracaoMin: number } | null;
-  /**
-   * OS TIPOS, para o seletor que esta tela não tinha — e a ausência dele virou
-   * defeito no primeiro contato com dado real.
-   *
-   * A grade oferece a disponibilidade de UM tipo (é o que a rota pede), e até
-   * aqui esse tipo era `tiposIniciais[0]`: o primeiro em ordem alfabética,
-   * escolhido por ninguém e invisível na tela. Numa organização com
-   * "Atendimento", "Consulta" e "Reunião", a grade inteira desenhava a
-   * disponibilidade de "Atendimento" — e, se o dono dele não tivesse jornada
-   * publicada, a grade travava com "não consegui carregar os horários" enquanto
-   * os outros dois tipos tinham vaga. Medido na primeira execução da spec
-   * nova, contra o banco do e2e.
-   *
-   * O seletor existia, mas DENTRO do painel de marcação: escolher o tipo era
-   * parte de marcar. Agora ele também governa o que a grade mostra, e
-   * configuração que governa a tela precisa de superfície NA tela — é o
-   * invariante 6 do Sistema Vivo. O estado é o mesmo nos dois lugares: trocar
-   * aqui troca lá.
-   */
-  tipos: Array<{ id: string; nome: string; duracaoMin: number }>;
-  onEscolherTipo: (id: string) => void;
   /**
    * O clique num bloco livre da grade. OPCIONAL de propósito: quem só lê não
    * recebe esta prop, e a AUSÊNCIA dela é o que desmonta a interação inteira
@@ -229,32 +206,6 @@ export function AgendaInterativa({
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)}>
       {horarios?.google_cobertura_parcial && <p role="status" className="text-xs text-warning">{t("Ocupação do Google ainda não verificada neste período.")}</p>}
-      {tipos.length > 1 && (
-        <div
-          data-testid="tipo-da-grade"
-          className="flex flex-wrap items-center gap-1.5 text-xs text-text-muted"
-        >
-          <span className="shrink-0">{t("Horários livres de")}</span>
-          {tipos.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              data-testid={`tipo-da-grade-${t.id}`}
-              aria-pressed={t.id === tipo?.id}
-              onClick={() => onEscolherTipo(t.id)}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5 transition-colors duration-fast",
-                t.id === tipo?.id
-                  ? "border-transparent bg-accent text-accent-foreground"
-                  : "border-border hover:border-border-strong hover:text-text",
-              )}
-            >
-              {t.nome}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/*
         O MOTIVO EM TEXTO, e não só no `title` de cada bloco.
 

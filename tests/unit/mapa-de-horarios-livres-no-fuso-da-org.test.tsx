@@ -89,8 +89,6 @@ function montar(fuso: string) {
       agendamentos={agendamentos}
       recorte={{ de: "2026-09-16T13:00:00.000Z", ate: "2026-09-16T14:00:00.000Z" }}
       tipo={{ id: "t1", duracaoMin: 30 }}
-      tipos={[{ id: "t1", nome: "Consulta", duracaoMin: 30 }]}
-      onEscolherTipo={vi.fn()}
       onMarcarEm={vi.fn()}
     />,
   );

@@ -186,6 +186,7 @@ function montar() {
   const tela = () => (
     <QueryClientProvider client={cliente}>
       <AgendaClient
+        orgId="org-teste"
         fusoDaAgenda="America/Sao_Paulo"
         fusoDeApresentacao="America/Sao_Paulo"
         hojeNaOrganizacao="2026-09-16"
@@ -209,7 +210,11 @@ function abrirCom(url: string) {
   window.history.replaceState(null, "", url);
 }
 
-const botaoDoTipo = (id: string) => screen.getByTestId(`tipo-da-grade-${id}`);
+// A escolha mora no botão "Horários livres" (popover): abre uma vez e acha o tipo.
+const botaoDoTipo = (id: string) => {
+  if (!screen.queryByTestId("tipo-da-grade")) fireEvent.click(screen.getByTestId("horarios-livres"));
+  return screen.getByTestId(`tipo-da-grade-${id}`);
+};
 
 beforeEach(() => {
   abrirCom("/app/agenda");

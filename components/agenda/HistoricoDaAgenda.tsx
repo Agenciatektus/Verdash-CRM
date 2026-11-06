@@ -10,6 +10,7 @@ import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/chip";
 import { cn } from "@/lib/utils";
 
 import { AvatarDaPessoa } from "./AvatarDaPessoa";
@@ -153,40 +154,27 @@ export function HistoricoDaAgenda({
       <div
         role="tablist"
         aria-label={t("Filtrar o histórico")}
-        className="flex flex-wrap items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
+        className="flex flex-wrap items-center gap-2"
       >
         {ABAS.map((a) => {
           const n = grupos[a.id].length;
           return (
-            <button
+            <Chip
               key={a.id}
               role="tab"
-              type="button"
               data-testid={`aba-${a.id}`}
               aria-selected={aba === a.id}
+              ligado={null}
               onClick={() => setAba(a.id)}
-              className={cn(
-                "flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs transition-colors duration-fast ease-out",
-                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
-                aba === a.id
-                  ? "bg-accent font-semibold text-accent-foreground"
-                  : "text-text-muted hover:bg-surface-elevated hover:text-text",
-              )}
             >
               <span>{t(a.rotulo)}</span>
               {/* O contador vem SEMPRE, inclusive zero: "Cancelados 0" responde a
                   pergunta sem gastar um clique, e some-lo faria a aba vazia
                   parecer não carregada. */}
-              <span
-                data-testid={`contador-${a.id}`}
-                className={cn(
-                  "rounded-full px-1.5 text-[10px] tabular-nums",
-                  aba === a.id ? "bg-accent-foreground/20" : "bg-surface-elevated text-text-subtle",
-                )}
-              >
+              <span data-testid={`contador-${a.id}`} className="tabular-nums opacity-70">
                 {n}
               </span>
-            </button>
+            </Chip>
           );
         })}
       </div>
@@ -209,14 +197,14 @@ export function HistoricoDaAgenda({
                 <li
                   key={a.id}
                   data-testid={`linha-${a.id}`}
-                  className="flex items-center gap-3 border-b border-border px-3 py-2.5 last:border-b-0"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-3 py-2.5 last:border-b-0"
                 >
                   <span
                     aria-hidden
                     className="h-8 w-[3px] shrink-0 rounded-full"
                     style={{ backgroundColor: corDaTrilha(pessoa?.trilha ?? 1) }}
                   />
-                  <div className="w-28 shrink-0">
+                  <div className="w-24 shrink-0">
                     <div className="text-sm font-medium tabular-nums first-letter:uppercase">
                       {format(dataDeParede(comeca, fuso), t("d 'de' MMM"), { locale: localeDaData })}
                     </div>
@@ -226,7 +214,7 @@ export function HistoricoDaAgenda({
                       {format(dataDeParede(new Date(a.termina), fuso), "HH:mm")}
                     </div>
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 basis-36">
                     {/* `titulo` e `tipo` são DADO DO OPERADOR (o nome que ele
                         cadastrou em Tipos de agendamento) e saem como ele
                         escreveu. Só o fallback "Agendamento" é rótulo nosso, e
@@ -246,7 +234,7 @@ export function HistoricoDaAgenda({
                   <Badge variant={variante} className="shrink-0">
                     {t(ROTULO_DA_SITUACAO[a.situacao])}
                   </Badge>
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1">
                     {/*
                       Ação por aba, e a lista de CADA aba tem razão própria.
                       A primeira versão disto oferecia ação só em "próximos" e
