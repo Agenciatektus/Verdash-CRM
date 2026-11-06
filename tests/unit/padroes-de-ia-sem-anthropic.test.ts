@@ -146,12 +146,13 @@ describe("nenhum literal de modelo Claude fora das exceções", () => {
 const MIGRATIONS = path.join(RAIZ, "supabase", "migrations");
 const MIGRATIONS_DECLARADAS: Record<string, string> = {
   "20261104120000_9096_ia_padrao_barato_e_teto_que_para.sql":
-    "seed de org nova em openrouter + anthropic/claude-haiku-5.5 (US$0,10/0,50 por M, " +
-    "mesmo patamar do Flash-Lite). DECLARADA ao dono em 06/11/2026: trocar é decisão de produto, " +
-    "não de limpeza. Enquanto valer, está aqui, à vista.",
+    "HISTÓRICO: seed de org nova em openrouter + anthropic/claude-haiku-5.5. SUPERADO pela 9250 (06/11/2026): " +
+    "o seed EFETIVO é medido abaixo (`seedEfetivoDeOrgNova`), não por esta lista.",
   "20261105120000_9098_teto_de_ia_padrao_por_plano.sql":
-    "repete o seed da 9096 (openrouter + anthropic/claude-haiku-5.5 para org nova). Mesma decisão " +
-    "declarada ao dono em 06/11/2026.",
+    "HISTÓRICO: repete o seed da 9096 num backfill já executado. SUPERADO pela 9250 (06/11/2026).",
+  "20261106220000_9250_org_nova_sem_anthropic.sql":
+    "cita `anthropic/claude-haiku-5.5` SÓ no `where` do backfill, para LOCALIZAR e trocar o seed antigo; " +
+    "a função que ela cria não cita Claude (medido por `seedEfetivoDeOrgNova`).",
 };
 
 function migrationsNovasComClaude(): string[] {
@@ -176,5 +177,43 @@ describe("migration nova não semeia Claude escondido", () => {
       const sql = readFileSync(path.join(MIGRATIONS, nome), "utf8").replace(/--.*$/gm, "");
       expect(/claude-[\w.-]+/i.test(sql), nome).toBe(true);
     }
+  });
+});
+
+// ── O SEED EFETIVO de organização nova (o que de fato roda no INSERT) ────────
+//
+// A lista acima só declara migrations antigas. O que importa é a ÚLTIMA definição de
+// `fn_seed_org_llm_defaults`: a da cadeia de migrations (quem aplica a cadeia) e a do
+// apêndice do baseline (quem roda install.sh/update.sh). As duas não podem semear Claude.
+// 06/11/2026: a org nova nascia com `anthropic/claude-haiku-5.5` (9096) e ninguém via.
+
+const DEFINICAO_DO_SEED = /create or replace function\s+public\.fn_seed_org_llm_defaults\(\)[\s\S]*?as \$\$[\s\S]*?\$\$;/gi;
+
+function ultimaDefinicaoDoSeed(sql: string): string | null {
+  const todas = [...sql.replace(/--.*$/gm, "").matchAll(DEFINICAO_DO_SEED)].map((m) => m[0]);
+  return todas.length > 0 ? todas[todas.length - 1]! : null;
+}
+
+function seedEfetivoDeOrgNova(): { cadeia: string | null; baseline: string | null } {
+  const arquivos = readdirSync(MIGRATIONS).filter((n) => n.endsWith(".sql")).sort();
+  let cadeia: string | null = null;
+  for (const nome of arquivos) {
+    const def = ultimaDefinicaoDoSeed(readFileSync(path.join(MIGRATIONS, nome), "utf8"));
+    if (def !== null) cadeia = def; // ordem do nome = ordem de aplicação; a última vence
+  }
+  const baseline = ultimaDefinicaoDoSeed(readFileSync(path.join(RAIZ, "supabase", "baseline.sql"), "utf8"));
+  return { cadeia, baseline };
+}
+
+describe("o seed efetivo de organização nova não é Anthropic", () => {
+  const { cadeia, baseline } = seedEfetivoDeOrgNova();
+
+  it.each([
+    ["cadeia de migrations", cadeia],
+    ["apêndice do baseline", baseline],
+  ])("%s: a última definição existe e semeia o padrão barato, sem Claude", (_onde, def) => {
+    expect(def, "a função de seed sumiu: org nova nasceria sem padrão de IA").not.toBeNull();
+    expect(def!).not.toMatch(/claude|anthropic/i);
+    expect(def!).toContain(DEFAULT_CLASSIFIER_MODEL);
   });
 });
