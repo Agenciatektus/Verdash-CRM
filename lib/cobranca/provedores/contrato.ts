@@ -36,6 +36,8 @@ export interface SinalDoWebhook {
   readonly eventoId: string;
   readonly tipo: string;
   readonly clienteRef: string | null;
+  /** Só quando o objeto não traz o cliente (Stripe Dispute): a cobrança contestada. */
+  readonly cobrancaRef?: string | null;
 }
 
 /** A única verdade que o provedor nos dá — relida na API. Tradução: `lib/cobranca/estado.ts`. */

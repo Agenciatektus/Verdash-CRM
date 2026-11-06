@@ -73856,7 +73856,7 @@ create table if not exists public.cobranca_pagamentos (
   cobranca_ref text check (cobranca_ref is null or length(cobranca_ref) between 1 and 255),
   valor_cents integer not null check (valor_cents >= 0),
   moeda text not null check (moeda ~ '^[a-z]{3}$'),
-  status text not null check (status in ('pago', 'estornado_parcial', 'estornado', 'contestado')),
+  status text not null default 'pago' check (status in ('pago', 'estornado_parcial', 'estornado', 'contestado')),
   valor_estornado_cents integer not null default 0 check (valor_estornado_cents >= 0),
   pago_em timestamptz not null,
   estornado_em timestamptz,
@@ -73864,6 +73864,7 @@ create table if not exists public.cobranca_pagamentos (
   url_do_recibo text check (url_do_recibo is null or url_do_recibo ~ '^https?://'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint cobranca_pagamentos_estorno_ate_o_valor check (valor_estornado_cents <= valor_cents),
   constraint cobranca_pagamentos_provedor_ref_key unique (provedor, pagamento_ref)
 );
 

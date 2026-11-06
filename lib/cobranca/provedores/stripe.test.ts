@@ -336,11 +336,17 @@ describe("verificarWebhook", () => {
     expect(verificarWebhookStripe(nulo, cab(`t=${T},v1=${hmac(SEGREDO, T, nulo)}`), SEGREDO, AGORA)?.clienteRef).toBeNull();
   });
 
-  it("evento de cobrança (charge.refunded, charge.dispute.created): o clienteRef vem de data.object.customer", () => {
-    for (const tipo of ["charge.refunded", "charge.dispute.created"]) {
-      const corpo = JSON.stringify({ id: "evt_ch", type: tipo, data: { object: { id: "ch_1", object: "charge", customer: "cus_C", amount_refunded: 100 } } });
-      expect(verificarWebhookStripe(corpo, cab(`t=${T},v1=${hmac(SEGREDO, T, corpo)}`), SEGREDO, AGORA)).toEqual({ eventoId: "evt_ch", tipo, clienteRef: "cus_C" });
-    }
+  it("charge.refunded: o clienteRef vem de data.object.customer (a Charge tem customer)", () => {
+    const corpo = JSON.stringify({ id: "evt_ch", type: "charge.refunded", data: { object: { id: "ch_1", object: "charge", customer: "cus_C", amount_refunded: 100 } } });
+    expect(verificarWebhookStripe(corpo, cab(`t=${T},v1=${hmac(SEGREDO, T, corpo)}`), SEGREDO, AGORA)).toEqual({ eventoId: "evt_ch", tipo: "charge.refunded", clienteRef: "cus_C" });
+  });
+
+  it("charge.dispute.created: a Dispute NÃO tem customer; a cobrança contestada vira cobrancaRef", () => {
+    const disputa = { id: "dp_1", object: "dispute", amount: 9_900, charge: "ch_1", payment_intent: "pi_1", reason: "fraudulent", status: "needs_response", currency: "brl" };
+    const corpo = JSON.stringify({ id: "evt_dp", type: "charge.dispute.created", data: { object: disputa } });
+    expect(verificarWebhookStripe(corpo, cab(`t=${T},v1=${hmac(SEGREDO, T, corpo)}`), SEGREDO, AGORA)).toEqual({
+      eventoId: "evt_dp", tipo: "charge.dispute.created", clienteRef: null, cobrancaRef: "ch_1",
+    });
   });
 
   it("a comparação é em tempo constante (timingSafeEqual), nunca === entre strings", () => {
@@ -761,9 +767,10 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
         fatura("in_sem_cobranca", { hosted_invoice_url: "javascript:alert(1)", parent: null }),
       ] } },
       "GET /charges": { corpo: { data: [
-        { id: "ch_1", payment_intent: "pi_1", amount_refunded: 9_900, disputed: false, refunds: { data: [{ created: 1_700_000_500, status: "succeeded" }, { created: 1_700_000_900, status: "failed" }] } },
-        { id: "ch_2", payment_intent: null, amount_refunded: 0, disputed: true, refunds: { data: [] } },
+        { id: "ch_1", status: "succeeded", payment_intent: "pi_1", amount_refunded: 9_900, disputed: false, refunds: { data: [{ created: 1_700_000_500, status: "succeeded" }, { created: 1_700_000_900, status: "failed" }] } },
+        { id: "ch_2", status: "succeeded", payment_intent: null, amount_refunded: 0, disputed: true, refunds: { data: [] } },
       ] } },
+      "GET /disputes": { corpo: { data: [{ status: "needs_response" }] } },
     });
     const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
     expect(lidos?.map((p) => p.pagamentoRef)).toEqual(["in_pi", "in_ch", "in_sem_cobranca"]);
@@ -776,6 +783,40 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
     expect(faturas?.url.searchParams.get("status")).toBe("paid");
     expect(faturas?.url.searchParams.getAll("expand[]")).toEqual(["data.payments"]);
     expect(chamadas.find((c) => c.rota === "GET /charges")?.url.searchParams.getAll("expand[]")).toEqual(["data.refunds"]);
+  });
+
+  it("listarPagamentos: a recusada do mesmo payment_intent nunca toma o lugar da paga (o estorno fica na paga)", async () => {
+    const fatura = (id: string, pi: string) => ({
+      id, amount_paid: 9_900, currency: "brl", status_transitions: { paid_at: 1_700_000_000 },
+      payments: { data: [{ payment: { type: "payment_intent", payment_intent: pi } }] },
+    });
+    const cobranca = (id: string, pi: string, status: string, estornado: number) => ({ id, status, payment_intent: pi, amount_refunded: estornado, disputed: false, refunds: { data: [{ created: 1_700_000_500 }] } });
+    const { adaptador } = montar({
+      "GET /invoices": { corpo: { data: [fatura("in_a", "pi_a"), fatura("in_b", "pi_b")] } },
+      // Mais nova primeiro: em pi_a a paga é a mais nova; em pi_b a recusada é a mais nova.
+      "GET /charges": { corpo: { data: [
+        cobranca("ch_a_paga", "pi_a", "succeeded", 9_900),
+        cobranca("ch_a_recusada", "pi_a", "failed", 0),
+        cobranca("ch_b_recusada", "pi_b", "failed", 0),
+        cobranca("ch_b_paga", "pi_b", "succeeded", 3_000),
+      ] } },
+    });
+    const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
+    expect(lidos?.map((p) => [p.pagamentoRef, p.cobrancaRef, p.estornadoCents])).toEqual([["in_a", "ch_a_paga", 9_900], ["in_b", "ch_b_paga", 3_000]]);
+  });
+
+  it("listarPagamentos: disputa GANHA não é contestado; aberta ou perdida é", async () => {
+    const { adaptador, chamadas } = montar({
+      "GET /invoices": { corpo: { data: ["ch_g", "ch_p"].map((ch) => ({
+        id: `in_${ch}`, amount_paid: 9_900, currency: "brl", status_transitions: { paid_at: 1_700_000_000 },
+        payments: { data: [{ payment: { type: "charge", charge: ch } }] },
+      })) } },
+      "GET /charges": { corpo: { data: ["ch_g", "ch_p"].map((id) => ({ id, status: "succeeded", amount_refunded: 0, disputed: true })) } },
+      "GET /disputes": (url) => ({ corpo: { data: [{ status: url.searchParams.get("charge") === "ch_g" ? "won" : "lost" }] } }),
+    });
+    const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
+    expect(lidos?.map((p) => [p.cobrancaRef, p.contestado])).toEqual([["ch_g", false], ["ch_p", true]]);
+    expect(chamadas.filter((c) => c.rota === "GET /disputes")).toHaveLength(2);
   });
 
   it("listarPagamentos: forma inesperada vira ErroDoProvedor, nunca ZodError", async () => {

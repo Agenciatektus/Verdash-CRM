@@ -240,6 +240,7 @@ const faturaComPagamentos = z.object({
 });
 const cobrancaComEstornos = z.object({
   id: z.string().min(1),
+  status: z.string(),
   payment_intent: z.string().nullish(),
   amount_refunded: z.number().int(),
   disputed: z.boolean(),
@@ -286,7 +287,11 @@ const eventoDaStripe = z.object({
   id: z.string().startsWith("evt_"),
   type: z.string().min(1),
   data: z.object({
-    object: z.object({ customer: z.union([z.string(), z.object({ id: z.string() })]).nullish() }),
+    object: z.object({
+      customer: z.union([z.string(), z.object({ id: z.string() })]).nullish(),
+      // A Dispute não tem `customer`: só a cobrança contestada.
+      charge: z.union([z.string(), z.object({ id: z.string() })]).nullish(),
+    }),
   }),
 });
 
@@ -334,11 +339,14 @@ function lerEvento(corpoCru: string): SinalDoWebhook | null {
   }
   const evento = eventoDaStripe.safeParse(json);
   if (!evento.success) return null;
-  const cliente = evento.data.data.object.customer;
+  const { customer: cliente, charge: cobranca } = evento.data.data.object;
+  const clienteRef = typeof cliente === "string" ? cliente : (cliente?.id ?? null);
+  const cobrancaRef = typeof cobranca === "string" ? cobranca : (cobranca?.id ?? null);
   return {
     eventoId: evento.data.id,
     tipo: evento.data.type,
-    clienteRef: typeof cliente === "string" ? cliente : (cliente?.id ?? null),
+    clienteRef,
+    ...(clienteRef === null && cobrancaRef !== null ? { cobrancaRef } : {}),
   };
 }
 
@@ -703,10 +711,20 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
       ),
       chamar("GET", `/charges?customer=${cliente}&limit=100&expand[]=data.refunds`).then((d) => ler(listaDe(cobrancaComEstornos), d).data),
     ]);
+    // Só cobrança PAGA: na nova tentativa o mesmo payment_intent tem a recusada e
+    // a paga. A lista vem da mais nova para a mais antiga; a 1ª paga vence.
     const porRef = new Map<string, z.infer<typeof cobrancaComEstornos>>();
-    for (const c of cobrancas) {
-      porRef.set(c.id, c);
-      if (c.payment_intent) porRef.set(c.payment_intent, c);
+    for (const c of cobrancas.filter((x) => x.status === "succeeded")) {
+      if (!porRef.has(c.id)) porRef.set(c.id, c);
+      if (c.payment_intent && !porRef.has(c.payment_intent)) porRef.set(c.payment_intent, c);
+    }
+    // `disputed` segue true com a disputa ganha: só conta como contestado a que não foi `won`.
+    // Disputa é rara: uma leitura por cobrança disputada.
+    const contestadas = new Set<string>();
+    for (const c of new Set(porRef.values())) {
+      if (!c.disputed) continue;
+      const disputas = ler(listaDe(z.object({ status: z.string() })), await chamar("GET", `/disputes?charge=${encodeURIComponent(c.id)}&limit=10`)).data;
+      if (disputas.length === 0 || disputas.some((d) => d.status !== "won")) contestadas.add(c.id);
     }
     return faturas.flatMap((f) => {
       const pagaEm = f.status_transitions.paid_at;
@@ -722,7 +740,7 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
         valorCents: f.amount_paid,
         moeda: f.currency.toLowerCase(),
         estornadoCents: c?.amount_refunded ?? 0,
-        contestado: c?.disputed ?? false,
+        contestado: c !== undefined && contestadas.has(c.id),
         pagoEm: emData(pagaEm),
         estornadoEm: (c?.amount_refunded ?? 0) > 0 && estornos.length > 0 ? emData(Math.max(...estornos)) : null,
         planoId: plano !== undefined && UUID.safeParse(plano).success ? plano : null,

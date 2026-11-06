@@ -79,6 +79,27 @@ describe("gravarPagamentos", () => {
     });
   });
 
+  it("releitura que NÃO acha a cobrança não desfaz estorno nem contestação já gravados", async () => {
+    const t = tabela();
+    const listar = vi.fn<NonNullable<AdaptadorDeCobranca["listarPagamentos"]>>();
+    listar.mockResolvedValueOnce([lido({ estornadoCents: 9_900, estornadoEm: new Date("2026-10-02T00:00:00Z") }), lido({ pagamentoRef: "in_2", cobrancaRef: "ch_2", contestado: true })]);
+    listar.mockResolvedValueOnce([lido({ cobrancaRef: null }), lido({ pagamentoRef: "in_2", cobrancaRef: null })]);
+    await gravarPagamentos(t.banco.cliente as never, ORG, "stripe", adaptadorCom(listar), "cus_1");
+    expect(await gravarPagamentos(t.banco.cliente as never, ORG, "stripe", adaptadorCom(listar), "cus_1")).toBe(2);
+    expect(t.linhas.get("stripe|in_1")).toMatchObject({ status: "estornado", valor_estornado_cents: 9_900, cobranca_ref: "ch_1", estornado_em: "2026-10-02T00:00:00.000Z" });
+    expect(t.linhas.get("stripe|in_2")).toMatchObject({ status: "contestado", cobranca_ref: "ch_2" });
+    // O upsert sem cobrança leva um só formato de linha (PostgREST mandaria null nas chaves que faltam).
+    const ultimo = t.banco.cadeias.filter((c) => operacao(c) === "upsert").at(-1)!;
+    const linhas = argumentos(ultimo, "upsert")?.[0] as Record<string, unknown>[];
+    expect(linhas.every((l) => !("status" in l) && !("cobranca_ref" in l) && !("valor_estornado_cents" in l))).toBe(true);
+  });
+
+  it("estornado acima do pago (cobrança maior que a fatura) é limitado ao pago: a CHECK do banco não derruba o lote", async () => {
+    const t = tabela();
+    await gravarPagamentos(t.banco.cliente as never, ORG, "stripe", adaptadorCom(async () => [lido({ estornadoCents: 12_000 })]), "cus_1");
+    expect(t.linhas.get("stripe|in_1")).toMatchObject({ valor_estornado_cents: 9_900, status: "estornado" });
+  });
+
   it("controle negativo: o dublê recusa a 2ª gravação de quem faz upsert sem a chave única (o teste acima mede algo)", async () => {
     const t = tabela();
     const semChave = async () =>

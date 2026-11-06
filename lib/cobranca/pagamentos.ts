@@ -30,7 +30,8 @@ export function linhaDoPagamento(orgId: string, provedor: ProvedorDeCobranca, p:
     valor_cents: p.valorCents,
     moeda: p.moeda,
     status: statusDoPagamento(p.valorCents, p.estornadoCents, p.contestado),
-    valor_estornado_cents: p.estornadoCents,
+    // A CHECK do banco: estornado nunca passa do pago (cobrança maior que a fatura).
+    valor_estornado_cents: Math.min(p.estornadoCents, p.valorCents),
     pago_em: p.pagoEm.toISOString(),
     estornado_em: p.estornadoEm?.toISOString() ?? null,
     plano_id: p.planoId,
@@ -50,10 +51,22 @@ export async function gravarPagamentos(
   try {
     const lidos = await adaptador.listarPagamentos({ clienteRef });
     if (lidos.length === 0) return 0;
-    const { error } = await admin
-      .from("cobranca_pagamentos")
-      .upsert(lidos.map((p) => linhaDoPagamento(orgId, provedor, p)), { onConflict: "provedor,pagamento_ref" });
-    if (error) throw new Error(`gravacao (${error.code ?? "sem_codigo"})`);
+    const comCobranca = lidos.filter((p) => p.cobrancaRef !== null).map((p) => linhaDoPagamento(orgId, provedor, p));
+    // Sem a cobrança (fora da janela lida, pago fora do provedor) não há como saber
+    // de estorno ou disputa: esses campos ficam de fora para não apagar o que já
+    // foi gravado. Linha nova nasce com os defaults (`pago`, 0, sem cobrança).
+    // Dois upserts: no PostgREST um lote com chaves diferentes mandaria null nas que faltam.
+    const semCobranca = lidos
+      .filter((p) => p.cobrancaRef === null)
+      .map((p) => {
+        const { status: _s, valor_estornado_cents: _v, estornado_em: _e, cobranca_ref: _c, ...resto } = linhaDoPagamento(orgId, provedor, p);
+        return resto;
+      });
+    for (const lote of [comCobranca, semCobranca]) {
+      if (lote.length === 0) continue;
+      const { error } = await admin.from("cobranca_pagamentos").upsert(lote, { onConflict: "provedor,pagamento_ref" });
+      if (error) throw new Error(`gravacao (${error.code ?? "sem_codigo"})`);
+    }
     return lidos.length;
   } catch (e) {
     logger.warn("cobranca.pagamentos_nao_gravados", {
