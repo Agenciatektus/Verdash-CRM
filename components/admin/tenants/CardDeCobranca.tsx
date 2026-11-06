@@ -16,6 +16,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { documentoDoPagador } from "@/lib/cobranca/documento";
+import { acoesDoCard, ultimoEstorno, type PagamentoDoHistorico } from "@/lib/cobranca/historico";
 import { ROTULO_DO_ESTADO } from "@/lib/cobranca/rotulos";
 import type { EstadoDaAssinatura } from "@/lib/cobranca/vocabulario";
 import { useIdioma } from "@/lib/i18n/IdiomaProvider";
@@ -80,6 +81,7 @@ export function CardDeCobranca({
   rotuloAntigo,
   pedeDocumento = false,
   documentoDoCadastro = null,
+  pagamentos = [],
 }: {
   orgId: string;
   planos: readonly PlanoDoCard[];
@@ -90,6 +92,8 @@ export function CardDeCobranca({
   pedeDocumento?: boolean;
   /** CNPJ do cadastro, já conferido e sem máscara: pré-preenche o documento. */
   documentoDoCadastro?: string | null;
+  /** Últimos pagamentos da empresa (`cobranca_pagamentos`), do mais novo para o mais antigo. */
+  pagamentos?: readonly PagamentoDoHistorico[];
 }) {
   const t = useT();
   const idioma = useIdioma();
@@ -107,6 +111,10 @@ export function CardDeCobranca({
   const documentoErrado = documento.trim() !== "" && documentoNormalizado === null;
   const base = `/api/v1/admin/tenants/${orgId}/assinatura`;
   const data = new Intl.DateTimeFormat(idioma, { dateStyle: "short" });
+  const acoes = acoesDoCard(assinatura, pagamentos);
+  const estornado = ultimoEstorno(pagamentos);
+  const dinheiro = (cents: number, moeda: string) =>
+    new Intl.NumberFormat(idioma, { style: "currency", currency: moeda.toUpperCase() }).format(cents / 100);
   const nomeDoPlano = (id: string) => planos.find((p) => p.id === id)?.nome ?? "—";
 
   async function agir(acao: () => Promise<unknown>, sucesso: string | ((resultado: unknown) => string)) {
@@ -186,13 +194,25 @@ export function CardDeCobranca({
       ) : (
         <p className="text-sm text-muted-foreground">{t("Isenta: não paga e não tem limites.")}</p>
       )}
+      {acoes.cancelada && (
+        <p role="status" className="text-sm font-medium">
+          {t("Assinatura cancelada. A empresa não paga mais por este plano.")}
+        </p>
+      )}
+      {estornado && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("Última cobrança estornada:")} {dinheiro(estornado.valor_estornado_cents, estornado.moeda)}
+          {estornado.valor_estornado_cents < estornado.valor_cents && ` ${t("de")} ${dinheiro(estornado.valor_cents, estornado.moeda)}`}
+          {estornado.estornado_em && `, ${data.format(new Date(estornado.estornado_em))}`}.
+        </p>
+      )}
       {rotuloAntigo && (
         <p className="text-xs text-muted-foreground">
           {t("Rótulo antigo:")} {rotuloAntigo}
         </p>
       )}
 
-      {assinatura && assinatura.estado !== "ativa" && (
+      {acoes.podeGerarLink && (
         <div className="space-y-2">
           {pedeDocumento && (
             <div className="space-y-1">
@@ -314,7 +334,7 @@ export function CardDeCobranca({
           <Button variant="outline" disabled={ocupado} onClick={() => agir(() => apiClient.delete(base), t("A empresa agora é isenta."))}>
             {t("Tornar isenta")}
           </Button>
-          {assinatura?.provedor && (
+          {acoes.podeEstornar && (
             <EstornoDaEmpresa
               base={base}
               onFeito={async () => {
@@ -323,7 +343,7 @@ export function CardDeCobranca({
               }}
             />
           )}
-          {assinatura?.provedor &&
+          {acoes.podeCancelar &&
             (confirmandoCancelamento ? (
               <>
                 <p role="alert" className="basis-full text-sm text-warning-fg">
