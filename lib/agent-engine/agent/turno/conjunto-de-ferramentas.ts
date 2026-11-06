@@ -21,7 +21,7 @@ import { restringirAConducao } from '@/lib/cadencia/conducao/ferramentas';
 import { filtrarRawTools } from '@/lib/cadencia/conducao/presets';
 import { restringirConfigAConducao } from '@/lib/cadencia/conducao/turno';
 import { AGENDA_TOOL_NAMES, avisarCapacidadesAusentes } from '../inbound-turn';
-import type { EstadoDoTurno } from './estado-do-turno';
+import { registroDoTurno, type EstadoDoTurno } from './estado-do-turno';
 import type { ContextoDoTurno } from './portoes-de-entrada';
 import type { SaidaDoRoteamento } from './roteamento';
 
@@ -89,7 +89,8 @@ export async function montarConjuntoDeFerramentas(
         },
         configDoTurno,
         runLog,
-        preview ? { readOnly: true } : undefined,
+        // #3333: o MESMO coletor que o gate lê (`registroDoTurno`).
+        { readOnly: Boolean(preview), efeitos: estado.efeitos },
       );
       if (mcp !== null) {
         registrarLimpezaDoMcp(mcp.cleanup);
@@ -208,7 +209,11 @@ export async function montarConjuntoDeFerramentas(
       execute: async () => ({ ok: true, notes: preview.notes ?? [] }),
     };
   const previewContext = preview
-    ? await previewGateContext(pool, preview, runLog, clock())
+    ? {
+        ...(await previewGateContext(pool, preview, runLog, clock())),
+        // #3333: a prévia testa contra o mesmo gate do turno real.
+        registro: registroDoTurno(agentConfig, estado),
+      }
     : null;
   const previewTools =
     preview && previewContext

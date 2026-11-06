@@ -28,6 +28,11 @@ import {
 import type { LeadCandidate } from "@/lib/leads/active-lead";
 import { anexarDadosDoContato, type LinhaDoContatoNoQuadro } from "@/lib/kanban/dados-do-contato";
 import { anexarProximoPasso, type TarefaAbertaDoQuadro } from "@/lib/kanban/proximo-passo-do-quadro";
+import {
+  anexarAnexosAosNegocios,
+  type LinhaDoAnexoNoQuadro,
+} from "@/lib/kanban/anexos-no-card";
+import { camposDeArquivoDoNegocio } from "@/lib/leads/campos-do-funil";
 import { diasDeRecorte, recortaEncerradosAntigos } from "@/lib/kanban/recorte-de-encerrados";
 import { anexarTarefasAosNegocios, type LinhaDaTarefaNoQuadro } from "@/lib/kanban/tarefas-no-quadro";
 import { buscaEmLotes } from "@/lib/supabase/em-lotes";
@@ -41,6 +46,7 @@ import { createClient } from "@/lib/supabase/server";
 import { idsDeContatosPessoais } from "@/app/api/v1/conversations/_handler";
 import type { BoardData, Pipeline, Stage } from "@/lib/kanban/types";
 import type { Lead } from "@/lib/types/leads";
+import { ocultarProvaMetaNaResposta } from "@/lib/leads/prova-meta-lead-submitted";
 
 export const dynamic = "force-dynamic";
 
@@ -574,6 +580,49 @@ async function withTarefas(
   };
 }
 
+/**
+ * Anexa a cada negócio do quadro o que os campos `file` do funil têm (#2829).
+ *
+ * Uma leitura de `crm_lead_attachments` para o quadro inteiro, em lotes de ids
+ * como as outras etapas: o card não pode custar uma consulta por negócio.
+ *
+ * Funil SEM campo `file` sai daqui sem consultar nada — o `file` é a única forma
+ * de haver anexo de campo personalizado, e quem nunca criou um não paga nem a
+ * ida ao banco nem um byte na resposta.
+ *
+ * Erro de leitura derruba o quadro com 500, como as outras etapas: um quadro que
+ * escondesse o anexo em silêncio diria "nenhum documento" justamente no dia em
+ * que não sabe — e é a trava de etapa seguinte (fatia 2 da #2829) que vai
+ * depender desta contagem para deixar o negócio andar.
+ */
+async function withAnexos(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  organizationId: string,
+  leads: Lead[],
+  campos: ReturnType<typeof camposDeArquivoDoNegocio>,
+): Promise<{ leads: Lead[]; error: string | null }> {
+  if (leads.length === 0 || campos.length === 0) return { leads, error: null };
+
+  const leadIds = leads.map((l) => l.id);
+
+  const { data, error } = await buscaEmLotes(leadIds, (lote) =>
+    supabase
+      .from("crm_lead_attachments")
+      .select("lead_id, field_key, id, file_name, mime_type, file_size, created_at")
+      .eq("organization_id", organizationId)
+      .in("lead_id", lote)
+      // Sem `.in("field_key", …)`: a cerca do board só aceita `.in` em lote, e
+      // `anexarAnexosAosNegocios` já descarta a chave que o funil não declara.
+      .order("created_at", { ascending: true }),
+  );
+  if (error) return { leads, error: error.message };
+
+  return {
+    leads: anexarAnexosAosNegocios(leads, (data ?? []) as LinhaDoAnexoNoQuadro[], campos) as Lead[],
+    error: null,
+  };
+}
+
 export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const inicioDaRota = performance.now();
   const requestId = randomUUID();
@@ -720,6 +769,9 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     tarefas: () => withTarefas(supabase, organizationId, leadsDoQuadro),
     conversa: () => withConversas(supabase, organizationId, leadsDoQuadro),
     contato: () => withMarcadoresDoContato(supabase, organizationId, leadsDoQuadro),
+    // Os anexos dos campos `file` (#2829): contagem e o documento clicável no card.
+    anexos: () =>
+      withAnexos(supabase, organizationId, leadsDoQuadro, camposDeArquivoDoNegocio((pipeline as Pipeline).settings)),
   });
   tempos.total = Math.round((performance.now() - inicioDaRota) * 10) / 10;
 
@@ -746,6 +798,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resultados.tarefas,
     resultados.conversa,
     resultados.contato,
+    resultados.anexos,
   ].find((r) => r.error);
   if (comErro?.error) {
     return fail("internal_error", comErro.error, 500, { requestId, headers });
@@ -758,13 +811,17 @@ export async function GET(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     resultados.passo,
     resultados.tarefas.leads,
     resultados.conversa.leads,
+    resultados.anexos.leads,
     resultados.contato.leads,
   ]);
 
   const board: BoardData = {
     pipeline: pipeline as Pipeline,
     stages: (stages ?? []) as Stage[],
-    leads: leadsEnriquecidos,
+    leads: leadsEnriquecidos.map(
+      (lead) =>
+        ocultarProvaMetaNaResposta(lead as unknown as Record<string, unknown>) as unknown as Lead,
+    ),
     passagens: (passagens ?? []).map((p) => ({
       stage_id: p.de_stage_id,
       status: p.status_na_saida as "won" | "lost",

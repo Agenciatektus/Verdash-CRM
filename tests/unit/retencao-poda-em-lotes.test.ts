@@ -385,7 +385,7 @@ describe("podarHistorico — o laço de lotes", () => {
     expect(chamadas.some((c) => c.nome === "fn_expurgar_espelho_da_agenda")).toBe(true);
   });
 
-  it("erro em TODOS os drenos: as 14 do rpc + mídia + rascunhos entram nomeadas, sem lançar", async () => {
+  it("erro em TODOS os drenos: as do rpc + mídia + rascunhos entram nomeadas, sem lançar", async () => {
     const db: PodaDb = {
       async rpc(nome) {
         return { data: null, error: { message: `permission denied for function ${nome}` } };
@@ -399,9 +399,11 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // 18 drenos: 16 pelo rpc (inclui a poda do bus da Tektus, 9021/9057, o aviso de agendamento, 0753, e a
-    // telemetria, o ritmo, as cópias e os checkpoints do upstream 1.90) + a mídia + a décima poda (o DELETE do admin).
-    expect(r.falhas).toHaveLength(18);
+    // 19 drenos: 17 pelo rpc (inclui a poda do bus da Tektus, 9021/9057, o aviso de agendamento, 0753, a
+    // telemetria, o ritmo, as cópias e os checkpoints do upstream 1.90, e o traço do turno, 0778, do 1.95)
+    // + a mídia + a décima poda (o DELETE do admin).
+    expect(r.falhas).toHaveLength(19);
+    expect(r.falhas.some((f) => f.includes("fn_expurgar_traco_do_turno_vencido"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("conversation_drafts"))).toBe(true);
     expect(r.falhas.some((f) => f.includes("fn_enfileirar_midia_vencida"))).toBe(true);
     expect(r.jobs_apagados).toBe(0);
@@ -455,8 +457,8 @@ describe("podarHistorico — o laço de lotes", () => {
     };
     const r = await podarHistorico(db, {});
 
-    // Só os 16 drenos do rpc falham nesta rodada (15 + a poda do bus da Tektus).
-    expect(r.falhas).toHaveLength(16);
+    // Só os 17 drenos do rpc falham nesta rodada (16 do upstream 1.95 + a poda do bus da Tektus).
+    expect(r.falhas).toHaveLength(17);
     for (const f of r.falhas) expect(f.length).toBeLessThanOrEqual(300);
   });
 });
@@ -652,6 +654,11 @@ describe("houveEfeito — as duas direções", () => {
     lotes_checkpoints: 0,
     checkpoints_tem_resto: false,
     retencao_checkpoints_dias: 180,
+    // Décima sétima poda (migration 0778, issue #3201): o traço do turno.
+    tracos_apagados: 0,
+    lotes_tracos: 0,
+    tracos_tem_resto: false,
+    retencao_traco_dias: 400,
     avisos: [] as string[],
     falhas: [] as string[],
   };
@@ -685,6 +692,13 @@ describe("houveEfeito — as duas direções", () => {
     // laço — a lição da quarta, da quinta e das demais. E é a única que apaga
     // TEXTO escrito para uma pessoa: apagaria dado pessoal sem trilha.
     expect(houveEfeito({ ...base, rascunhos_apagados: 1 })).toBe(true);
+  });
+
+  it("...e apagou traço do turno vencido → TAMBÉM audita (0778, #3201)", () => {
+    // A mesma lição das anteriores: a poda entra no laço e em `houveEfeito` no
+    // MESMO commit. O traço é metadado do turno (não é texto de cliente), mas é
+    // a trilha do que o agente FEZ — apagar sem registro é encolhimento.
+    expect(houveEfeito({ ...base, tracos_apagados: 1 })).toBe(true);
   });
 
   it("...e apagou candidato ao golden set vencido → TAMBÉM audita (0428)", () => {

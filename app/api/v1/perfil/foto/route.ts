@@ -25,6 +25,7 @@ import type { NextRequest } from "next/server";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { invalidarUsuario } from "@/lib/auth/cache-curto";
 import { loadAuthUser } from "@/lib/auth/server";
 import { checkRateLimit } from "@/lib/ai/dispatcher/rate-limit";
 import { caminhoNovoDaFoto, extensaoDaFoto, fotoDoUsuario, urlDaFotoDoUsuario } from "@/lib/fotos/foto";
@@ -58,6 +59,8 @@ async function gravar(userId: string, caminho: string | null, requestId: string)
     logger.error("[perfil/foto] gravação do ponteiro falhou", { detalhe: error.message, requestId });
     return false;
   }
+  // As outras sessões da pessoa leem o `getUser` do cache curto: sem isto a foto fica velha nelas.
+  invalidarUsuario(userId);
   return true;
 }
 

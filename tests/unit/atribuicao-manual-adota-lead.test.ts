@@ -57,6 +57,15 @@ function montar(assignRows: Array<Record<string, unknown>>) {
   const supabase = {
     rpc: async (fn: string) =>
       fn === "fn_conversation_assign" ? { data: assignRows, error: null } : { data: null, error: null },
+    // #3642: o transfer lê o número de antes da troca (só para a auditoria).
+    from() {
+      const leitura = {
+        select: () => leitura,
+        eq: () => leitura,
+        maybeSingle: () => Promise.resolve({ data: { channel_session_id: null }, error: null }),
+      };
+      return leitura;
+    },
   };
   const admin = {
     from(tabela: string) {

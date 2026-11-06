@@ -17,6 +17,7 @@ import { MarcaDaBarra } from "@/components/shell/MarcaDaBarra";
 import { NoDeFunis } from "@/components/shell/NoDeFunis";
 import { GRUPO_NO_RODAPE, sidebarGroups } from "@/lib/navigation/registry";
 import type { FunilDoMenu } from "@/lib/navigation/funis-no-menu";
+import { usePrefetchPorIntencao } from "@/hooks/navigation/prefetchPorIntencao";
 
 const CHAVE_GRUPOS_FECHADOS = "sidebar-grupos-fechados";
 const ITEM_ATIVO = "bg-accent text-accent-foreground";
@@ -51,6 +52,13 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
   const t = useT();
   const pathname = usePathname();
   const { user, activeOrg } = useAuth();
+  /**
+   * O menu não prefetcha sozinho (#3170): um render RSC por link do menu (19
+   * destinos × as duas instâncias, lateral e móvel), e eles disputam o servidor
+   * com o render que o clique pediu. O prefetch passa a ser
+   * por intenção (ponteiro/foco) — ver `hooks/navigation/prefetchPorIntencao.ts`.
+   */
+  const intencao = usePrefetchPorIntencao();
   const todos = sidebarGroups(
     user.is_platform_admin && !user.support,
     activeOrg?.role ?? null,
@@ -137,6 +145,7 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
                       <li key={item.href}>
                         <Link
                           href={item.href}
+                          {...intencao(item.href)}
                           aria-current={isActive ? "page" : undefined}
                           onClick={onNavigate}
                           className={cn(
@@ -170,6 +179,7 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
                     <li>
                       <Link
                         href={group.hub.href}
+                        {...intencao(group.hub.href)}
                         aria-current={pathname === group.hub.href ? "page" : undefined}
                         onClick={onNavigate}
                         className={cn(
@@ -192,6 +202,7 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
         {rodape && (
           <Link
             href={rodape.href}
+            {...intencao(rodape.href)}
             aria-current={pathname.startsWith(rodape.href) ? "page" : undefined}
             onClick={onNavigate}
             className={cn(
