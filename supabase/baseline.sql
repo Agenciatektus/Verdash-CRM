@@ -74280,6 +74280,18 @@ begin
   end if;
 end $$;
 
+-- 9099: colunas do banco externo acrescentadas depois da 9009 (0373, 0558, 0618, 0691, 0706) voltam a ser
+-- legíveis por membro (a view `_safe` é security_invoker e lê `receitas`); a senha segue de fora.
+do $$
+begin
+  if to_regclass('public.external_db_connections') is not null then
+    grant select (
+      max_rows, max_filters, max_response_bytes, customer_key_column, customer_key_kind,
+      source_mode, sources, db_type, last_test_aviso, receitas
+    ) on public.external_db_connections to authenticated;
+  end if;
+end $$;
+
 
 -- ---- modulos liberados por empresa (migration 9026) ----
 -- O dono do servidor libera modulo opcional empresa por empresa. Escrita so

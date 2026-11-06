@@ -1528,4 +1528,18 @@ $$;
 
 revoke all on function public.fn_agenda_respeita_capacidade() from public, anon, authenticated;
 
+-- Banco externo: a 9009 (nossa) trocou o SELECT de tabela por grant POR COLUNA, sem a senha. As colunas
+-- que o upstream acrescentou depois (0373, 0558, 0618, 0691, 0706) ficaram sem grant, e a view `_safe`
+-- é security_invoker: o membro levava `permission denied` ao ler `receitas_count` (0706). Devolve o
+-- SELECT das colunas sem segredo; password_encrypted/iv/tag seguem de fora.
+do $$
+begin
+  if to_regclass('public.external_db_connections') is not null then
+    grant select (
+      max_rows, max_filters, max_response_bytes, customer_key_column, customer_key_kind,
+      source_mode, sources, db_type, last_test_aviso, receitas
+    ) on public.external_db_connections to authenticated;
+  end if;
+end $$;
+
 notify pgrst, 'reload schema';
