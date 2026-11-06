@@ -170,6 +170,16 @@ describe("PainelDeProvedores — o Jev no painel", () => {
   });
 });
 
+describe("PainelDeProvedores — molde Leitura", () => {
+  it("a página usa o molde Leitura (768px), como o board", async () => {
+    // Em 06/11 a tela foi ao ar com o comentário "Molde Leitura" e SEM a prop:
+    // a coluna esticou até 1510px. Este caso prende a prop, não o comentário.
+    montar();
+    await screen.findByTestId("cartao-do-jev");
+    expect(screen.getByTestId("painel-de-provedores")).toHaveAttribute("data-largura", "leitura");
+  });
+});
+
 describe("PainelDeProvedores — grupos em lista", () => {
   it("'Configuração avançada' abre a folha com os pontos do grupo, e só então", async () => {
     montar();
