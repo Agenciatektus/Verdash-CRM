@@ -219,9 +219,13 @@ test.describe("o agente organiza a operação e a tela conta quem foi", () => {
       expect(criada.etapas.map((e) => e.name)).toContain(ETAPA);
 
       // ---- a etapa aparece NA TELA, marcada como mudança do assistente ----
-      await page.goto(`${APP_URL}/app/settings/tenant/pipelines`);
+      // A tela mostra UM funil por vez (?funil=) e a etapa é uma linha que abre
+      // os detalhes no lugar: escolhe o funil da etapa e abre a linha.
+      await page.goto(`${APP_URL}/app/settings/tenant/pipelines?funil=${funil.id}`);
       const linhaDaEtapa = page.getByTestId(`etapa-${stageId}`);
       await expect(linhaDaEtapa).toBeVisible({ timeout: 15_000 });
+      await page.getByTestId(`abrir-etapa-${stageId}`).click();
+      await expect(page.getByTestId(`abrir-etapa-${stageId}`)).toHaveAttribute("aria-expanded", "true");
       // O nome mora num campo editável (clique para renomear), então `toContainText`
       // olharia rótulo e placeholder e nunca veria o nome. O valor do input é o
       // que o dono da clínica lê na coluna.
