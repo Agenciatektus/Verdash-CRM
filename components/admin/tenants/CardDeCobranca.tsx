@@ -17,6 +17,7 @@ import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { documentoDoPagador } from "@/lib/cobranca/documento";
 import { acoesDoCard, ultimoEstorno, type PagamentoDoHistorico } from "@/lib/cobranca/historico";
+import { dinheiro } from "@/components/admin/tenants/HistoricoDePagamentos";
 import { ROTULO_DO_ESTADO } from "@/lib/cobranca/rotulos";
 import type { EstadoDaAssinatura } from "@/lib/cobranca/vocabulario";
 import { useIdioma } from "@/lib/i18n/IdiomaProvider";
@@ -113,8 +114,6 @@ export function CardDeCobranca({
   const data = new Intl.DateTimeFormat(idioma, { dateStyle: "short" });
   const acoes = acoesDoCard(assinatura, pagamentos);
   const estornado = ultimoEstorno(pagamentos);
-  const dinheiro = (cents: number, moeda: string) =>
-    new Intl.NumberFormat(idioma, { style: "currency", currency: moeda.toUpperCase() }).format(cents / 100);
   const nomeDoPlano = (id: string) => planos.find((p) => p.id === id)?.nome ?? "—";
 
   async function agir(acao: () => Promise<unknown>, sucesso: string | ((resultado: unknown) => string)) {
@@ -195,14 +194,14 @@ export function CardDeCobranca({
         <p className="text-sm text-muted-foreground">{t("Isenta: não paga e não tem limites.")}</p>
       )}
       {acoes.cancelada && (
-        <p role="status" className="text-sm font-medium">
+        <p className="text-sm font-medium">
           {t("Assinatura cancelada. A empresa não paga mais por este plano.")}
         </p>
       )}
       {estornado && (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t("Última cobrança estornada:")} {dinheiro(estornado.valor_estornado_cents, estornado.moeda)}
-          {estornado.valor_estornado_cents < estornado.valor_cents && ` ${t("de")} ${dinheiro(estornado.valor_cents, estornado.moeda)}`}
+        <p className="text-sm text-muted-foreground">
+          {t("Última cobrança estornada:")} {dinheiro(idioma, estornado.valor_estornado_cents, estornado.moeda)}
+          {estornado.valor_estornado_cents < estornado.valor_cents && ` ${t("de")} ${dinheiro(idioma, estornado.valor_cents, estornado.moeda)}`}
           {estornado.estornado_em && `, ${data.format(new Date(estornado.estornado_em))}`}.
         </p>
       )}

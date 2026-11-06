@@ -48,5 +48,8 @@ describe("acoesDoCard", () => {
     expect(acoesDoCard({ estado: "em_atraso", provedor: "asaas" }, []).podeGerarLink).toBe(true);
     expect(acoesDoCard({ estado: "trial", provedor: null }, [])).toMatchObject({ podeCancelar: false, podeEstornar: false, podeGerarLink: true });
   });
+  it("só linhas contestadas: nada estornável, não oferece Estornar", () => {
+    expect(acoesDoCard(ativaNoProvedor, [pag({ status: "contestado" }), pag({ id: "p2", status: "contestado" })]).podeEstornar).toBe(false);
+  });
   it("histórico vazio mantém Estornar (ainda não relido)", () => expect(acoesDoCard(ativaNoProvedor, []).podeEstornar).toBe(true));
 });

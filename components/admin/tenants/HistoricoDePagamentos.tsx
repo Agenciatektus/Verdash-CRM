@@ -15,7 +15,7 @@ const VARIANTE: Record<StatusDoPagamento, "success" | "warning" | "neutral" | "e
 };
 
 /** Moeda que o Intl não conhece não pode derrubar a tela: cai no número puro. */
-function dinheiro(idioma: string, cents: number, moeda: string): string {
+export function dinheiro(idioma: string, cents: number, moeda: string): string {
   try {
     return new Intl.NumberFormat(idioma, { style: "currency", currency: moeda.toUpperCase() }).format(cents / 100);
   } catch {
@@ -29,7 +29,8 @@ export function HistoricoDePagamentos({ pagamentos }: { pagamentos: readonly Pag
   const idioma = useIdioma();
   const data = new Intl.DateTimeFormat(idioma, { dateStyle: "short" });
   return (
-    <Card className="space-y-3 p-6" aria-labelledby="historico-de-pagamentos">
+    <section aria-labelledby="historico-de-pagamentos">
+    <Card className="space-y-3 p-6">
       <h2 id="historico-de-pagamentos" className="text-base font-semibold">{t("Histórico de pagamentos")}</h2>
       {pagamentos.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -49,7 +50,13 @@ export function HistoricoDePagamentos({ pagamentos }: { pagamentos: readonly Pag
                 </span>
               )}
               {p.url_do_recibo && (
-                <a className="basis-full text-xs underline" href={p.url_do_recibo} target="_blank" rel="noopener noreferrer">
+                <a
+                  className="basis-full text-xs underline"
+                  href={p.url_do_recibo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${t("Ver recibo")}, ${data.format(new Date(p.pago_em))}, ${dinheiro(idioma, p.valor_cents, p.moeda)} ${t("(abre em nova aba)")}`}
+                >
                   {t("Ver recibo")}
                 </a>
               )}
@@ -58,5 +65,6 @@ export function HistoricoDePagamentos({ pagamentos }: { pagamentos: readonly Pag
         </ul>
       )}
     </Card>
+    </section>
   );
 }

@@ -727,7 +727,8 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
       try {
         const disputas = ler(listaDe(z.object({ status: z.string() })), await chamar("GET", `/disputes?charge=${encodeURIComponent(c.id)}&limit=10`)).data;
         if (disputas.length === 0 || disputas.some((d) => d.status !== "won")) contestadas.add(c.id);
-      } catch {
+      } catch (e) {
+        logger.warn("cobranca.stripe.disputa_nao_lida", { cobranca: c.id, status: e instanceof ErroDoProvedor ? e.status : null });
         contestadas.add(c.id);
       }
     }

@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import objetos from "@/tests/fixtures/stripe/objetos.json";
 
+import { logger } from "@/lib/logger";
+
 import { ErroDoProvedor } from "./contrato";
 import {
   criarAdaptadorStripe,
@@ -820,6 +822,7 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
   });
 
   it("listarPagamentos: falha em /disputes (403 ou 500) não derruba o lote; a disputada sai contestada e a outra segue paga", async () => {
+    const aviso = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
     for (const falha of [{ status: 403, corpo: { error: { type: "invalid_request_error" } } }, { status: 500, corpo: {} }]) {
       const { adaptador } = montar({
         "GET /invoices": { corpo: { data: ["ch_d", "ch_ok"].map((ch) => ({
@@ -835,6 +838,8 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
       const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
       expect(lidos?.map((p) => [p.cobrancaRef, p.contestado])).toEqual([["ch_d", true], ["ch_ok", false]]);
     }
+    // O log traz a cobrança e o status, nunca corpo nem chave.
+    expect(aviso).toHaveBeenCalledWith("cobranca.stripe.disputa_nao_lida", { cobranca: "ch_d", status: 403 });
   });
 
   it("listarPagamentos: forma inesperada vira ErroDoProvedor, nunca ZodError", async () => {

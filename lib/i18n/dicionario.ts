@@ -18743,6 +18743,7 @@ export const DICIONARIO: Traducoes = {
   "Contestado": { es: "Disputado" },
   "Devolvido:": { es: "Devuelto:" },
   "Ver recibo": { es: "Ver recibo" },
+  "(abre em nova aba)": { es: "(se abre en una pestaña nueva)" },
   "Último pagamento:": { es: "Último pago:" },
   "Já devolvido:": { es: "Ya devuelto:" },
   "Ainda pode devolver:": { es: "Aún se puede devolver:" },
