@@ -63,6 +63,7 @@ test.describe("Mapas em Provedores", () => {
     const cartao = page.getByTestId("cartao-de-mapas");
     await cartao.scrollIntoViewIfNeeded({ timeout: 60_000 });
     await expect(cartao.getByTestId("mapas-estado")).toHaveText("Sem chave", { timeout: 30_000 });
+    await cartao.getByTestId("mapas-configurar").click();
     await expect(cartao.getByTestId("mapas-testar")).toBeDisabled();
 
     await cartao.getByTestId("mapas-chave").fill(CHAVE);

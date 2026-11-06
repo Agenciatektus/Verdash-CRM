@@ -12,7 +12,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { definirLeituraDeMidiaDaEmpresa } from "@/app/actions/settings/definirLeituraDeMidiaDaEmpresa";
-import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { traduzir } from "@/lib/i18n/traducao";
@@ -46,11 +45,11 @@ export function InterruptorLeituraDeMidia({ ligado, idioma }: { ligado: boolean;
   }
 
   return (
-    <Card className="p-6">
+    <div>
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <Label htmlFor="leitura_de_midia_empresa">{t("A IA lê a mídia que o cliente envia")}</Label>
-          <p className="max-w-2xl text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {t(
               "Transcreve áudios e descreve imagens, documentos e vídeos para o agente entender o que chegou. Desligado, nenhuma mídia é lida pela IA e não há gasto com isso: o agente só sabe que chegou um arquivo. A mídia que a própria empresa envia nunca é lida. O padrão é ligado.",
             )}
@@ -63,6 +62,6 @@ export function InterruptorLeituraDeMidia({ ligado, idioma }: { ligado: boolean;
           onCheckedChange={mudar}
         />
       </div>
-    </Card>
+    </div>
   );
 }

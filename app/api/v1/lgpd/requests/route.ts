@@ -13,7 +13,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { computeSlaBucket } from "@/lib/lgpd/balde-de-sla";
+import { computeSlaBucket, corteDosUrgentes } from "@/lib/lgpd/balde-de-sla";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,9 @@ const querySchema = z.object({
   type: z
     .enum(["redact", "data_request", "store_redact"])
     .optional(),
-  sla_bucket: z.enum(["overdue", "critical", "warning", "ok"]).optional(),
+  // "urgent" = em aberto com prazo vencido ou a menos de 2 dias; filtrado no BANCO, antes da página.
+  sla_bucket: z.enum(["overdue", "critical", "warning", "ok", "urgent"]).optional(),
+  only_count: z.enum(["true", "false"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -67,15 +69,22 @@ export async function GET(req: NextRequest): Promise<Response> {
   const orgId = activeOrg.orgId;
   const offset = (page - 1) * limit;
 
-  // Count query (before sla_bucket filter which is client-side)
+  // Count query (os baldes além de "urgent" filtram depois, na página)
   let countQuery = supabase
     .from("lgpd_requests")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", orgId);
   if (status) countQuery = countQuery.eq("status", status);
   if (type) countQuery = countQuery.eq("request_type", type);
+  const urgent = parsed.data.sla_bucket === "urgent";
+  const corte = corteDosUrgentes();
+  if (urgent) countQuery = countQuery.not("status", "in", "(completed,failed)").lt("due_at", corte);
   const { count } = await countQuery;
   const total = count ?? 0;
+
+  if (parsed.data.only_count === "true") {
+    return ok([], { requestId, meta: { total, page, limit, has_more: false } });
+  }
 
   // Data query
   let dataQuery = supabase
@@ -90,6 +99,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   if (status) dataQuery = dataQuery.eq("status", status);
   if (type) dataQuery = dataQuery.eq("request_type", type);
+  if (urgent) dataQuery = dataQuery.not("status", "in", "(completed,failed)").lt("due_at", corte);
 
   const { data: rows, error: dbErr } = await dataQuery;
   if (dbErr) {
@@ -105,7 +115,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     sla_bucket: computeSlaBucket(r.due_at, r.received_at),
   }));
 
-  const filtered = parsed.data.sla_bucket
+  const filtered = parsed.data.sla_bucket && !urgent
     ? enriched.filter((r) => r.sla_bucket === parsed.data.sla_bucket)
     : enriched;
 

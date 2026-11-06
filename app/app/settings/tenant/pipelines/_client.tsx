@@ -293,8 +293,11 @@ export function PipelinesClient({
   etapas = {},
   podeEditarConfig,
   comandaDisponivel = false,
+  funilEscolhido,
 }: {
   pipelines: PipelineRow[];
+  /** O `?funil=` da URL; a página lê no servidor. Ausente = o primeiro funil. */
+  funilEscolhido?: string;
   /**
    * As etapas de cada funil por id de funil — o que o editor de `obrigatorio_em`
    * oferece como "exigir ao entrar aqui". Opcional só para os testes que não
@@ -330,18 +333,53 @@ export function PipelinesClient({
       </Card>
     );
   }
+  function ehOFunilEscolhido(p: { id: string }) {
+    return p.id === funilEscolhido;
+  }
+  // Um funil por vez: a escolha vem da query string (`?funil=ID`), e id que não
+  // existe (link velho, funil arquivado) cai no primeiro.
+  // `find` com função nomeada: uma arrow function seguida de texto engana a cerca de vocabulário.
+  const primeiro = pipelines[0]!;
+  const escolhido = pipelines.find(ehOFunilEscolhido) ?? primeiro;
   return (
-    <div className="flex flex-col gap-4">
-      {pipelines.map((p) => (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+      {pipelines.length > 1 && (
+        <nav aria-label={t("Funis")} className="min-w-0 lg:w-60 lg:shrink-0">
+          <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:p-0">
+            {pipelines.map((p) => {
+              const atual = p.id === escolhido.id;
+              return (
+                <li key={p.id} className="shrink-0">
+                  <Link
+                    href={`?funil=${p.id}`}
+                    scroll={false}
+                    aria-current={atual ? "page" : undefined}
+                    data-testid={`funil-${p.id}`}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-semibold whitespace-nowrap ${
+                      atual
+                        ? "bg-accent-soft text-accent-text"
+                        : "text-text-muted hover:bg-surface-elevated"
+                    }`}
+                  >
+                    <span>{p.name}</span>
+                    <span className="font-medium opacity-70">{(etapas[p.id] ?? []).filter((e) => !e.is_archived).length}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
+      <div className="min-w-0 flex-1 lg:max-w-3xl">
         <CardDoFunil
-          key={p.id}
-          pipeline={p}
-          etapas={etapas[p.id] ?? []}
+          key={escolhido.id}
+          pipeline={escolhido}
+          etapas={etapas[escolhido.id] ?? []}
           podeEditarConfig={podeEditarConfig}
           comandaDisponivel={comandaDisponivel}
-          ehFunilPadrao={p.id === (pipelines.find((x) => x.is_default) ?? pipelines[0])?.id}
+          ehFunilPadrao={escolhido.id === (pipelines.find((x) => x.is_default) ?? pipelines[0])?.id}
         />
-      ))}
+      </div>
     </div>
   );
 }
@@ -382,27 +420,18 @@ function CardDoFunil({
   // apagaria em silêncio o que foi editado e ainda não salvo.
   const [editorMontado, setEditorMontado] = useState(false);
   return (
-    <Card className="space-y-6 p-6">
-          <header>
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className="text-base font-semibold">{pipeline.name}</h2>
-        <p className="text-xs text-muted-foreground">/{pipeline.slug}</p>
-          </header>
-          {/* As ETAPAS vêm primeiro, e a ordem é a do raciocínio de quem
-              configura: primeiro o quadro existe do jeito da sua operação,
-              depois se decide o que o assistente faz com ele. Invertido, a
-              primeira coisa que o dono da clínica vê é um mapeamento sobre
-              colunas de e-commerce que ele nem sabia que dava para trocar. */}
-      <StagesSection pipelineId={pipeline.id} ancoraMapeamento={ancoraDoMapeamento(pipeline.id)} />
-          <div className="border-t border-border pt-6">
-        <AgentMappingSection pipelineId={pipeline.id} ancoraEtapas={ancoraDasEtapas(pipeline.id)} />
-          </div>
-          {podeEditarConfig && (
-        <div className="space-y-4 border-t border-border pt-6">
+        <p className="font-mono text-xs text-text-muted">/{pipeline.slug}</p>
+        <span className="flex-1" />
+        {podeEditarConfig && (
           <Button
             type="button"
             variant="outline"
             size="sm"
             aria-expanded={editorAberto}
+            aria-label={editorAberto ? undefined : t("Editar vocabulário e campos deste funil")}
             data-testid={`abrir-editor-${pipeline.id}`}
             onClick={() => {
               setEditorMontado(true);
@@ -414,23 +443,34 @@ function CardDoFunil({
               aria-hidden
               className={editorAberto ? "mr-1 rotate-180" : "mr-1"}
             />
-            {editorAberto
-              ? t("Recolher")
-              : t("Editar vocabulário e campos deste funil")}
+            {editorAberto ? t("Recolher") : t("Vocabulário e campos")}
           </Button>
-          {editorMontado && (
-            <div hidden={!editorAberto} data-testid={`area-do-editor-${pipeline.id}`}>
-              <PipelineEditor
-                pipeline={pipeline}
-                etapas={etapas}
-                comandaDisponivel={comandaDisponivel}
-                ehFunilPadrao={ehFunilPadrao}
-              />
-            </div>
-          )}
-        </div>
-          )}
+        )}
+      </header>
+      {podeEditarConfig && editorMontado && (
+        <Card className="p-4 sm:p-6">
+          <div hidden={!editorAberto} data-testid={`area-do-editor-${pipeline.id}`}>
+            <PipelineEditor
+              pipeline={pipeline}
+              etapas={etapas}
+              comandaDisponivel={comandaDisponivel}
+              ehFunilPadrao={ehFunilPadrao}
+            />
+          </div>
         </Card>
+      )}
+      {/* As ETAPAS vêm primeiro, e a ordem é a do raciocínio de quem
+          configura: primeiro o quadro existe do jeito da sua operação,
+          depois se decide o que o assistente faz com ele. Invertido, a
+          primeira coisa que o dono da clínica vê é um mapeamento sobre
+          colunas de e-commerce que ele nem sabia que dava para trocar. */}
+      <Card className="p-4 sm:p-6">
+        <StagesSection pipelineId={pipeline.id} ancoraMapeamento={ancoraDoMapeamento(pipeline.id)} />
+      </Card>
+      <Card className="p-4 sm:p-6">
+        <AgentMappingSection pipelineId={pipeline.id} ancoraEtapas={ancoraDasEtapas(pipeline.id)} />
+      </Card>
+    </div>
   );
 }
 

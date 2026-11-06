@@ -506,6 +506,9 @@ test.describe("Jev — os pedidos do cliente, pela tela", () => {
       );
       await expect(oCartao).not.toContainText("Decide em parte");
       await expect(oCartao).not.toContainText("Decidindo");
+      // Avisar a equipe não é decidir: o resumo das tarefas conta à parte, com 0 decidindo.
+      await expect(oCartao.getByTestId("jev-tarefas-resumo")).toContainText("0 decidindo");
+      await expect(oCartao.getByTestId("jev-tarefas-resumo")).toContainText("avisando a equipe");
       // O pedido de parar de receber segue só observando: cada tarefa, a sua escolha.
       await expect(page.getByTestId("jev-tarefa-opt_out")).toHaveAttribute("data-estado", "observando");
     });

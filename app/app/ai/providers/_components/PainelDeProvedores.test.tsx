@@ -5,7 +5,7 @@
  * ligado na frente dele.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PainelDeProvedores } from "./PainelDeProvedores";
@@ -167,5 +167,29 @@ describe("PainelDeProvedores — o Jev no painel", () => {
     fireEvent.click(screen.getByTestId("avancado-entender"));
     expect(screen.getByTestId("ponto-sentiment_classify")).toBeInTheDocument();
     expect(screen.queryByTestId("jev-no-ponto-sentiment_classify")).toBeNull();
+  });
+});
+
+describe("PainelDeProvedores — grupos em lista", () => {
+  it("'Configuração avançada' abre a folha com os pontos do grupo, e só então", async () => {
+    montar();
+    await screen.findByTestId("cartao-do-jev");
+    expect(screen.getByTestId("lista-de-grupos")).toBeInTheDocument();
+    expect(screen.queryByTestId("ponto-sentiment_classify")).toBeNull();
+    fireEvent.click(screen.getByTestId("avancado-entender"));
+    expect(await screen.findByTestId("ponto-sentiment_classify")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Entender a conversa");
+  });
+
+  it("fechar a folha com Esc devolve o foco ao botão do grupo", async () => {
+    montar();
+    await screen.findByTestId("cartao-do-jev");
+    const botao = screen.getByTestId("avancado-entender");
+    botao.focus();
+    fireEvent.click(botao);
+    const folha = await screen.findByRole("dialog");
+    fireEvent.keyDown(folha, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(botao).toHaveFocus());
   });
 });

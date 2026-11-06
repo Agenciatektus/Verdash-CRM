@@ -11,7 +11,7 @@
  * sem dizer para onde eles vão; e (d) reler o servidor depois de tudo.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -99,6 +99,19 @@ function leiturasDoFunil() {
   return vi
     .mocked(apiClient.get)
     .mock.calls.filter(([rota]) => String(rota).includes("/agent-mapping"));
+}
+
+/**
+ * Espera a lista e ABRE os detalhes de todas as etapas (cada linha é um
+ * disclosure fechado de início). Os detalhes ficam montados e escondidos, e o
+ * jsdom não deixa focar controle escondido — por isso o teste abre antes de usar.
+ */
+async function etapasAbertas(testid: string) {
+  const elemento = await screen.findByTestId(testid);
+  for (const botao of screen.getAllByTestId(/^abrir-etapa-/)) {
+    if (botao.getAttribute("aria-expanded") === "false") fireEvent.click(botao);
+  }
+  return elemento;
 }
 
 /** Abre um seletor e devolve os rótulos oferecidos. */
@@ -200,22 +213,16 @@ describe("StagesSection — a linha se explica sozinha", () => {
    * entende o que é a etapa de fechamento?") vira um chute. O rótulo do seletor
    * foi escrito para ser lido SOB este cabeçalho.
    */
-  it("cada controle tem rótulo NOS DOIS layouts — cabeçalho no desktop, na linha no celular", async () => {
+  it("cada controle dos detalhes tem o rótulo em cima, em qualquer largura", async () => {
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
-    // Desktop: o cabeçalho de colunas.
-    const cabecalho = within(screen.getByTestId("etapas-cabecalho"));
-    for (const texto of [ROTULO.nome, ROTULO.ordem, ROTULO.papel]) {
-      expect(cabecalho.getByText(texto)).toBeInTheDocument();
-    }
-
-    // ⭐ Celular: a linha EMPILHA e o cabeçalho não alinha com nada — os mesmos
-    // rótulos precisam viajar dentro da linha. Sem isto, o defeito que o
-    // cabeçalho consertou fica intacto num viewport inteiro, e `aria-label` não
-    // cobre: é invisível para quem enxerga.
+    // O rótulo mora em cima de cada controle, dentro dos detalhes da etapa — em
+    // qualquer largura. Sem isto, o seletor «Nada especial» volta a ser um
+    // controle solto, e `aria-label` não cobre: é invisível para quem enxerga.
     const linha = within(screen.getByTestId("etapa-e1"));
     expect(linha.getByText(ROTULO.nome)).toBeInTheDocument();
+    expect(linha.getByText(ROTULO.chance)).toBeInTheDocument();
     expect(linha.getByText(ROTULO.ordem)).toBeInTheDocument();
     expect(linha.getByText(ROTULO.papel)).toBeInTheDocument();
 
@@ -225,12 +232,69 @@ describe("StagesSection — a linha se explica sozinha", () => {
   });
 });
 
+describe("StagesSection — a etapa é UMA linha que abre os detalhes no lugar", () => {
+  it("nasce fechada, mostra o papel na linha, e clicar abre e fecha (aria-expanded)", async () => {
+    const user = userEvent.setup();
+    montar();
+    const botao = await screen.findByTestId("abrir-etapa-e3");
+
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    expect(botao).toHaveTextContent("Pago");
+    expect(botao).toHaveTextContent("Fechamento");
+    expect(screen.getByTestId("abrir-etapa-e4")).toHaveTextContent("Perda");
+    expect(screen.getByTestId("abrir-etapa-e1")).toHaveTextContent("Nada especial");
+    expect(document.getElementById(botao.getAttribute("aria-controls")!)).toHaveAttribute("hidden");
+
+    await user.click(botao);
+    expect(botao).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(botao.getAttribute("aria-controls")!)).not.toHaveAttribute("hidden");
+    // As outras seguem fechadas.
+    expect(screen.getByTestId("abrir-etapa-e1")).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(botao);
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("recolher e reabrir NÃO apaga o que foi digitado e ainda não foi confirmado", async () => {
+    const user = userEvent.setup();
+    montar();
+    const botao = await screen.findByTestId("abrir-etapa-e1");
+    await user.click(botao);
+    const campo = screen.getByTestId("nome-e1");
+    await user.clear(campo);
+    await user.type(campo, "Rascunho novo");
+
+    await user.click(botao); // recolhe sem confirmar
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    await user.click(botao);
+    expect(screen.getByTestId("nome-e1")).toBe(campo); // o MESMO nó: não foi desmontado
+    expect(screen.getByTestId("nome-e1")).toHaveValue("Rascunho novo");
+  });
+
+  it("os ícones acendem só para quem avisa a equipe e envia conversão", async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: estado({}, [
+        { ...ETAPAS[0]!, avisar_na_central: true },
+        { ...ETAPAS[1]!, envia_conversao: true },
+        ETAPAS[2]!,
+        ETAPAS[3]!,
+      ]),
+    });
+    montar();
+    const e1 = await screen.findByTestId("abrir-etapa-e1");
+    expect(e1).toHaveTextContent("Avisa a equipe");
+    expect(e1).toHaveTextContent("Não envia conversão");
+    expect(screen.getByTestId("abrir-etapa-e2")).toHaveTextContent("Envia conversão");
+    expect(screen.getByTestId("abrir-etapa-e3")).toHaveTextContent("Não avisa a equipe");
+  });
+});
+
 describe("StagesSection — renomear, criar e reordenar", () => {
   it("renomear salva ao CONFIRMAR, nunca a cada tecla", async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const campo = await screen.findByTestId("nome-e1");
+    const campo = await etapasAbertas("nome-e1");
 
     await user.clear(campo);
     await user.type(campo, "Primeira consulta");
@@ -248,7 +312,7 @@ describe("StagesSection — renomear, criar e reordenar", () => {
   it("sair do campo sem mudar nada não manda pedido nenhum", async () => {
     const user = userEvent.setup();
     montar();
-    const campo = await screen.findByTestId("nome-e1");
+    const campo = await etapasAbertas("nome-e1");
     await user.click(campo);
     await user.tab();
     expect(apiClient.patch).not.toHaveBeenCalled();
@@ -258,7 +322,7 @@ describe("StagesSection — renomear, criar e reordenar", () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.post).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("nova-etapa"));
     await user.type(screen.getByTestId("nova-etapa-nome"), "Retorno");
@@ -277,7 +341,7 @@ describe("StagesSection — renomear, criar e reordenar", () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("subir-e3"));
     await waitFor(() => expect(apiClient.patch).toHaveBeenCalledTimes(1));
@@ -286,7 +350,7 @@ describe("StagesSection — renomear, criar e reordenar", () => {
 
   it("a primeira coluna não sobe e a última não desce", async () => {
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
     expect(screen.getByTestId("subir-e1")).toBeDisabled();
     expect(screen.getByTestId("descer-e4")).toBeDisabled();
     expect(screen.getByTestId("descer-e1")).toBeEnabled();
@@ -298,7 +362,7 @@ describe("StagesSection — a marcação de fechamento", () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("papel-e2"));
     await user.click(await screen.findByRole("option", { name: "Aqui o cliente fecha" }));
@@ -317,7 +381,7 @@ describe("StagesSection — a marcação de fechamento", () => {
   it("cancelar o aviso não grava nada", async () => {
     const user = userEvent.setup();
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("papel-e2"));
     await user.click(await screen.findByRole("option", { name: "Aqui o cliente fecha" }));
@@ -336,7 +400,7 @@ describe("StagesSection — a marcação de fechamento", () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: estado({}, semGanho) });
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    await screen.findByTestId("nome-e2");
+    await etapasAbertas("nome-e2");
 
     await user.click(screen.getByTestId("papel-e2"));
     await user.click(await screen.findByRole("option", { name: "Aqui o cliente fecha" }));
@@ -358,7 +422,7 @@ describe("StagesSection — a marcação de fechamento", () => {
       ),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("papel-e3"));
     await user.click(await screen.findByRole("option", { name: "Nada especial" }));
@@ -388,7 +452,7 @@ describe("StagesSection — a marcação de fechamento", () => {
       new ApiError(422, "unprocessable_entity", undefined, "r", "Já existe uma etapa chamada «Cancelado» neste funil. Escolha outro nome."),
     );
     montar();
-    const campo = await screen.findByTestId("nome-e3");
+    const campo = await etapasAbertas("nome-e3");
     await user.clear(campo);
     await user.type(campo, "Cancelado");
     await user.tab();
@@ -401,7 +465,7 @@ describe("StagesSection — a marcação de fechamento", () => {
   it("etapa que representa um passo do assistente oferece o caminho para desfazer o vínculo", async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: estado({ won: "e3" }) });
     montar();
-    const linha = await screen.findByTestId("passo-de-e3");
+    const linha = await etapasAbertas("passo-de-e3");
     expect(linha).toHaveTextContent("O assistente usa esta etapa para «Ganho».");
     expect(within(linha).getByRole("link")).toHaveAttribute("href", `#mapeamento-${PIPE}`);
   });
@@ -411,7 +475,7 @@ describe("StagesSection — arquivar", () => {
   it("pede confirmação antes de tirar a coluna do quadro", async () => {
     const user = userEvent.setup();
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     // Nada foi enviado só por clicar em «Arquivar»: uma coluna some do quadro
@@ -443,7 +507,7 @@ describe("StagesSection — arquivar", () => {
       ),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     await user.click(screen.getByTestId("arquivar-confirmar-e1"));
@@ -478,7 +542,7 @@ describe("StagesSection — arquivar", () => {
       new ApiError(422, "unprocessable_entity", { negocios: 4, precisa_destino: true }, "r", "…tem 4 negócios…"),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     await user.click(screen.getByTestId("arquivar-confirmar-e1"));
@@ -513,7 +577,7 @@ describe("StagesSection — arquivar", () => {
       ),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e3"));
     await user.click(screen.getByTestId("arquivar-confirmar-e3"));
@@ -536,7 +600,7 @@ describe("StagesSection — arquivar", () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.get).mockResolvedValue({ data: estado({ negotiating: "e2" }) });
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e2"));
     const aviso = await screen.findByTestId("arquivar-perde-passo-e2");
@@ -548,7 +612,7 @@ describe("StagesSection — arquivar", () => {
   it("etapa sem vínculo com o assistente não ganha aviso que não se aplica", async () => {
     const user = userEvent.setup();
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
     await user.click(screen.getByTestId("arquivar-e1"));
     await screen.findByTestId("arquivar-painel-e1");
     expect(screen.queryByTestId("arquivar-perde-passo-e1")).not.toBeInTheDocument();
@@ -560,7 +624,7 @@ describe("StagesSection — arquivar", () => {
       new ApiError(422, "unprocessable_entity", { negocios: 1, precisa_destino: true }, "r", "…tem 1 negócio…"),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     await user.click(screen.getByTestId("arquivar-confirmar-e1"));
@@ -587,7 +651,7 @@ describe("StagesSection — arquivar", () => {
       ),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     await user.click(screen.getByTestId("arquivar-confirmar-e1"));
@@ -607,7 +671,7 @@ describe("StagesSection — arquivar", () => {
       ),
     );
     montar();
-    await screen.findByTestId("nome-e1");
+    await etapasAbertas("nome-e1");
 
     await user.click(screen.getByTestId("arquivar-e1"));
     await user.click(screen.getByTestId("arquivar-confirmar-e1"));
@@ -624,7 +688,7 @@ describe("StagesSection — a etapa que avisa na Central (migration 0440)", () =
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const chave = await screen.findByTestId("avisar-e2");
+    const chave = await etapasAbertas("avisar-e2");
     expect(chave).toHaveAttribute("aria-checked", "false");
     // Rótulo com o NOME da etapa: num funil de doze colunas, "Avisar" sozinho
     // não diz qual chave é qual para quem usa leitor de tela.
@@ -643,7 +707,7 @@ describe("StagesSection — a etapa que avisa na Central (migration 0440)", () =
     });
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const chave = await screen.findByTestId("avisar-e2");
+    const chave = await etapasAbertas("avisar-e2");
     expect(chave).toHaveAttribute("aria-checked", "true");
     expect(screen.getByTestId("avisar-e1")).toHaveAttribute("aria-checked", "false");
 
@@ -658,7 +722,7 @@ describe("StagesSection — enviar conversão ao entrar na etapa (migration 9054
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const chave = await screen.findByTestId("conversao-e2");
+    const chave = await etapasAbertas("conversao-e2");
     expect(chave).toHaveAttribute("aria-checked", "false");
     expect(chave).toHaveAccessibleName(/«Aguardando pagamento»/);
     // Desligada, o seletor do evento nem aparece.
@@ -684,7 +748,7 @@ describe("StagesSection — enviar conversão ao entrar na etapa (migration 9054
     });
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const chave = await screen.findByTestId("conversao-e2");
+    const chave = await etapasAbertas("conversao-e2");
     expect(chave).toHaveAttribute("aria-checked", "true");
     expect(screen.getByTestId("conversao-e1")).toHaveAttribute("aria-checked", "false");
 
@@ -706,7 +770,7 @@ describe("StagesSection — a janela de esfriando, em dias e horas (#1532)", () 
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     comJanela(null);
     montar();
-    const dias = await screen.findByTestId("janela-dias-e1");
+    const dias = await etapasAbertas("janela-dias-e1");
 
     await user.click(dias);
     await user.type(dias, "2");
@@ -729,7 +793,7 @@ describe("StagesSection — a janela de esfriando, em dias e horas (#1532)", () 
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     comJanela(48);
     montar();
-    const dias = await screen.findByTestId("janela-dias-e1");
+    const dias = await etapasAbertas("janela-dias-e1");
     expect(dias).toHaveValue(2);
 
     await user.clear(dias);
@@ -747,7 +811,7 @@ describe("StagesSection — a janela de esfriando, em dias e horas (#1532)", () 
     const user = userEvent.setup();
     comJanela(null);
     montar();
-    const dias = await screen.findByTestId("janela-dias-e1");
+    const dias = await etapasAbertas("janela-dias-e1");
 
     await user.type(dias, d);
     await user.tab();
@@ -762,7 +826,7 @@ describe("StagesSection — a janela de esfriando, em dias e horas (#1532)", () 
     const user = userEvent.setup();
     comJanela(48);
     montar();
-    const dias = await screen.findByTestId("janela-dias-e1");
+    const dias = await etapasAbertas("janela-dias-e1");
 
     await user.clear(dias);
     await user.type(dias, "5");
@@ -777,7 +841,7 @@ describe("StagesSection — Escape descarta o rascunho do nome e da chance (#216
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const campo = await screen.findByTestId("nome-e1");
+    const campo = await etapasAbertas("nome-e1");
 
     await user.clear(campo);
     await user.type(campo, "Carrinho abandonadoX");
@@ -792,7 +856,7 @@ describe("StagesSection — Escape descarta o rascunho do nome e da chance (#216
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const campo = await screen.findByTestId("probabilidade-e1");
+    const campo = await etapasAbertas("probabilidade-e1");
 
     await user.type(campo, "40");
     await user.keyboard("{Escape}");
@@ -804,7 +868,7 @@ describe("StagesSection — Escape descarta o rascunho do nome e da chance (#216
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const campo = await screen.findByTestId("nome-e1");
+    const campo = await etapasAbertas("nome-e1");
 
     await user.clear(campo);
     await user.type(campo, "Primeira consulta{Enter}");
@@ -819,7 +883,7 @@ describe("StagesSection — Escape descarta o rascunho do nome e da chance (#216
     const user = userEvent.setup();
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { etapas: [] } });
     montar();
-    const campo = await screen.findByTestId("probabilidade-e1");
+    const campo = await etapasAbertas("probabilidade-e1");
 
     await user.type(campo, "40");
     await user.tab();
@@ -836,7 +900,7 @@ describe("StagesSection — Escape descarta o rascunho do nome e da chance (#216
     const etapas = ETAPAS.map((e) => (e.id === "e1" ? { ...e, win_probability: 40 } : e));
     vi.mocked(apiClient.get).mockResolvedValue({ data: estado({}, etapas) });
     montar();
-    const campo = await screen.findByTestId("probabilidade-e1");
+    const campo = await etapasAbertas("probabilidade-e1");
     expect(campo).toHaveValue(40);
 
     await user.clear(campo);
@@ -1036,5 +1100,24 @@ describe("taxa histórica por etapa — a contagem ao lado do campo (#1753)", ()
     // A escrita é a MESMA de digitar no campo: uma rota só, sem caminho novo.
     const urls = vi.mocked(apiClient.patch).mock.calls.map(([rota]) => String(rota));
     expect(new Set(urls).size).toBe(1);
+  });
+});
+
+describe("StagesSection — erro com a linha recolhida", () => {
+  it("se a gravação falhar, a linha abre para mostrar o erro", async () => {
+    const user = userEvent.setup();
+    // A recusa só chega depois de a linha ser recolhida.
+    let recusar!: (e: unknown) => void;
+    vi.mocked(apiClient.patch).mockReturnValue(new Promise((_, rej) => (recusar = rej)));
+    montar();
+    const botao = await screen.findByTestId("abrir-etapa-e2");
+    await user.click(botao);
+    await user.click(screen.getByTestId("subir-e2"));
+    await user.click(botao); // recolhe a linha antes do erro chegar
+    expect(botao).toHaveAttribute("aria-expanded", "false");
+    recusar(new ApiError(422, "unprocessable_entity", undefined, "r", "Já existe uma etapa chamada «X» neste funil."));
+    // Recolhida ou não, o erro precisa aparecer: a linha abre sozinha.
+    expect(await screen.findByTestId("etapa-erro-e2")).toBeVisible();
+    expect(botao).toHaveAttribute("aria-expanded", "true");
   });
 });
