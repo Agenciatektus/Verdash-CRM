@@ -37,7 +37,7 @@ export const dynamic = "force-dynamic";
 
 function voltarComErro(codigo: string): NextResponse {
   const base = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  return NextResponse.redirect(new URL(`/app/settings/conversoes?erro=${codigo}`, base));
+  return NextResponse.redirect(new URL(`/app/settings/conversoes?aba=google&erro=${codigo}`, base));
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {

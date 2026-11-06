@@ -74,7 +74,6 @@ test("conversões: instalação sem credenciais explica a ausência e permite re
     if (d) throw d;
     await page.goto("/app/settings/conversoes");
     await expect(page.getByRole("heading", { name: "Conversões", exact: true })).toBeVisible();
-    await expect(page.getByTestId("google-ads-nao-configurado")).toBeVisible();
     await expect(page.getByText(/Aceite da API não confirma atribuição/)).toBeVisible();
     const linha = page.getByRole("row").filter({ hasText: titulo });
     await expect(linha.getByRole("cell", { name: "Google Ads", exact: true })).toBeVisible();
@@ -94,6 +93,9 @@ test("conversões: instalação sem credenciais explica a ausência e permite re
       .eq("event_type", "ad_conversion.retry_requested");
     if (e) throw e;
     expect(eventos).toHaveLength(1);
+    // O cartão "sem credenciais" mora na aba do Google Ads, não na Visão geral.
+    await page.goto("/app/settings/conversoes?aba=google");
+    await expect(page.getByTestId("google-ads-nao-configurado")).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("conversoes-reprocessamento.png"),
       fullPage: true,
@@ -171,7 +173,7 @@ test("regras de etapa da Meta: sem conexão direta, aparecem quando a venda sai 
     // e a seção não aparece.
     const { error: e1 } = await admin.from("organizations").update({ settings: comAChave(false) }).eq("id", org);
     if (e1) throw e1;
-    await page.goto("/app/settings/conversoes");
+    await page.goto("/app/settings/conversoes?aba=meta");
     await expect(page.getByRole("heading", { name: "Conversões", exact: true })).toBeVisible();
     await expect(titulo).toHaveCount(0);
 
@@ -221,7 +223,7 @@ test("captura Google: configure pela tela, recarregue e leve wbraid ao link do W
   const click = `teste-${randomUUID()}`;
   let site: ReturnType<typeof createServer> | undefined;
   try {
-    await page.goto("/app/settings/conversoes");
+    await page.goto("/app/settings/conversoes?aba=site");
     const form = page.getByTestId("captura-google");
     await form.getByLabel("Para qual WhatsApp mandar", { exact: true }).fill("+5511999999999");
     await form
@@ -335,7 +337,7 @@ test("links nomeados: cadastro pela tela, captura pública e desativação", asy
     name = `Link e2e ${randomUUID()}`;
   let id: string | undefined;
   try {
-    await page.goto("/app/settings/conversoes?aba=links");
+    await page.goto("/app/settings/conversoes?aba=site");
     const pane = page.getByTestId("links-rastreaveis");
     await pane.getByLabel("Nome", { exact: true }).fill(name);
     await pane.getByLabel("WhatsApp com código do país").fill("+5511999999999");
@@ -382,4 +384,11 @@ test("links nomeados: cadastro pela tela, captura pública e desativação", asy
       await admin.from("ad_tracking_links").delete().eq("organization_id", org).eq("id", id);
     }
   }
+});
+
+test("o endereço legado ?aba=links cai em Site e links", async ({ page }) => {
+  await loginComoAdmin(page, lerCreds());
+  await page.goto("/app/settings/conversoes?aba=links");
+  await expect(page.getByTestId("links-rastreaveis")).toBeVisible();
+  await expect(page.getByTestId("script-do-site")).toBeVisible();
 });

@@ -1,6 +1,4 @@
-import { CabecalhoDaPagina, Pagina, SecaoDaPagina, TABELA_EMPILHADA } from "@/components/pagina";
-import { LinksRastreaveis } from "./_linksRastreaveis";
-import { listarLinks, metricasLinks } from "@/lib/plataformas-de-anuncio/rastreio/links";
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 /**
  * Configurações → Conversões. Onde o dono do tráfego conecta a conta de anúncios
  * e vê quais vendas foram (ou não foram) reportadas de volta.
@@ -32,74 +30,45 @@ import { listarLinks, metricasLinks } from "@/lib/plataformas-de-anuncio/rastrei
  * O objeto é uma credencial que escreve na conta de anúncios da empresa, ao lado
  * de billing e API tokens na mesma prancheta. Mesmo gate de `settings/marca`.
  */
-import { ScriptDoSite } from "./_scriptDoSite";
+
 import { redirect } from "next/navigation";
 
+import { Badge } from "@/components/ui/badge";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import {
   contaEnviadas,
   lerEstadoDaConexao,
   lerPendencias,
-  MOTIVO_LEGIVEL,
 } from "@/lib/conversoes/estado-da-conexao";
 import { listSelectableChannels } from "@/lib/channels/selectable";
 import { traduzir } from "@/lib/i18n/dicionario";
-import {
-  CHAVES_DE_UTM,
-  montarCodigoDeOrigemDoSite,
-  TAMANHO_MAXIMO_DO_CODIGO,
-} from "@/lib/leads/origem-do-site";
-import { formatCentsBRL } from "@/lib/money";
-import {
-  faltaParaConectarOGoogleAds,
-  googleAdsEstaConfigurado,
-} from "@/lib/plataformas-de-anuncio/google/config";
+import { montarCodigoDeOrigemDoSite } from "@/lib/leads/origem-do-site";
+import { googleAdsEstaConfigurado } from "@/lib/plataformas-de-anuncio/google/config";
 import { lerEstadoDaConexaoGoogle } from "@/lib/plataformas-de-anuncio/google/estado-da-conexao";
 import { lerEstadoDaCaptura } from "@/lib/plataformas-de-anuncio/landing-config";
 import { existeConexaoDeLeitura } from "@/lib/plataformas-de-anuncio/credenciais-de-leitura";
+import { listarLinks, metricasLinks } from "@/lib/plataformas-de-anuncio/rastreio/links";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { ReprocessarConversao } from "./_reprocessar";
-import { LinkDoNegocio } from "./_linkDoNegocio";
 import { HistoricoDeEnvios } from "./_historico";
 import { DiagnosticoGoogle } from "./_diagnostico";
-import {
-  lerDiagnosticoGoogle,
-  lerFiltros,
-  lerHistorico,
-  rotuloDoEvento,
-} from "@/lib/conversoes/historico";
-import { FormularioDeCapturaDeUtm } from "./_formCapturaDeUtm";
-import { FormularioDeConversoes } from "./_form";
-import { FormularioDeConversoesGoogle } from "./_formGoogle";
-import { IdentidadeDaConversao } from "./_identidadeDaMeta";
-import { VendaPeloCanal } from "./_vendaPeloCanal";
+import { lerDiagnosticoGoogle, lerFiltros, lerHistorico } from "@/lib/conversoes/historico";
+import { AbaGoogle } from "./_abaGoogle";
+import { AbaMeta } from "./_abaMeta";
+import { AbaSite } from "./_abaSite";
+import { AbaVisaoGeral } from "./_abaVisaoGeral";
 import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { identidadeDaMeta } from "@/lib/plataformas-de-anuncio/meta/identidade";
-import { RegrasDeConversaoGoogle, type EtapaAberta } from "./_regrasGoogle";
+import type { EtapaAberta } from "./_regrasGoogle";
 import { listarRegrasGoogle } from "@/lib/conversoes/regras-google";
-import { RegrasDeConversaoMeta } from "./_regrasMeta";
 import { listarRegrasMeta, rotuloDoEventoDaMeta } from "@/lib/conversoes/regras-meta";
 
 export const metadata = { title: "Conversões" };
 export const dynamic = "force-dynamic";
 
-/** O que a volta do OAuth do Google Ads diz, traduzido — ver o callback. */
-const ERRO_DO_GOOGLE_EM_PORTUGUES: Record<string, string> = {
-  cancelado: "Você cancelou a autorização no Google. Nada foi conectado.",
-  estado_invalido:
-    'O link de conexão expirou ou é inválido. Clique em "Conectar com Google" de novo.',
-  sem_codigo: "O Google não devolveu o código esperado. Tente de novo.",
-  google_ads_nao_configurado:
-    "Esta instalação ainda não tem as credenciais do Google Ads configuradas. Fale com quem administra o servidor.",
-  troca_falhou: "Não consegui trocar o código pelo token de acesso. Tente conectar de novo.",
-  sem_refresh_token:
-    "O Google não devolveu a autorização de longa duração esperada. Tente conectar de novo.",
-  cifra_indisponivel:
-    "Esta instalação está sem a chave mestra de criptografia, e o token não foi gravado. Quem instalou o sistema precisa configurá-la.",
-  erro_ao_gravar: "Não consegui gravar a conexão agora. Tente de novo em instantes.",
-};
+/** As abas, na ordem da nav; a primeira é a Visão geral (sem `?aba=`). */
+const ABAS = ["visao", "meta", "google", "site", "historico", "diagnostico"] as const;
 
 export default async function ConversoesPage({
   searchParams,
@@ -114,10 +83,8 @@ export default async function ConversoesPage({
   }
   const parametros = await searchParams;
   const { erro: erroDoGoogle, ok: okDoGoogle } = parametros;
-  const aba: "configuracao" | "historico" | "diagnostico" | "links" =
-    parametros.aba === "historico" || parametros.aba === "diagnostico" || parametros.aba === "links"
-      ? parametros.aba
-      : "configuracao";
+  const aba =
+    ABAS.find((a) => a === parametros.aba) ?? (parametros.aba === "links" ? "site" : "visao");
 
   const admin = createAdminClient();
   const [
@@ -219,9 +186,9 @@ export default async function ConversoesPage({
       : null;
 
   const links =
-    aba === "links" ? await listarLinks(admin, activeOrg.orgId).catch(() => null) : null;
+    aba === "site" ? await listarLinks(admin, activeOrg.orgId).catch(() => null) : null;
   const metricas =
-    aba === "links" ? await metricasLinks(admin, activeOrg.orgId).catch(() => null) : null;
+    aba === "site" ? await metricasLinks(admin, activeOrg.orgId).catch(() => null) : null;
 
   const numerosConectados = canais
     .map((c) => c.phone_number)
@@ -243,48 +210,109 @@ export default async function ConversoesPage({
     `${t("Olá! Vim pelo site.")} ${codigoDeExemplo}`.trim(),
   )}`;
 
+  const rotuloDaAba: Record<(typeof ABAS)[number], string> = {
+    visao: t("Visão geral"),
+    meta: "Meta",
+    google: "Google Ads",
+    site: t("Site e links"),
+    historico: t("Histórico"),
+    diagnostico: t("Diagnóstico"),
+  };
+  // Só as abas de formulário usam o molde Leitura (768px); a visão geral e as tabelas ficam na largura toda.
+  const leitura = aba === "meta" || aba === "google" || aba === "site";
+  const etapasLegiveis = !etapas.error;
+  const idsAbertos = new Set(etapasAbertas.map((e) => e.id));
+
   return (
-    <Pagina>
+    <Pagina largura={leitura ? "leitura" : "total"}>
       <CabecalhoDaPagina
         titulo={t("Conversões")}
         descricao={t(
-            "Quando um negócio que veio de anúncio é marcado como ganho, o valor da venda volta para a plataforma que trouxe o cliente. É esse retorno que ensina o anúncio a procurar mais gente parecida com quem comprou.",
-          )}
+          "Quando um negócio que veio de anúncio é marcado como ganho, o valor da venda volta para a plataforma que trouxe o cliente. É esse retorno que ensina o anúncio a procurar mais gente parecida com quem comprou.",
+        )}
       />
       <SecaoDaPagina>
-
         <nav className="flex gap-1 overflow-x-auto border-b" aria-label={t("Seções de conversões")}>
-          {(
-            [
-              ["configuracao", t("Configuração")],
-              ["historico", t("Histórico de envios")],
-              ["diagnostico", t("Diagnóstico")],
-              ["links", t("Links rastreáveis")],
-            ] as const
-          ).map(([chave, rotulo]) => (
+          {ABAS.map((chave) => (
             <a
               key={chave}
-              href={chave === "configuracao" ? "?" : `?aba=${chave}`}
+              href={chave === "visao" ? "?" : `?aba=${chave}`}
               aria-current={aba === chave ? "page" : undefined}
-              className={
+              className={`flex items-center gap-1.5 whitespace-nowrap ${
                 aba === chave
                   ? "-mb-px border-b-2 border-primary px-3 py-2 text-sm font-medium"
                   : "px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-              }
+              }`}
             >
-              {rotulo}
+              {rotuloDaAba[chave]}
+              {chave === "visao" && pendencias.length > 0 && (
+                <Badge variant="error" data-testid="contagem-de-pendencias">
+                  {pendencias.length}
+                </Badge>
+              )}
             </a>
           ))}
         </nav>
 
-        {aba === "links" ? (
-          links ? (
-            <LinksRastreaveis links={links} metricas={metricas} idioma={idioma} />
-          ) : (
-            <p role="alert">
-              {t("Não foi possível ler os links. Atualize a página para tentar novamente.")}
-            </p>
-          )
+        {aba === "visao" ? (
+          <AbaVisaoGeral
+            resumo={{
+              meta: {
+                conectada: estado.conectada,
+                habilitada: estado.habilitada,
+                peloCanal: vendaPeloCanal,
+              },
+              google: {
+                conectada: estadoGoogle.temRefreshToken,
+                habilitada: estadoGoogle.habilitada,
+                etapas:
+                  etapasLegiveis && regrasGoogle
+                    ? {
+                        ligadas: regrasGoogle.filter((r) => r.enabled && idsAbertos.has(r.stageId))
+                          .length,
+                        total: etapasAbertas.length,
+                      }
+                    : null,
+              },
+              site: { capturaLigada: Boolean(estadoDaCaptura?.habilitada || capturaGoogle?.habilitada) },
+            }}
+            pendencias={pendencias}
+            enviadas={enviadas}
+            rotulosDeEtapa={rotulosDeEtapa}
+            idioma={idioma}
+          />
+        ) : aba === "meta" ? (
+          <AbaMeta
+            estado={estado}
+            idioma={idioma}
+            leituraConectada={leituraMeta.conectada}
+            vendaPeloCanal={vendaPeloCanal}
+            identidade={identidadeMeta}
+            etapasAbertas={etapasAbertas}
+            podeListarEtapas={etapasLegiveis}
+            regrasMeta={regrasMeta}
+          />
+        ) : aba === "google" ? (
+          <AbaGoogle
+            estado={estadoGoogle}
+            idioma={idioma}
+            erro={erroDoGoogle}
+            ok={okDoGoogle}
+            etapasAbertas={etapasAbertas}
+            podeListarEtapas={etapasLegiveis}
+            regras={regrasGoogle}
+          />
+        ) : aba === "site" ? (
+          <AbaSite
+            slug={slug}
+            idioma={idioma}
+            capturaGoogle={capturaGoogle}
+            capturaMeta={estadoDaCaptura}
+            numerosConectados={numerosConectados}
+            linkDeExemplo={linkDeExemplo}
+            links={links}
+            metricas={metricas}
+          />
         ) : aba === "historico" ? (
           historico ? (
             <HistoricoDeEnvios
@@ -299,289 +327,12 @@ export default async function ConversoesPage({
               {t("Não consegui ler o histórico agora. Atualize a página em instantes.")}
             </p>
           )
-        ) : aba === "diagnostico" ? (
-          diagnostico ? (
-            <DiagnosticoGoogle itens={diagnostico} idioma={idioma} />
-          ) : (
-            <p className="rounded-md border p-4 text-sm">
-              {t("Não consegui ler o diagnóstico agora. Atualize a página em instantes.")}
-            </p>
-          )
+        ) : diagnostico ? (
+          <DiagnosticoGoogle itens={diagnostico} idioma={idioma} />
         ) : (
-          <>
-            {erroDoGoogle && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
-                {t(
-                  ERRO_DO_GOOGLE_EM_PORTUGUES[erroDoGoogle] ??
-                    "Não consegui conectar com o Google Ads.",
-                )}
-              </div>
-            )}
-            {okDoGoogle && (
-              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm">
-                {t("Google Ads autorizado. Agora informe a conta e a ação de conversão abaixo.")}
-              </div>
-            )}
-
-            {estado.conectada && !estado.habilitada && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-                {t(
-                  "O envio está pausado. As vendas continuam sendo registradas aqui, mas não vão para a plataforma enquanto isto estiver desligado.",
-                )}
-              </div>
-            )}
-
-            {estado.testEventCode && (
-              <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-4 text-sm">
-                {t(
-                  "Modo de teste ligado: as vendas vão marcadas como teste e não contam para a otimização. Apague o código de teste quando terminar de conferir.",
-                )}
-              </div>
-            )}
-
-            <FormularioDeConversoes estado={estado} idioma={idioma} leituraConectada={leituraMeta.conectada} />
-            <VendaPeloCanal
-              ligada={vendaPeloCanal}
-              idioma={idioma}
-            />
-            {estado.conectada && (
-              <IdentidadeDaConversao
-                pageId={identidadeMeta.pageId}
-                whatsappBusinessAccountId={identidadeMeta.whatsappBusinessAccountId}
-                leituraConectada={leituraMeta.conectada}
-                idioma={idioma}
-              />
-            )}
-            {(estado.conectada || vendaPeloCanal) && !etapas.error && regrasMeta && (
-            <RegrasDeConversaoMeta
-              etapas={etapasAbertas}
-              regras={regrasMeta}
-              idioma={idioma}
-              conexaoDireta={estado.conectada}
-            />
-            )}
-            <FormularioDeConversoesGoogle
-              estado={estadoGoogle}
-              idioma={idioma}
-              configurado={googleAdsEstaConfigurado(estadoGoogle.api)}
-              dataManagerConfigurado={googleAdsEstaConfigurado("data_manager")}
-              falta={faltaParaConectarOGoogleAds(estadoGoogle.api)}
-              podeCriarAcao={googleAdsEstaConfigurado("google_ads")}
-            />
-            {googleAdsEstaConfigurado(estadoGoogle.api) && !etapas.error && regrasGoogle && (
-              <RegrasDeConversaoGoogle
-                etapas={etapasAbertas}
-                regras={regrasGoogle}
-                idioma={idioma}
-                podeCriarAcao={
-                  googleAdsEstaConfigurado("google_ads") &&
-                  estadoGoogle.temRefreshToken &&
-                  Boolean(estadoGoogle.customerId)
-                }
-              />
-            )}
-
-            {slug && (
-              <FormularioDeCapturaDeUtm
-                plataforma="google"
-                estado={capturaGoogle}
-                idioma={idioma}
-                slug={slug}
-                numerosConectados={numerosConectados}
-              />
-            )}
-
-            <p className="text-sm text-muted-foreground">
-              {t(
-                "Aceite da API não confirma atribuição ao anúncio. Confira os diagnósticos no gerenciador da plataforma. Depois de corrigir uma pendência, use o botão de reprocessamento.",
-              )}
-            </p>
-            <section className="flex flex-col gap-3">
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-lg font-semibold">{t("Conversões que não foram reportadas")}</h2>
-                <span className="text-sm text-muted-foreground">
-                  {enviadas} {t("conversões aceitas pela plataforma")}
-                </span>
-              </div>
-
-              {pendencias.length === 0 ? (
-                <p className="rounded-md border p-4 text-sm text-muted-foreground">
-                  {/*
-                Ausência de pendência tem DUAS causas com significados opostos, e
-                dizer só "tudo certo" esconderia a segunda: ou nada falhou, ou nunca
-                fechou uma venda vinda de anúncio. Quem acabou de conectar precisa
-                saber que a lista vazia ainda não prova que funciona.
-              */}
-                  {t(
-                    "Nenhuma pendência. Ainda pode não haver vendas ou qualificações com origem em anúncio.",
-                  )}
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-md border">
-                  <table className={`w-full text-sm ${TABELA_EMPILHADA}`}>
-                    <thead className="bg-muted/50 text-left">
-                      <tr>
-                        <th className="p-3 font-medium">{t("Negócio")}</th>
-                        <th className="p-3 font-medium">{t("Evento")}</th>
-                        <th className="p-3 font-medium">{t("Origem")}</th>
-                        <th className="p-3 font-medium">{t("Valor")}</th>
-                        <th className="p-3 font-medium">{t("O que houve")}</th>
-                        <th className="p-3 font-medium">{t("Quando")}</th>
-                        <th className="p-3 font-medium">{t("Próximo passo")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendencias.map((p) => (
-                        <tr key={`${p.leadId}:${p.evento}`} className="border-t align-top">
-                          <td className="p-3">
-                          <LinkDoNegocio className="underline underline-offset-2" leadId={p.leadId}>
-                              {p.tituloDoLead ?? t("(sem título)")}
-                          </LinkDoNegocio>
-                          </td>
-                          <td data-rotulo={t("Evento")} className="p-3">
-                            {t(rotuloDoEvento(p.evento, rotulosDeEtapa))}
-                          </td>
-                          <td data-rotulo={t("Origem")} className="p-3">
-                            {p.plataforma === "meta_ads"
-                              ? "Meta Ads"
-                              : p.plataforma === "google_ads"
-                                ? "Google Ads"
-                                : "—"}
-                          </td>
-                          <td data-rotulo={t("Valor")} className="p-3 whitespace-nowrap">
-                            {p.valorCentavos === null ? "—" : formatCentsBRL(p.valorCentavos)}
-                          </td>
-                          <td data-rotulo={t("O que houve")} className="p-3">
-                            <span>{t(MOTIVO_LEGIVEL[p.motivo ?? ""] ?? p.motivo ?? "—")}</span>
-                            {p.detalhe && (
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                {p.detalhe}
-                              </span>
-                            )}
-                          </td>
-                          <td data-rotulo={t("Quando")} className="p-3 whitespace-nowrap text-muted-foreground">
-                            {new Date(p.tentadoEm).toLocaleString(idioma)}
-                          </td>
-                          <td className="p-3">
-                            <ReprocessarConversao
-                              leadId={p.leadId}
-                              idioma={idioma}
-                              evento={p.evento}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            {/*
-          Condição 3 da decisão da #924: "quem opera encontra a explicação de como
-          montar o link do WhatsApp com o código".
-
-          Mora nesta tela porque esta é a tela da atribuição — a mesma que já
-          responde "a Meta recebeu minhas vendas?". O mecanismo do site não tem
-          outra superfície: sem este texto, o contrato do link existiria só no
-          código, e quem monta o botão da landing page não teria onde descobrir o
-          formato nem os limites.
-        */}
-            {slug ? (
-              <ScriptDoSite
-                slug={slug}
-                google={capturaGoogle}
-                meta={estadoDaCaptura}
-                idioma={idioma}
-              />
-            ) : null}
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold">{t("Quem chegou pelo site")}</h2>
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                {t(
-                  "Quando a pessoa vê a campanha numa página sua e toca num botão que abre o WhatsApp, o link desse botão pode levar a origem junto. O código abaixo vai no texto da mensagem, e a conversa entra no CRM já com a origem do site.",
-                )}
-              </p>
-
-              <div className="rounded-md border p-4 text-sm">
-                <p className="font-medium">{t("Como montar o link do botão")}</p>
-                <ol className="mt-2 flex list-decimal flex-col gap-2 pl-5">
-                  <li>
-                    {t(
-                      "Monte o texto que a pessoa vai enviar — uma saudação basta — e termine com o código.",
-                    )}
-                  </li>
-                  <li>
-                    {t(
-                      "Troque o número pelo WhatsApp da empresa e o texto pelo seu, mantendo o código no fim:",
-                    )}
-                  </li>
-                </ol>
-                <code className="mt-3 block overflow-x-auto rounded-md bg-muted/50 p-2 text-xs break-all">
-                  {linkDeExemplo}
-                </code>
-                {/*
-              A LISTA DE CHAVES VEM DO MÓDULO, e não da frase — mesma razão que o
-              exemplo logo acima é gerado e não escrito à mão. Enquanto os nomes
-              moravam dentro do texto traduzido, acrescentar uma chave exigia
-              lembrar de dois arquivos, e esquecer o segundo deixava a tela
-              ensinando uma lista incompleta em português e em espanhol.
-
-              O nome entra FORA do `t()` de propósito: `traduzir()` casa a string
-              EXATA, e um template literal não casaria chave nenhuma.
-            */}
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {t("Este exemplo foi gerado por esta tela. Os campos que o código aceita são:")}{" "}
-                  {CHAVES_DE_UTM.join(", ")}.
-                </p>
-              </div>
-
-              {/*
-            O endereço de captura é o caminho RECOMENDADO, e o código acima
-            continua valendo: quem já montou link com ele não precisa mexer em
-            nada. A diferença é quem monta o marcador — lá é a página, aqui é o
-            servidor, e por isso só este dispensa script.
-          */}
-              {slug ? (
-                <FormularioDeCapturaDeUtm
-                  estado={estadoDaCaptura}
-                  idioma={idioma}
-                  slug={slug}
-                  numerosConectados={numerosConectados}
-                />
-              ) : (
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-                  {t(
-                    "Esta organização ainda não tem um apelido de URL, e o endereço de captura precisa de um. Fale com quem administra o servidor.",
-                  )}
-                </div>
-              )}
-
-              <ul className="flex max-w-2xl list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
-                <li>
-                  {t(
-                    "O código vale só na primeira mensagem do contato: quem recebe um link encaminhado não ganha a origem de quem encaminhou.",
-                  )}
-                </li>
-                <li>
-                  {t(
-                    "Ele nunca sobrescreve uma origem já gravada, inclusive a de anúncio: quem chegou do Meta ou do Google antes mantém o anúncio.",
-                  )}
-                </li>
-                <li>
-                  {t(
-                    "Só campos de campanha viajam no código, e nenhum dado pessoal: nome, telefone, e-mail e documento ficam de fora.",
-                  )}{" "}
-                  {t("O código inteiro tem um teto de")} {TAMANHO_MAXIMO_DO_CODIGO} {t("caracteres.")}
-                </li>
-                <li>
-                  {t(
-                    'A origem aparece na ficha do contato e no filtro "Site (landing page)" da lista de contatos.',
-                  )}
-                </li>
-              </ul>
-            </section>
-          </>
+          <p className="rounded-md border p-4 text-sm">
+            {t("Não consegui ler o diagnóstico agora. Atualize a página em instantes.")}
+          </p>
         )}
       </SecaoDaPagina>
     </Pagina>

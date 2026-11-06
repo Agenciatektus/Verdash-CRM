@@ -85,7 +85,7 @@ describe("#3062 — nome do negócio na tabela de pendências (aba Configuraçã
   });
 
   it("a página de Conversões monta a coluna com esse link, e não com `/app/kanban`", () => {
-    const pagina = fonte("./page.tsx");
+    const pagina = fonte("./_pendencias.tsx");
     const historico = fonte("./_historico.tsx");
 
     // A coluna "Negócio" das pendências usa o componente, com o id do negócio.
