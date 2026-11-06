@@ -33,7 +33,7 @@ export function CartaoDaConexaoGoogle({
   contaConectada,
   enderecoDeRetorno,
   linkDeConfiguracao,
-  chaveDoAviso = "agenda:aviso-google-dispensado",
+  chaveDoAviso,
 }: {
   configurado: boolean;
   /**
@@ -46,7 +46,7 @@ export function CartaoDaConexaoGoogle({
   falta: string[];
   contaConectada?: string | null;
   /** Onde guardar o "dispensado": por organização e usuário (ver `_client.tsx`). */
-  chaveDoAviso?: string;
+  chaveDoAviso: string;
   /** O endereço EXATO que o Google exige registrado. Ver o bloco no JSX. */
   enderecoDeRetorno?: string;
 }) {

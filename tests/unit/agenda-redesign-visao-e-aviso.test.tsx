@@ -26,12 +26,12 @@ describe("visão padrão da Agenda pela largura", () => {
 
 describe("aviso do Google na faixa fina", () => {
   it("Dispensar esconde o aviso e a escolha fica guardada", () => {
-    const { unmount } = render(<CartaoDaConexaoGoogle configurado falta={[]} contaConectada={null} />);
+    const { unmount } = render(<CartaoDaConexaoGoogle chaveDoAviso="agenda:aviso-teste" configurado falta={[]} contaConectada={null} />);
     expect(screen.getByTestId("conectar-google")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Dispensar"));
     expect(screen.queryByTestId("conectar-google")).toBeNull();
     unmount();
-    render(<CartaoDaConexaoGoogle configurado falta={[]} contaConectada={null} />);
+    render(<CartaoDaConexaoGoogle chaveDoAviso="agenda:aviso-teste" configurado falta={[]} contaConectada={null} />);
     expect(screen.queryByTestId("conectar-google")).toBeNull();
   });
 });

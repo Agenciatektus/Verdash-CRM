@@ -107,7 +107,7 @@ export function AgendaClient({
   /** Id de quem está logado — a única fonte para o rótulo "Você". */
   usuarioId: string;
   /** Org ativa: escopa o "dispensar" do aviso do Google (opcional nos testes). */
-  orgId?: string;
+  orgId: string;
   googleConfigurado: boolean;
   contaConectada?: string | null;
   enderecoDeRetorno?: string;
