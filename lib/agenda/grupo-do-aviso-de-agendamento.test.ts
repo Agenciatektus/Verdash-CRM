@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHANNEL_PROVIDER } from "@/lib/channels/capabilities";
-import type { DepsDeGrupos } from "@/lib/grupos/servico";
+import type { DepsDeGrupos, LinhaDoDiretorio } from "@/lib/grupos/servico";
 
 import { confereGrupoDaConexao } from "./grupo-do-aviso-de-agendamento";
 
@@ -13,6 +13,7 @@ const DE_OUTRO_NUMERO = "120363000000000002@g.us";
 const QUE_O_NUMERO_SAIU = "120363000000000003@g.us";
 
 function deps(opts: { canalFora?: boolean } = {}): DepsDeGrupos {
+  let diretorio: LinhaDoDiretorio[] = [];
   return {
     db: {
       lerSessao: vi.fn(async () => ({ provider: DEFAULT_CHANNEL_PROVIDER, sessionRef: "s1", groupsCapability: "full" as const })),
@@ -20,6 +21,14 @@ function deps(opts: { canalFora?: boolean } = {}): DepsDeGrupos {
       listarLinhas: vi.fn(async () => [
         { group_chat_id: QUE_O_NUMERO_SAIU, subject: "Antigo", enabled: true, enabled_at: null, ia_responde: false },
       ]),
+      // Diretório em memória (cache da lista de grupos, 9223): `gravarDiretorio` o enche como o banco.
+      lerDiretorio: vi.fn(async () => diretorio),
+      gravarDiretorio: vi.fn(async (_o: string, _s: string, grupos: Array<{ chatId: string; subject: string | null }>, agoraIso: string) => {
+        diretorio = grupos.map((g) => ({
+          group_chat_id: g.chatId, subject: g.subject, participant_count: null, admin_count: 0,
+          papel: null, is_announce: false, tipo: "grupo" as const, archived: null, pinned: null, refreshed_at: agoraIso,
+        }));
+      }),
       contarLigados: vi.fn(async () => 1),
       gravarLinha: vi.fn(async () => ({ id: "x" })),
       definirIa: vi.fn(async () => null),

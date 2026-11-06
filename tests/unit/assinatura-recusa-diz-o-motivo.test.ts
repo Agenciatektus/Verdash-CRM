@@ -202,10 +202,10 @@ describe("o caminho AUTOMÁTICO registra o mesmo motivo (é ele que rodou 500 ve
   it("⭐ lerLoginCodexRenovandoSeProxima loga o motivo da recusa", async () => {
     const fake = admin();
     fake.linha = linhaCifrada({
-      // Token a 1 h de vencer: dentro da janela de 8 dias, logo a renovação é tentada.
+      // Token a 4 min de vencer: dentro da janela (5 min no fork), logo a renovação é tentada.
       ...(() => {
         const c = encryptKey(
-          JSON.stringify({ ...tokens, expires_at: Date.now() + 60 * 60 * 1000 }),
+          JSON.stringify({ ...tokens, expires_at: Date.now() + 4 * 60 * 1000 }),
         );
         return {
           api_key_encrypted: bufToBytea(c.ciphertext),

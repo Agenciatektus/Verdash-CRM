@@ -80,5 +80,14 @@ Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndic
 - Testes do upstream retirados porque testam tela que não é a nossa: `MessageBubble.pulo-da-agenda.test.tsx` (#3848),
   `KanbanCard.densidade.test.tsx` (`denso`, que no fork é `compacto`), `funil-arquivado-abre-em-leitura-quadro.test.tsx`
   (prop `funilInicial`; o arquivado em leitura do fork lê `is_archived` do quadro) e os casos #3313 que o merge acrescentou
-  em `ConversationHeader.test.tsx`. Voltam quando as features forem portadas.
+  em `ConversationHeader.test.tsx`; também `hidratacao-do-badge-das-abas` (#3736), `composer-dicas-dos-icones` (linha de
+  ações do compositor do upstream) e `inbox-atualizacao-na-lista` (#2366: a nossa lista usa `cacheDasConversas`). Voltam
+  quando as features forem portadas.
+- Assinatura do ChatGPT: fica a NOSSA janela de 5 minutos (medida em produção) com o marco da rotação do upstream. Os
+  testes do upstream (`assinatura-uma-rotacao-por-janela`, `assinatura-recusa-diz-o-motivo`) foram ajustados para um par
+  vencendo dentro da janela.
+- 32 arquivos acima de 300 linhas entraram em `arquivos-grandes-herdados.json` (quase todos do upstream; do fork, os que
+  cresceram com o porte: `CartaoDoPonto`, `turno/correcao-pos-modelo`, `Sidebar`, `ChannelHistorico`). Dividir depois.
+- `app/app/ai/memory/_client.tsx` (validade do aprendizado) ficou como exceção da cerca de controle nativo: trocar por
+  `CampoDeData` junto com o teste `memoria-validade-grava-ao-sair`. `HorarioDoSetor` já usa `Escolha`/`CampoDeData`.
 - Typecheck a frio estoura memória no Windows; vale o job do CI.

@@ -32,7 +32,7 @@ export async function confereGrupoDaConexao(
   if (!e.channelSessionId) return "fora_da_conexao";
   if (e.grupo === e.grupoAtual && e.channelSessionId === e.conexaoAtual) return "ok";
   try {
-    const grupos = await listarGruposDoNumero(deps, {
+    const { grupos } = await listarGruposDoNumero(deps, {
       organizationId: e.organizationId,
       channelSessionId: e.channelSessionId,
     });

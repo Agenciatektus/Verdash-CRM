@@ -57,7 +57,11 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const CRED = "22222222-2222-4222-8222-222222222222";
 const UMA_HORA = 60 * 60 * 1000;
 
-/** A vida do access_token da assinatura: MUITO menor que a janela de 8 dias. */
+// Fork: a janela é de 5 minutos (medido em produção, 05/11/2026), não de 8 dias;
+// o par de teste vence dentro dela para a primeira leitura rotacionar.
+const DENTRO_DA_JANELA = 4 * 60 * 1000;
+
+/** O par gravado, vencendo em `ms`. */
 function linhaVencendoEm(ms: number) {
   const guardado: TokensDoCodex = {
     access_token: "at-velho",
@@ -148,12 +152,13 @@ describe("o marco da janela, puro", () => {
         agora,
       ),
     ).toBe(false);
-    // Marco vencido, token dentro da janela de 8 dias: rotaciona.
+    // Marco vencido, token dentro da janela (5 min no fork): rotaciona.
     expect(
-      precisaRenovar({ expires_at: agora + 6 * 60 * 1000, proxima_renovacao_em: agora - 1 }, agora),
+      precisaRenovar({ expires_at: agora + 4 * 60 * 1000, proxima_renovacao_em: agora - 1 }, agora),
     ).toBe(true);
-    // Par antigo, sem marco: responde pela régua de 8 dias (uma vez).
-    expect(precisaRenovar({ expires_at: agora + UMA_HORA }, agora)).toBe(true);
+    // Par antigo, sem marco: responde pela régua da janela (5 min no fork), uma vez.
+    expect(precisaRenovar({ expires_at: agora + 4 * 60 * 1000 }, agora)).toBe(true);
+    expect(precisaRenovar({ expires_at: agora + UMA_HORA }, agora)).toBe(false);
     expect(precisaRenovar({ expires_at: agora + 30 * 24 * UMA_HORA }, agora)).toBe(false);
   });
 });
@@ -161,7 +166,7 @@ describe("o marco da janela, puro", () => {
 describe("dois turnos seguidos fazem UM POST — a janela do token novo é respeitada", () => {
   it("⭐ o turno seguinte NÃO rotaciona de novo: o marco do token novo está no futuro", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaVencendoEm(UMA_HORA);
+    fake.linha = linhaVencendoEm(DENTRO_DA_JANELA);
     const fetchDuble = dublarTrocaDeToken();
 
     const primeiro = await lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: ORG });
@@ -182,7 +187,7 @@ describe("dois turnos seguidos fazem UM POST — a janela do token novo é respe
 
   it("⭐ o expires_at do token NOVO e o marco ficam GRAVADOS na credencial", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaVencendoEm(UMA_HORA);
+    fake.linha = linhaVencendoEm(DENTRO_DA_JANELA);
     dublarTrocaDeToken();
 
     const antes = Date.now();
@@ -202,7 +207,7 @@ describe("dois turnos seguidos fazem UM POST — a janela do token novo é respe
 
   it("quando a janela do token novo abre, a rotação acontece de novo (não é 'nunca mais')", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaVencendoEm(UMA_HORA);
+    fake.linha = linhaVencendoEm(DENTRO_DA_JANELA);
     const fetchDuble = dublarTrocaDeToken();
 
     await lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: ORG });
@@ -224,7 +229,7 @@ describe("dois turnos seguidos fazem UM POST — a janela do token novo é respe
 describe("a renovação que volta a dar certo fecha o aviso da Central", () => {
   it("⭐ a renovação AUTOMÁTICA bem-sucedida fecha o aviso da empresa — sem clique", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaVencendoEm(UMA_HORA);
+    fake.linha = linhaVencendoEm(DENTRO_DA_JANELA);
     dublarTrocaDeToken();
 
     await lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: ORG });
@@ -237,7 +242,7 @@ describe("a renovação que volta a dar certo fecha o aviso da Central", () => {
 
   it("renovação que falha NÃO fecha o aviso", async () => {
     const fake = new FakeSupabase();
-    fake.linha = linhaVencendoEm(UMA_HORA);
+    fake.linha = linhaVencendoEm(DENTRO_DA_JANELA);
     globalThis.fetch = vi.fn(async () => {
       throw new TypeError("fetch failed");
     }) as never;

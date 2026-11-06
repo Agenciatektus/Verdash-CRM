@@ -92,6 +92,13 @@ const REMOCOES_DELIBERADAS: Record<string, { valores: string[]; porque: string }
       "e reconstrói sem `task_overdue`. A 9099 (`integracao_da_subida_1_90`) reafirma a UNIÃO " +
       "(e é a última reconstrução, a que `kind-check-migration-x-baseline` compara com o baseline).",
   },
+  "20261105130000_9099_integracao_da_subida_1_90.sql::agent_inbox_items_kind_check": {
+    valores: ["assinatura_desconectada", "cliente_sem_resposta_na_queda", "recuperacao_da_queda"],
+    porque:
+      "A 9099 foi escrita na subida 1.90, antes da 9027/9033 do upstream (1.97). Na cadeia unida " +
+      "roda depois delas e reconstrói sem os três kinds novos. A 9238 (`integracao_da_subida_1_99`) " +
+      "reafirma a UNIÃO e passa a ser a última reconstrução.",
+  },
   "20261021000000_0693_motivo_verificacao_manual.sql::passagens_de_atendimento_motivo_codigo_check": {
     valores: ["cadencia_ia_encerrou", "cadencia_lead_respondeu", "objetivo_atingido"],
     porque:

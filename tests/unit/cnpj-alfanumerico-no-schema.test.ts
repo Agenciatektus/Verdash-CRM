@@ -46,7 +46,7 @@ describe("o schema aceita o CNPJ alfanumérico da Receita (#3495)", () => {
   it("a migration da régua nova vem DEPOIS da 0448 que criou a coluna", () => {
     const culpada = "20260928132000_0448_empresas_pessoas_importacao.sql";
     const migration = readdirSync(path.join(RAIZ_DO_REPO, "supabase", "migrations")).find((n) =>
-      /^[0-9]{14}_9056_[a-z0-9_]+\.sql$/.test(n),
+      /^[0-9]{14}_9056_cnpj_[a-z0-9_]+\.sql$/.test(n),
     );
     expect(migration).toBeTruthy();
     expect(migration! > culpada).toBe(true);
@@ -60,7 +60,7 @@ describe("o schema aceita o CNPJ alfanumérico da Receita (#3495)", () => {
 
   it("a migration que muda a régua existe e é reaplicável (drop antes do add)", () => {
     const arquivo = readdirSync(path.join(RAIZ_DO_REPO, "supabase", "migrations")).find((n) =>
-      /^[0-9]{14}_9056_[a-z0-9_]+\.sql$/.test(n),
+      /^[0-9]{14}_9056_cnpj_[a-z0-9_]+\.sql$/.test(n),
     );
     expect(arquivo, "migration 9056 do CNPJ alfanumérico não encontrada").toBeTruthy();
     const sql = readFileSync(path.join(RAIZ_DO_REPO, "supabase", "migrations", arquivo!), "utf8");

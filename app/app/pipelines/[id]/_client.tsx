@@ -284,6 +284,14 @@ export function PipelinePageClient({
       data-refetch-em={seguranca.ultimaVerificacao ?? ""}
     >
       {cabecalho}
+      {arquivado && (
+        <p
+          className="rounded-md border border-border bg-surface-elevated/40 p-3 text-sm leading-relaxed text-text-muted"
+          data-testid="funil-arquivado-aviso"
+        >
+          {t("Este funil está arquivado: o quadro abre em leitura, e nada aqui grava até você tirá-lo do arquivo em Funis.")}
+        </p>
+      )}
       {novo}
       {barra}
       {error ? (
