@@ -42,7 +42,9 @@ import { ehFormaDeValorPermitida, ehNomeDeToken } from "@/lib/branding/formas-de
  * As paletas que uma extensão pode oferecer como tema. São as MESMAS cinco do
  * laboratório `app/design/lib/tokens.ts` (PALETTES), vertidas para cá como a
  * lista FECHADA de chave — o "gancho" referencia uma paleta, o valor de cada
- * token é validado pela régua de forma. O default do produto é `sage`.
+ * token é validado pela régua de forma. `sage` é o default do LABORATÓRIO; o
+ * produto não usa estas paletas: suas cores são as do DS v2 Verdash (azul), em
+ * `app/globals.css`.
  */
 export const PALETAS_DE_TEMA = ["sage", "clay", "mist", "plum", "olive"] as const;
 export type PaletaDeTema = (typeof PALETAS_DE_TEMA)[number];

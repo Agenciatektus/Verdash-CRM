@@ -17,6 +17,10 @@ import { computeSlaBucket, corteDosUrgentes } from "@/lib/lgpd/balde-de-sla";
 
 export const dynamic = "force-dynamic";
 
+// shortcut: baldes por razão de prazo classificam em memória até este teto; acima
+// disso, mover `computeSlaBucket` para uma coluna gerada ou RPC.
+const TETO_DO_BALDE = 2000;
+
 const querySchema = z.object({
   status: z
     .enum(["received", "processing", "completed", "failed", "pending_review"])
@@ -69,21 +73,28 @@ export async function GET(req: NextRequest): Promise<Response> {
   const orgId = activeOrg.orgId;
   const offset = (page - 1) * limit;
 
-  // Count query (os baldes além de "urgent" filtram depois, na página)
-  let countQuery = supabase
-    .from("lgpd_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", orgId);
-  if (status) countQuery = countQuery.eq("status", status);
-  if (type) countQuery = countQuery.eq("request_type", type);
+  // "urgent" é corte de data e vai ao BANCO. Os outros baldes dependem da razão
+  // recebido→prazo (`computeSlaBucket`), que o PostgREST não expressa: a rota busca
+  // a org até TETO_DO_BALDE, classifica e SÓ ENTÃO pagina. Filtrar a página já
+  // recortada escondia o pedido em alerta que estivesse na página 2.
   const urgent = parsed.data.sla_bucket === "urgent";
+  const balde = parsed.data.sla_bucket && !urgent ? parsed.data.sla_bucket : null;
   const corte = corteDosUrgentes();
-  if (urgent) countQuery = countQuery.not("status", "in", "(completed,failed)").lt("due_at", corte);
-  const { count } = await countQuery;
-  const total = count ?? 0;
 
-  if (parsed.data.only_count === "true") {
-    return ok([], { requestId, meta: { total, page, limit, has_more: false } });
+  let total = 0;
+  if (!balde) {
+    let countQuery = supabase
+      .from("lgpd_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", orgId);
+    if (status) countQuery = countQuery.eq("status", status);
+    if (type) countQuery = countQuery.eq("request_type", type);
+    if (urgent) countQuery = countQuery.not("status", "in", "(completed,failed)").lt("due_at", corte);
+    const { count } = await countQuery;
+    total = count ?? 0;
+    if (parsed.data.only_count === "true") {
+      return ok([], { requestId, meta: { total, page, limit, has_more: false } });
+    }
   }
 
   // Data query
@@ -94,8 +105,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     )
     .eq("organization_id", orgId)
     .order("due_at", { ascending: true, nullsFirst: false })
-    .order("received_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order("received_at", { ascending: false });
+  dataQuery = balde ? dataQuery.limit(TETO_DO_BALDE) : dataQuery.range(offset, offset + limit - 1);
 
   if (status) dataQuery = dataQuery.eq("status", status);
   if (type) dataQuery = dataQuery.eq("request_type", type);
@@ -115,11 +126,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     sla_bucket: computeSlaBucket(r.due_at, r.received_at),
   }));
 
-  const filtered = parsed.data.sla_bucket && !urgent
-    ? enriched.filter((r) => r.sla_bucket === parsed.data.sla_bucket)
-    : enriched;
+  if (balde) {
+    const doBalde = enriched.filter((r) => r.sla_bucket === balde);
+    total = doBalde.length;
+    const pagina = parsed.data.only_count === "true" ? [] : doBalde.slice(offset, offset + limit);
+    return ok(pagina, { requestId, meta: { total, page, limit, has_more: offset + limit < total } });
+  }
 
-  return ok(filtered, {
+  return ok(enriched, {
     requestId,
     meta: {
       total,
