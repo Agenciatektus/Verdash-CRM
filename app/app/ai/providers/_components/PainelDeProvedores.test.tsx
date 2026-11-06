@@ -169,3 +169,15 @@ describe("PainelDeProvedores — o Jev no painel", () => {
     expect(screen.queryByTestId("jev-no-ponto-sentiment_classify")).toBeNull();
   });
 });
+
+describe("PainelDeProvedores — grupos em lista", () => {
+  it("'Configuração avançada' abre a folha com os pontos do grupo, e só então", async () => {
+    montar();
+    await screen.findByTestId("cartao-do-jev");
+    expect(screen.getByTestId("lista-de-grupos")).toBeInTheDocument();
+    expect(screen.queryByTestId("ponto-sentiment_classify")).toBeNull();
+    fireEvent.click(screen.getByTestId("avancado-entender"));
+    expect(await screen.findByTestId("ponto-sentiment_classify")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("Entender a conversa");
+  });
+});

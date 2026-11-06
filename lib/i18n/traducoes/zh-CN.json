@@ -5936,5 +5936,10 @@
   "Envia conversão": "发送转化",
   "sem chance definida": "未设置成交概率",
   "Não avisa a equipe": "不通知团队",
-  "Não envia conversão": "不发送转化"
+  "Não envia conversão": "不发送转化",
+  "Qual IA faz cada tarefa": "每项任务由哪个 AI 处理",
+  "Área da saúde? Leia antes de ligar": "医疗行业？开启前请先阅读",
+  "observando": "观察中",
+  "decidindo": "决策中",
+  "Ver tarefas": "查看任务"
 }
