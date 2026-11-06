@@ -82353,6 +82353,18 @@ begin
 end $grants_por_coluna$;
 
 
+-- ---- provider 'mercadophone' em tenant_integrations (migration 9101) ----
+-- Mesmo bloco da migration 9101. Nao cria funcao: pode ficar depois da VARREDURA anon.
+
+-- manifest: 9101 — tenant_integrations_provider_check aceita 'mercadophone' (PDV; conexão por dois tokens colados, sem OAuth)
+
+alter table public.tenant_integrations
+  drop constraint if exists tenant_integrations_provider_check;
+alter table public.tenant_integrations
+  add constraint tenant_integrations_provider_check check (provider in (
+    'nuvemshop', 'vtex', 'shopify', 'mercadophone'
+  ));
+
 -- ---- 6. Fonte e credencial da importação do histórico (migration 9102) ----
 -- Mesmo corpo da migration 9102. Roda por último: o select por coluna precisa ver todas as colunas.
 alter table public.importacoes_de_historico add column if not exists fonte text not null default 'waha';

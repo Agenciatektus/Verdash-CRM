@@ -842,6 +842,16 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // Sem OAuth: o admin cola dois tokens. Fica só no ⌘K (fora do menu lateral).
+    href: "/app/integrations/mercadophone",
+    label: "MercadoPhone",
+    description: "Conecte o PDV da loja para trazer estoque, clientes e vendas para o CRM.",
+    icon: "Storefront",
+    group: "canais",
+    minRole: "admin",
+    sidebar: false,
+  },
+  {
     href: "/app/webhooks",
     label: "Webhooks",
     description: "Avise outros sistemas quando algo acontecer aqui dentro.",
