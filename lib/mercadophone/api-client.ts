@@ -88,3 +88,15 @@ export function listarVendas(
     filters: { dataVendaInicial: p.dataVendaInicial, dataVendaFinal: p.dataVendaFinal },
   });
 }
+
+/** Itens vendidos com custo e lucro. `order`/`direction` dão 422 neste controller: não enviar. */
+export function listarHistorico(
+  token: string,
+  p: { dataVendaInicial: string; dataVendaFinal: string; page?: number; limit?: number },
+): Promise<MercadoPhonePagina> {
+  return chamar(token, "HistoricoVendaApiController", "index", {
+    page: p.page ?? 1,
+    limit: Math.min(p.limit ?? 50, 100),
+    filters: { dataVendaInicial: p.dataVendaInicial, dataVendaFinal: p.dataVendaFinal },
+  });
+}

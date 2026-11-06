@@ -19,7 +19,7 @@ function centavos(v: unknown): number {
 }
 
 /** "2026-11-02 11:41:00" em Brasília (-03:00) -> ISO UTC. */
-function dataDaVenda(v: unknown): string {
+export function dataDaVenda(v: unknown): string {
   const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/.exec(String(v ?? ""));
   const hora = m?.[2]?.length === 5 ? `${m[2]}:00` : m?.[2];
   const t = m ? Date.parse(`${m[1]}T${hora}-03:00`) : NaN;
