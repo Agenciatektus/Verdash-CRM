@@ -112,7 +112,7 @@ export function IdentidadeDaConversao({
           <h3 className="text-sm font-semibold">
             {t("Página e conta do WhatsApp Business das vendas de clique-para-WhatsApp")}
           </h3>
-          <p className="max-w-2xl text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {t(
               "Quando a venda vem de anúncio clique-para-WhatsApp, a Meta exige o ID da Página ou o ID da conta do WhatsApp Business junto do evento. Sem nenhum dos dois, ela recusa a venda e o motivo aparece na lista de pendências. Preencha o que estiver vinculado ao seu conjunto de dados.",
             )}
