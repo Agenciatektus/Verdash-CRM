@@ -7728,6 +7728,11 @@ export const DICIONARIO: Traducoes = {
   "Permitir que a IA responda neste grupo": {
     es: "Permitir que la IA responda en este grupo",
   },
+  "Só quando chamada": { es: "Solo cuando se la llama" },
+  "Toda mensagem": { es: "Cada mensaje" },
+  "Só quando chamada: a IA responde quem marcar o número com @ ou responder uma mensagem dele.": {
+    es: "Solo cuando se la llama: la IA responde a quien etiquete el número con @ o responda a un mensaje de él.",
+  },
   "Atualizar lista": { es: "Actualizar lista" },
   "Atualizado agora": { es: "Actualizado ahora" },
   "Atualizado há": { es: "Actualizado hace" },

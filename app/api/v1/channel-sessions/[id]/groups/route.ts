@@ -29,11 +29,12 @@ const corpoSchema = z
     subject: z.string().max(200).nullable().optional(),
     enabled: z.boolean().optional(),
     ia_responde: z.boolean().optional(),
+    ia_modo: z.enum(["off", "chamada", "todas"]).optional(),
   })
-  .refine((c) => c.enabled !== undefined || c.ia_responde !== undefined, {
+  .refine((c) => c.enabled !== undefined || c.ia_responde !== undefined || c.ia_modo !== undefined, {
     message: "o body precisa trazer enabled ou ia_responde",
   })
-  .refine((c) => !(c.enabled !== undefined && c.ia_responde !== undefined), {
+  .refine((c) => !(c.enabled !== undefined && (c.ia_responde !== undefined || c.ia_modo !== undefined)), {
     message: "troque uma chave por vez",
   });
 
@@ -99,12 +100,13 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     // das duas (o schema recusa as duas juntas), e a organização vem SEMPRE da
     // sessão autenticada — um `organization_id` forjado no body é ignorado,
     // como na chave de cima.
-    if (corpo.data.ia_responde !== undefined) {
+    if (corpo.data.ia_responde !== undefined || corpo.data.ia_modo !== undefined) {
       const r = await definirIaDoGrupo(deps, {
         organizationId: authz.org.orgId,
         channelSessionId: id.data,
         groupChatId: corpo.data.group_chat_id,
-        iaResponde: corpo.data.ia_responde,
+        // `ia_responde` boolean antigo: true → todas, false → off.
+        iaModo: corpo.data.ia_modo ?? (corpo.data.ia_responde ? "todas" : "off"),
         actorUserId: authz.user.id,
         requestId,
       });

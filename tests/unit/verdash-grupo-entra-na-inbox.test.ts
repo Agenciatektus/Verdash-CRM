@@ -60,7 +60,6 @@ describe("canal Verdash: mensagem de grupo", () => {
     });
     const a = admin();
     const r = await entrada(payload({ conversation: "bom dia, grupo" }), a);
-    expect(a.from).not.toHaveBeenCalled();
     expect(r).toMatchObject({ status: "ingested", conversationId: "conv-1", messageId: "msg-1" });
     const [, e] = gravar.mock.calls[0]!;
     expect(e).toMatchObject({
@@ -79,7 +78,6 @@ describe("canal Verdash: mensagem de grupo", () => {
     gravar.mockResolvedValue("grupo_desligado");
     const a = admin();
     expect(await entrada(payload({ conversation: "oi" }), a)).toEqual({ status: "ignored", reason: "grupo_desligado" });
-    expect(a.from).not.toHaveBeenCalled();
   });
 
   it("mensagem que SAIU do celular entra sem remetente (quem falou é o dono do número)", async () => {
@@ -122,5 +120,47 @@ describe("lista de grupos do número (Conexões › Grupos)", () => {
     expect(gruposDaLista([{ chatId: "4@g.us", subject: "P", participantCount: 3, adminCount: 1, papel: "dono", isAnnounce: false, tipo: "comunidade" }])).toEqual([
       { chatId: "4@g.us", subject: "P", participantCount: 3, adminCount: 1, papel: "dono", isAnnounce: false, tipo: "comunidade" },
     ]);
+  });
+});
+
+describe("canal Verdash: grupo, chamada ao número (9224)", () => {
+  /** Dublê com sessão (telefone + metadata), mensagens outbound conhecidas e registro de updates. */
+  function adminComSessao(opts: { outbound?: string[]; metadata?: Record<string, unknown> } = {}) {
+    const updates: unknown[] = [];
+    const from = vi.fn((tabela: string) => {
+      const f: Record<string, unknown> = {};
+      const q: Record<string, unknown> = {
+        select: () => q,
+        eq: (c: string, v: unknown) => { f[c] = v; return q; },
+        limit: async () => ({ data: tabela === "messages" && (opts.outbound ?? []).includes(String(f.external_id)) ? [{ id: "m" }] : [] }),
+        maybeSingle: async () => ({ data: { phone_number: "+5566999990000", metadata: { outra: 1, ...opts.metadata } }, error: null }),
+        update: (v: unknown) => { updates.push(v); return q; },
+      };
+      return q;
+    });
+    return { rpc: vi.fn(), from, updates };
+  }
+  const chamadaGravada = () => (gravar.mock.calls[0]![1] as { chamada: boolean }).chamada;
+
+  it("aprende o own_lid na mensagem IsFromMe com Sender @lid, sem apagar outras chaves", async () => {
+    gravar.mockResolvedValue("gravada");
+    const a = adminComSessao();
+    await entrada(payload({ conversation: "oi" }, { IsFromMe: true, Sender: "98765432100:4@lid" }), a as never);
+    expect(a.updates).toEqual([{ metadata: { outra: 1, own_lid: "98765432100" } }]);
+  });
+
+  it("menção por LID aprendido chama; sem LID aprendido, só a resposta à mensagem do número", async () => {
+    gravar.mockResolvedValue("gravada");
+    const msg = { extendedTextMessage: { text: "@x oi", contextInfo: { stanzaId: "ABC", mentionedJid: ["98765432100@lid"] } } };
+    await entrada(payload(msg), adminComSessao({ metadata: { own_lid: "98765432100" } }) as never);
+    expect(chamadaGravada()).toBe(true);
+
+    gravar.mockClear();
+    await entrada(payload(msg), adminComSessao() as never);
+    expect(chamadaGravada()).toBe(false);
+
+    gravar.mockClear();
+    await entrada(payload(msg), adminComSessao({ outbound: ["ABC"] }) as never);
+    expect(chamadaGravada()).toBe(true);
   });
 });

@@ -11,6 +11,7 @@
  * (`sincronizarRecebimentoDeGrupos`, em `sincronizar-filtro.ts`). A conferência é barata porque o transporte lê antes
  * e só escreve quando o valor difere — sem escrita e sem reinício de sessão quando já está certo.
  */
+import { modoDaIa, type IaModo } from "@/lib/grupos/ia-no-grupo";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
@@ -58,6 +59,8 @@ export interface GrupoDoNumero {
    * sendo a IA calada em grupo.
    */
   iaResponde: boolean;
+  /** 9224 — o modo da IA no grupo; `iaResponde` é o espelho (`iaModo !== "off"`). */
+  iaModo: IaModo;
   /** Do diretório (cache do WhatsApp). `archived`/`pinned`: `null` = ainda não se sabe. */
   participantCount: number | null;
   adminCount: number;
@@ -92,6 +95,11 @@ export interface LinhaDoDiretorio {
   refreshed_at: string;
 }
 
+/** Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo. */
+function modoDaLinha(l: LinhaDeGrupo | undefined): IaModo {
+  return l?.ia_modo ? modoDaIa(l.ia_modo) : l?.ia_responde === true ? "todas" : "off";
+}
+
 interface LinhaDeGrupo {
   group_chat_id: string;
   subject: string | null;
@@ -99,6 +107,8 @@ interface LinhaDeGrupo {
   enabled_at: string | null;
   /** #2729 — a chave por grupo; `null` nunca vem do banco (`not null`). */
   ia_responde: boolean | null;
+  /** 9224 — `off` | `chamada` | `todas`; `null` só em banco sem a migration. */
+  ia_modo?: string | null;
 }
 
 /**
@@ -129,7 +139,7 @@ export interface GruposDb {
    * linha LIGADA (um `update ... where enabled = true`). `null` = o grupo não
    * está na fila, e quem chama recusa com `grupo_desligado`.
    */
-  definirIa(org: string, sessionId: string, groupChatId: string, valor: boolean): Promise<{ id: string } | null>;
+  definirIa(org: string, sessionId: string, groupChatId: string, modo: IaModo): Promise<{ id: string } | null>;
 }
 
 export interface DepsDeGrupos {
@@ -223,6 +233,7 @@ export async function listarGruposDoNumero(
       // #2729: `l?.ia_responde ?? false` — grupo sem linha não tem como ter
       // a chave ligada, e `false` é o default da coluna (0653).
       iaResponde: l?.ia_responde === true,
+      iaModo: modoDaLinha(l),
       participantCount: g.participant_count,
       adminCount: g.admin_count,
       papel: g.papel,
@@ -247,6 +258,7 @@ export async function listarGruposDoNumero(
       // Órfão LIGADO traz a chave junto: a IA pode estar respondendo num grupo
       // que o número deixou, e a tela tem de poder calá-la.
       iaResponde: l.ia_responde === true,
+      iaModo: modoDaLinha(l),
       participantCount: null,
       adminCount: 0,
       papel: null,
@@ -427,18 +439,18 @@ export async function definirIaDoGrupo(
     organizationId: string;
     channelSessionId: string;
     groupChatId: string;
-    iaResponde: boolean;
+    iaModo: IaModo;
     actorUserId: string;
     requestId: string;
   },
-): Promise<{ ia_responde: boolean }> {
+): Promise<{ ia_responde: boolean; ia_modo: IaModo }> {
   chatIdDeGrupo.parse(e.groupChatId);
   await sessaoComGrupos(deps, e.organizationId, e.channelSessionId);
 
-  const row = await deps.db.definirIa(e.organizationId, e.channelSessionId, e.groupChatId, e.iaResponde);
+  const row = await deps.db.definirIa(e.organizationId, e.channelSessionId, e.groupChatId, e.iaModo);
   if (!row) throw new GrupoError("grupo_desligado");
   await deps.audit({
-    action: e.iaResponde ? "channel.group_ai_enabled" : "channel.group_ai_disabled",
+    action: e.iaModo !== "off" ? "channel.group_ai_enabled" : "channel.group_ai_disabled",
     organizationId: e.organizationId,
     actorUserId: e.actorUserId,
     resourceId: row.id,
@@ -446,10 +458,11 @@ export async function definirIaDoGrupo(
     metadata: {
       channel_session_id: e.channelSessionId,
       group_chat_id: e.groupChatId,
-      ia_responde: e.iaResponde,
+      ia_responde: e.iaModo !== "off",
+      ia_modo: e.iaModo,
     },
   });
-  return { ia_responde: e.iaResponde };
+  return { ia_responde: e.iaModo !== "off", ia_modo: e.iaModo };
 }
 
 /** Dependências reais. `admin` é service role: TODA consulta filtra `organization_id`. */
@@ -470,7 +483,7 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
       async listarLinhas(org, sessionId) {
         const { data } = await admin
           .from("channel_session_groups")
-          .select("group_chat_id, subject, enabled, enabled_at, ia_responde")
+          .select("group_chat_id, subject, enabled, enabled_at, ia_responde, ia_modo")
           .eq("organization_id", org)
           .eq("channel_session_id", sessionId);
         return (data ?? []) as LinhaDeGrupo[];
@@ -532,7 +545,7 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
         if (error) throw error;
         return data as { id: string };
       },
-      async definirIa(org, sessionId, groupChatId, valor) {
+      async definirIa(org, sessionId, groupChatId, modo) {
         // O `enabled = true` no WHERE é o que faz a atualização devolver
         // `null` para grupo FORA da fila (sem linha, ou linha desligada) — é a
         // régua do banco por trás do `grupo_desligado` (#2729). A coluna não
@@ -540,7 +553,7 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
         // a IA junto, e desligar não a apaga.
         const { data, error } = await admin
           .from("channel_session_groups")
-          .update({ ia_responde: valor })
+          .update({ ia_modo: modo, ia_responde: modo !== "off" })
           .eq("organization_id", org)
           .eq("channel_session_id", sessionId)
           .eq("group_chat_id", groupChatId)

@@ -390,13 +390,13 @@ describe("GruposSheet", () => {
 
     const linhaLigado = screen.getByText("A").closest("li")!;
     const linhaDesligado = screen.getByText("B").closest("li")!;
-    const chaveLigado = within(linhaLigado).getByRole("switch", {
+    const chaveLigado = within(linhaLigado).getByRole("combobox", {
       name: /Permitir que a IA responda neste grupo/i,
     });
-    expect(chaveLigado).toBeChecked();
+    expect(chaveLigado).toHaveValue("todas");
 
     expect(
-      within(linhaDesligado).queryByRole("switch", { name: /Permitir que a IA responda neste grupo/i }),
+      within(linhaDesligado).queryByRole("combobox", { name: /Permitir que a IA responda neste grupo/i }),
     ).not.toBeInTheDocument();
 
     // A descrição do topo já não promete a calos total da regra antiga.
@@ -409,18 +409,18 @@ describe("GruposSheet", () => {
     );
     render(<GruposSheet channelId="s1" onClose={() => {}} />);
     await screen.findByText("A");
-    const chave = within(screen.getByText("A").closest("li")!).getByRole("switch", {
+    const chave = within(screen.getByText("A").closest("li")!).getByRole("combobox", {
       name: /Permitir que a IA responda neste grupo/i,
     });
-    expect(chave).not.toBeChecked();
+    expect(chave).toHaveValue("off");
 
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (init?.method === "PUT") return resposta({});
-      return resposta([{ chatId: "1@g.us", subject: "A", enabled: true, enabledAt: "x", presente: true, iaResponde: true }]);
+      return resposta([{ chatId: "1@g.us", subject: "A", enabled: true, enabledAt: "x", presente: true, iaResponde: true, iaModo: "chamada" }]);
     });
 
-    fireEvent.click(chave);
-    await waitFor(() => expect(chave).toBeChecked());
+    fireEvent.change(chave, { target: { value: "chamada" } });
+    await waitFor(() => expect(chave).toHaveValue("chamada"));
 
     const put = fetchMock.mock.calls.find((call: unknown[]) => (call[1] as RequestInit | undefined)?.method === "PUT");
     expect(put).toBeDefined();
@@ -430,7 +430,7 @@ describe("GruposSheet", () => {
     expect(JSON.parse(String((put![1] as RequestInit).body))).toEqual({
       group_chat_id: "1@g.us",
       subject: "A",
-      ia_responde: true,
+      ia_modo: "chamada",
     });
   });
 
@@ -440,7 +440,7 @@ describe("GruposSheet", () => {
     );
     render(<GruposSheet channelId="s1" onClose={() => {}} />);
     await screen.findByText("A");
-    const chave = within(screen.getByText("A").closest("li")!).getByRole("switch", {
+    const chave = within(screen.getByText("A").closest("li")!).getByRole("combobox", {
       name: /Permitir que a IA responda neste grupo/i,
     });
 
@@ -449,8 +449,8 @@ describe("GruposSheet", () => {
       return resposta([{ chatId: "1@g.us", subject: "A", enabled: true, enabledAt: "x", presente: true, iaResponde: false }]);
     });
 
-    fireEvent.click(chave);
+    fireEvent.change(chave, { target: { value: "todas" } });
     expect(await screen.findByText(/Não foi possível salvar/i)).toBeInTheDocument();
-    expect(chave).not.toBeChecked();
+    expect(chave).toHaveValue("off");
   });
 });

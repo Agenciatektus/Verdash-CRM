@@ -174,13 +174,13 @@ export function GruposSheet({
    * entre o GET e o clique) mantém a chave como estava e mostra o erro — o
    * estado novo só entra no local depois do servidor confirmar.
    */
-  async function alternarIa(g: Grupo, iaResponde: boolean) {
+  async function alternarIa(g: Grupo, iaModo: "off" | "chamada" | "todas") {
     setSalvando(g.chatId);
     setErro(null);
     const res = await fetch(`/api/v1/channel-sessions/${channelId}/groups`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ group_chat_id: g.chatId, subject: g.subject, ia_responde: iaResponde }),
+      body: JSON.stringify({ group_chat_id: g.chatId, subject: g.subject, ia_modo: iaModo }),
     });
     setSalvando(null);
     if (!res.ok) {
@@ -191,7 +191,7 @@ export function GruposSheet({
       );
       return;
     }
-    setGrupos((atual) => atual?.map((x) => (x.chatId === g.chatId ? { ...x, iaResponde } : x)) ?? null);
+    setGrupos((atual) => atual?.map((x) => (x.chatId === g.chatId ? { ...x, iaModo, iaResponde: iaModo !== "off" } : x)) ?? null);
   }
 
   /**
