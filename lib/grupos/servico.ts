@@ -58,6 +58,38 @@ export interface GrupoDoNumero {
    * sendo a IA calada em grupo.
    */
   iaResponde: boolean;
+  /** Do diretório (cache do WhatsApp). `archived`/`pinned`: `null` = ainda não se sabe. */
+  participantCount: number | null;
+  adminCount: number;
+  papel: "dono" | "admin" | "membro" | null;
+  isAnnounce: boolean;
+  tipo: "grupo" | "comunidade" | "grupo_da_comunidade";
+  archived: boolean | null;
+  pinned: boolean | null;
+}
+
+export interface ListaDeGrupos {
+  grupos: GrupoDoNumero[];
+  /** Quando o diretório foi atualizado pela última vez. */
+  atualizadoEm: string | null;
+  /** O WhatsApp não respondeu agora e a lista vem do cache. */
+  desatualizado: boolean;
+}
+
+/** Até quando o diretório vale sem perguntar ao WhatsApp. */
+export const VALIDADE_DO_DIRETORIO_MS = 10 * 60_000;
+
+export interface LinhaDoDiretorio {
+  group_chat_id: string;
+  subject: string | null;
+  participant_count: number | null;
+  admin_count: number;
+  papel: GrupoDoNumero["papel"];
+  is_announce: boolean;
+  tipo: GrupoDoNumero["tipo"];
+  archived: boolean | null;
+  pinned: boolean | null;
+  refreshed_at: string;
 }
 
 interface LinhaDeGrupo {
@@ -83,6 +115,13 @@ export interface GruposDb {
     sessionId: string,
   ): Promise<{ provider: ChannelProvider; sessionRef: string; groupsCapability: "full" | "limited" | "none" } | null>;
   listarLinhas(org: string, sessionId: string): Promise<LinhaDeGrupo[]>;
+  lerDiretorio(org: string, sessionId: string): Promise<LinhaDoDiretorio[]>;
+  /**
+   * Upsert de tudo o que o WhatsApp devolveu SEM tocar em archived/pinned (o espelho vem por
+   * evento) e apaga do diretório o que ele não devolveu mais.
+   */
+  /** Apaga só o que é mais velho que `corteIso` (o INÍCIO desta busca), para não apagar o que outra busca simultânea acabou de gravar. */
+  gravarDiretorio(org: string, sessionId: string, grupos: ChannelGroup[], agoraIso: string, corteIso: string): Promise<void>;
   contarLigados(org: string, sessionId: string): Promise<number>;
   gravarLinha(org: string, sessionId: string, row: LinhaDeGravacao): Promise<{ id: string }>;
   /**
@@ -123,19 +162,60 @@ async function sessaoComGrupos(deps: DepsDeGrupos, org: string, sessionId: strin
 
 export async function listarGruposDoNumero(
   deps: DepsDeGrupos,
-  e: { organizationId: string; channelSessionId: string },
-): Promise<GrupoDoNumero[]> {
+  e: {
+    organizationId: string;
+    channelSessionId: string;
+    /** `?refresh=1`: pergunta ao WhatsApp e espera. */
+    refresh?: boolean;
+    /** Agenda trabalho para depois da resposta (`after()` da rota). Sem isto, o refresh de cache velho é síncrono. */
+    agendar?: (tarefa: () => Promise<void>) => void;
+  },
+): Promise<ListaDeGrupos> {
   const s = await sessaoComGrupos(deps, e.organizationId, e.channelSessionId);
-  const [doCanal, gravados] = await Promise.all([
-    deps.listGroups(s.provider, s.sessionRef, e.organizationId),
-    deps.db.listarLinhas(e.organizationId, e.channelSessionId),
-  ]);
+  let cache = await deps.db.lerDiretorio(e.organizationId, e.channelSessionId);
+  const aoVivo = async () => {
+    const corteIso = deps.agora().toISOString();
+    const doCanal = await deps.listGroups(s.provider, s.sessionRef, e.organizationId);
+    // Lista vazia com cache cheio é envelope estranho ou sessão meio conectada: não apaga o diretório.
+    if (doCanal.length === 0 && cache.length > 0) throw new Error("lista_de_grupos_vazia");
+    await deps.db.gravarDiretorio(e.organizationId, e.channelSessionId, doCanal, deps.agora().toISOString(), corteIso);
+  };
+  let desatualizado = false;
+  const maisNovo = () => cache.reduce((m, l) => (l.refreshed_at > m ? l.refreshed_at : m), "");
+  const idade = () => deps.agora().getTime() - new Date(maisNovo()).getTime();
+  const velho = () => idade() >= VALIDADE_DO_DIRETORIO_MS;
+  // `?refresh=1` em laço não pode virar um /group/list de vários MB por clique: 30 s entre buscas forçadas.
+  if (e.refresh && cache.length > 0 && idade() < 30_000) e = { ...e, refresh: false };
+
+  if (cache.length > 0 && !e.refresh && velho() && e.agendar) {
+    // Velho: responde com o que tem e atualiza depois.
+    e.agendar(async () => {
+      try {
+        await aoVivo();
+      } catch (err) {
+        logger.warn("grupos: o refresh em segundo plano falhou", {
+          channelSessionId: e.channelSessionId,
+          causa: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+  } else if (cache.length === 0 || e.refresh || velho()) {
+    try {
+      await aoVivo();
+      cache = await deps.db.lerDiretorio(e.organizationId, e.channelSessionId);
+    } catch (err) {
+      if (cache.length === 0) throw err;
+      desatualizado = true; // o cache serve melhor que um erro.
+    }
+  }
+
+  const gravados = await deps.db.listarLinhas(e.organizationId, e.channelSessionId);
   const porId = new Map(gravados.map((l) => [l.group_chat_id, l]));
-  const daLista = doCanal.map((g) => {
-    const l = porId.get(g.chatId);
-    porId.delete(g.chatId); // o que sobrar no Map depois disto é órfão.
+  const daLista: GrupoDoNumero[] = cache.map((g) => {
+    const l = porId.get(g.group_chat_id);
+    porId.delete(g.group_chat_id); // o que sobrar no Map depois disto é órfão.
     return {
-      chatId: g.chatId,
+      chatId: g.group_chat_id,
       subject: g.subject ?? l?.subject ?? null,
       enabled: l?.enabled ?? false,
       enabledAt: l?.enabled_at ?? null,
@@ -143,13 +223,20 @@ export async function listarGruposDoNumero(
       // #2729: `l?.ia_responde ?? false` — grupo sem linha não tem como ter
       // a chave ligada, e `false` é o default da coluna (0653).
       iaResponde: l?.ia_responde === true,
+      participantCount: g.participant_count,
+      adminCount: g.admin_count,
+      papel: g.papel,
+      isAnnounce: g.is_announce,
+      tipo: g.tipo,
+      archived: g.archived,
+      pinned: g.pinned,
     };
   });
   // Órfãos: LIGADOS no banco, mas o WhatsApp não devolveu mais (o número saiu
   // do grupo, ou o grupo deixou de existir). Uma linha desligada que sumiu não
   // precisa aparecer — não há nada para desligar; uma linha LIGADA que sumiu
   // precisa, senão ela nunca mais pode ser desligada pela tela.
-  const orfaos = [...porId.values()]
+  const orfaos: GrupoDoNumero[] = [...porId.values()]
     .filter((l) => l.enabled)
     .map((l) => ({
       chatId: l.group_chat_id,
@@ -160,8 +247,15 @@ export async function listarGruposDoNumero(
       // Órfão LIGADO traz a chave junto: a IA pode estar respondendo num grupo
       // que o número deixou, e a tela tem de poder calá-la.
       iaResponde: l.ia_responde === true,
+      participantCount: null,
+      adminCount: 0,
+      papel: null,
+      isAnnounce: false,
+      tipo: "grupo" as const,
+      archived: null,
+      pinned: null,
     }));
-  return [...daLista, ...orfaos];
+  return { grupos: [...daLista, ...orfaos], atualizadoEm: cache.length ? maisNovo() : null, desatualizado };
 }
 
 /**
@@ -380,6 +474,45 @@ export function criarDepsDeGrupos(admin: SupabaseClient): DepsDeGrupos {
           .eq("organization_id", org)
           .eq("channel_session_id", sessionId);
         return (data ?? []) as LinhaDeGrupo[];
+      },
+      async lerDiretorio(org, sessionId) {
+        const { data, error } = await admin
+          .from("channel_session_group_directory")
+          .select("group_chat_id, subject, participant_count, admin_count, papel, is_announce, tipo, archived, pinned, refreshed_at")
+          .eq("organization_id", org)
+          .eq("channel_session_id", sessionId);
+        if (error) throw error;
+        return (data ?? []) as LinhaDoDiretorio[];
+      },
+      async gravarDiretorio(org, sessionId, grupos, agoraIso, corteIso) {
+        // Sem archived/pinned/archived_changed_at no objeto: o upsert não os sobrescreve.
+        const linhas = grupos.map((g) => ({
+          organization_id: org,
+          channel_session_id: sessionId,
+          group_chat_id: g.chatId,
+          subject: g.subject,
+          participant_count: g.participantCount ?? null,
+          admin_count: g.adminCount ?? 0,
+          papel: g.papel ?? null,
+          is_announce: g.isAnnounce ?? false,
+          tipo: g.tipo ?? "grupo",
+          refreshed_at: agoraIso,
+        }));
+        for (let i = 0; i < linhas.length; i += 200) {
+          const { error } = await admin
+            .from("channel_session_group_directory")
+            .upsert(linhas.slice(i, i + 200), { onConflict: "channel_session_id,group_chat_id" });
+          if (error) throw error;
+        }
+        // O que o WhatsApp não devolveu mais sai: o corte é o INÍCIO desta busca, então o que
+        // esta ou outra busca simultânea gravou depois fica (evita lista de ids na URL).
+        const { error } = await admin
+          .from("channel_session_group_directory")
+          .delete()
+          .eq("organization_id", org)
+          .eq("channel_session_id", sessionId)
+          .lt("refreshed_at", corteIso);
+        if (error) throw error;
       },
       async contarLigados(org, sessionId) {
         const { count } = await admin

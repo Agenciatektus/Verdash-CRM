@@ -57,6 +57,7 @@ import { extrairAtribuicaoVerdash } from "./atribuicao-de-anuncio";
 import { aplicarAlteracaoDeMensagem } from "../alteracao-de-mensagem";
 
 import { insertMessage, marcarConversa, pedirPersistenciaDaMidia } from "./gravacao";
+import { aplicarEstadoDeGrupo, ehEventoDeEstado } from "./estado-de-grupo";
 import { ingerirGrupo } from "./grupo";
 import { aplicarEventoDeConexao, eventoDeConexao, horaDoEvento } from "./eventos-conexao";
 import { parseVerdashInbound, type VerdashInboundMessage } from "./webhook";
@@ -102,6 +103,7 @@ export async function ingestVerdashInbound(
       emIso: horaDoEvento(input.payload),
     });
   }
+  if (ehEventoDeEstado(input.payload)) return aplicarEstadoDeGrupo(admin, input);
   const msg = parseVerdashInbound(input.payload);
   if (!msg) return { status: "ignored", reason: "evento_sem_interesse" };
 

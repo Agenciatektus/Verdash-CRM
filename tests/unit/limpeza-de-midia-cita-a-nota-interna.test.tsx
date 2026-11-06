@@ -34,6 +34,7 @@ const BASE: TenantInput = {
   locale: "pt-BR",
   currency: "EUR",
   media_retention_days: 90,
+  group_media_retention_days: 30,
   media_retention_enforced: false,
   dpo_email: null,
   privacy_policy_url: null,
@@ -49,7 +50,7 @@ function tela(locale: "pt-BR" | "es" = "pt-BR", enforced = false) {
 
 const FRASE_CONFIRM = "Ao ligar, a mídia de mensagem e o anexo de nota interna com mais de {n} dias começarão a ser apagados.";
 const FRASE_DESLIGADO = "Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.";
-const FRASE_LIGADO = "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.";
+const FRASE_LIGADO = "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias, e a mídia de grupo com mais de {g} dias.";
 
 describe("a confirmação de ligar a limpeza cita o anexo de nota interna", () => {
   it("o confirm menciona a nota interna, não só a mídia de mensagem", () => {
