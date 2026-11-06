@@ -6,10 +6,12 @@ import { audit } from "@/lib/audit";
 import type { AuditAction } from "@/lib/audit/actions";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { totalDeConversasDoIzzy } from "@/lib/channels/historico/fonte-izzy";
 import { calcularPrevia, lerSessaoDoHistorico, type SessaoDoHistorico } from "@/lib/channels/historico/previa";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -36,6 +38,11 @@ type Context = { params: Promise<{ id: string }> };
  * toda cadeia carrega a organização ativa e o número do path.
  */
 const TABELA = "importacoes_de_historico";
+/** O token do Izzy nunca sai nas respostas. */
+function semCredencial<T extends object>(linha: T): Omit<T, "credencial_cifrada"> {
+  const { credencial_cifrada: _omitido, ...resto } = linha as T & { credencial_cifrada?: unknown };
+  return resto;
+}
 const ACERVO_DESLIGADO = "Ligue 'Guardar o histórico' e conecte o número de novo";
 
 /** A sessão da org, ou a resposta de erro (404 sem sessão, 500 se o banco falhou). */
@@ -56,7 +63,12 @@ async function sessaoOuFalha(
 }
 
 const corpo = z.discriminatedUnion("acao", [
-  z.object({ acao: z.literal("previa"), dias: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]) }),
+  z.object({
+    acao: z.literal("previa"),
+    dias: z.union([z.literal(30), z.literal(90), z.literal(180), z.literal(365)]),
+    fonte: z.literal("izzy").optional(),
+    token: z.string().trim().min(8).max(500).optional(),
+  }),
   z.object({ acao: z.literal("importar"), importacaoId: z.uuid() }),
   z.object({ acao: z.literal("cancelar"), importacaoId: z.uuid() }),
   z.object({ acao: z.literal("retomar"), importacaoId: z.uuid() }),
@@ -88,7 +100,7 @@ export async function GET(_req: NextRequest, { params }: Context): Promise<Respo
     .limit(1)
     .maybeSingle();
   if (error) return fail("internal_error", "Não foi possível ler a importação.", 500, { requestId });
-  return ok({ guardar_historico: sessao.guardarHistorico, importacao: data ?? null }, { requestId });
+  return ok({ guardar_historico: sessao.guardarHistorico, importacao: data ? semCredencial(data) : null }, { requestId });
 }
 
 export async function POST(req: NextRequest, { params }: Context): Promise<Response> {
@@ -120,7 +132,9 @@ export async function POST(req: NextRequest, { params }: Context): Promise<Respo
 
   const pedido = parsed.data;
   if (pedido.acao === "previa") {
-    if (!sessao.guardarHistorico || !sessao.nomeNoCanal) return fail("state_conflict", ACERVO_DESLIGADO, 409, { requestId });
+    const doIzzy = pedido.fonte === "izzy";
+    if (doIzzy && !pedido.token) return fail("validation_failed", "Informe o token do Izzy.", 422, { requestId });
+    if (!doIzzy && (!sessao.guardarHistorico || !sessao.nomeNoCanal)) return fail("state_conflict", ACERVO_DESLIGADO, 409, { requestId });
     // Com uma `rodando` no número, a prévia nova viraria a mais recente no GET e
     // esconderia a que está andando (e o botão de cancelar dela). Duas abas.
     const { data: andando, error: erroDoAndamento } = await admin
@@ -134,11 +148,29 @@ export async function POST(req: NextRequest, { params }: Context): Promise<Respo
     if (erroDoAndamento) return fail("internal_error", "Não foi possível ler a importação.", 500, { requestId });
     if (andando) return fail("state_conflict", "Já há uma importação em andamento neste número.", 409, { requestId });
     let previa;
+    let credencial: string | null = null;
     try {
-      previa = await calcularPrevia(sessao.nomeNoCanal, pedido.dias);
+      if (doIzzy) {
+        // Valida o token ANTES de criar a importação; a prévia do Izzy é só a contagem de conversas.
+        const conversas = await totalDeConversasDoIzzy(pedido.token!);
+        previa = { conversas, mensagens: 0, audios: 0, imagens: 0, desde: new Date(Date.now() - pedido.dias * 86_400_000).toISOString(), parcial: true };
+      } else {
+        previa = await calcularPrevia(sessao.nomeNoCanal!, pedido.dias);
+      }
     } catch (err) {
+      if (doIzzy && err instanceof Error && err.message === "izzy_nao_autorizado") {
+        return fail("validation_failed", "O Izzy recusou esse token. Confira se copiou inteiro e se ainda está ativo.", 422, { requestId });
+      }
       logger.warn("[historico] prévia falhou", { requestId, detail: err instanceof Error ? err.message : "erro" });
-      return fail("channel_unavailable", "O servidor do canal não respondeu. Tente de novo em instantes.", 502, { requestId });
+      return fail("channel_unavailable", doIzzy ? "O Izzy não respondeu. Tente de novo em instantes." : "O servidor do canal não respondeu. Tente de novo em instantes.", 502, { requestId });
+    }
+    if (doIzzy) {
+      credencial = await encryptWebhookSecret(admin, pedido.token!);
+      if (!credencial) return fail("internal_error", "Não foi possível guardar o token com segurança.", 500, { requestId });
+    }
+    // Prévia nova substitui as anteriores: o token delas não fica guardado à toa.
+    if (doIzzy) {
+      await admin.from(TABELA).update({ credencial_cifrada: null } as never).eq("channel_session_id", id).eq("status", "previa");
     }
     const { data, error } = await admin
       .from(TABELA)
@@ -148,29 +180,36 @@ export async function POST(req: NextRequest, { params }: Context): Promise<Respo
         status: "previa",
         dias: pedido.dias,
         previa,
+        ...(doIzzy ? { fonte: "izzy", credencial_cifrada: credencial } : {}),
         criada_por: auth.user.id,
       } as never)
       .select("*")
       .single();
     if (error || !data) return fail("internal_error", "Não foi possível gravar a prévia.", 500, { requestId });
-    const importacao = data as { id: string };
-    auditar("channel.historico_previa", { importacao_id: importacao.id, dias: pedido.dias, previa });
+    const importacao = semCredencial(data as { id: string });
+    auditar("channel.historico_previa", { importacao_id: importacao.id, dias: pedido.dias, previa, fonte: doIzzy ? "izzy" : "canal" });
     return ok({ importacao }, { requestId });
   }
 
   const t = TRANSICOES[pedido.acao];
-  if (pedido.acao === "importar" && !sessao.guardarHistorico) {
-    return fail("state_conflict", ACERVO_DESLIGADO, 409, { requestId });
-  }
   const daImportacao = () =>
-    admin.from(TABELA).select("id, status").eq("id", pedido.importacaoId).eq("organization_id", orgId).eq("channel_session_id", id);
+    admin.from(TABELA).select("id, status, fonte").eq("id", pedido.importacaoId).eq("organization_id", orgId).eq("channel_session_id", id);
 
   const { data: atual, error: erroDeLeitura } = await daImportacao().maybeSingle();
   if (erroDeLeitura) return fail("internal_error", "Não foi possível ler a importação.", 500, { requestId });
   if (!atual) return fail("not_found", "Importação não encontrada.", 404, { requestId });
 
+  const doIzzy = (atual as { fonte?: string }).fonte === "izzy";
+  if (pedido.acao === "importar" && !doIzzy && !sessao.guardarHistorico) {
+    return fail("state_conflict", ACERVO_DESLIGADO, 409, { requestId });
+  }
+  // O token é zerado quando a importação do Izzy termina em erro: retomar exige colar de novo (nova importação).
+  if (pedido.acao === "retomar" && doIzzy) {
+    return fail("state_conflict", "O token do Izzy já foi descartado. Comece uma nova importação.", 409, { requestId });
+  }
   const patch: Record<string, unknown> = { status: t.para, updated_at: new Date().toISOString() };
   if (pedido.acao === "retomar") patch.erro = null;
+  if (pedido.acao === "cancelar") patch.credencial_cifrada = null;
   const { data: mudadas, error } = await admin
     .from(TABELA)
     .update(patch as never)
@@ -185,7 +224,7 @@ export async function POST(req: NextRequest, { params }: Context): Promise<Respo
     }
     return fail("internal_error", "Não foi possível mudar a importação.", 500, { requestId });
   }
-  const importacao = (mudadas ?? [])[0] as { id: string; status: string } | undefined;
+  const importacao = (mudadas ?? []).map(semCredencial)[0] as { id: string; status: string } | undefined;
   if (!importacao) {
     return fail("invalid_state_transition", "Esta importação não pode mais fazer isso.", 409, { requestId });
   }
