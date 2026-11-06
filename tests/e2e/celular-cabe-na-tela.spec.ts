@@ -541,10 +541,14 @@ test("a barra de abas ocupa rodapé no celular e NADA no desktop", async ({ page
   await abrir(page, "/app/kanban");
 
   await expect(page.locator("nav[data-barra-inferior]")).toBeHidden();
-  const reserva = await page.evaluate(() =>
-    document.documentElement.style.getPropertyValue("--rodape-ocupado").trim(),
+  // A régua é o `padding-bottom` do `<main>` (o que a pessoa perde), não a
+  // variável `--rodape-ocupado`: a barra de hoje (`CascaDoCelular`) não a
+  // publica, então ela ficaria vazia com ou sem defeito. No desktop vale o piso
+  // do `p-6` da casca.
+  const descontadoNoDesktop = await page.evaluate(() =>
+    Math.round(parseFloat(getComputedStyle(document.querySelector("main")!).paddingBottom)),
   );
-  expect(reserva === "" || reserva === "0px").toBe(true);
+  expect(descontadoNoDesktop, "o <main> desconta rodapé para uma barra escondida").toBe(24);
 });
 
 /**
@@ -574,7 +578,7 @@ test("a barra de abas ocupa rodapé no celular e NADA no desktop", async ({ page
  * É a condição que faz este caso medir a transição: qualquer recarga zeraria o
  * `alturaMedida` do hook, que é exatamente o que o defeito precisa que exista.
  */
-test("ao alargar a janela SEM recarregar, a barra que sai de vista devolve o rodapé ao piso", async ({
+test("ao alargar a janela SEM recarregar, o <main> devolve o rodapé ao piso", async ({
   page,
 }) => {
   await loginComoAdmin(page, creds);
@@ -606,11 +610,9 @@ test("ao alargar a janela SEM recarregar, a barra que sai de vista devolve o rod
   const largo = await medirODescontoDoRodape(page);
   // A barra saiu de vista: a medida dela é zero e o hook tem de gravar esse zero.
   expect(largo.alturaDaBarra).toBe(0);
-  expect(
-    largo.variavel === "" || largo.variavel === "0px",
-    `--rodape-ocupado ficou preso em ${largo.variavel || "(vazio)"} depois de a barra sair de vista`,
-  ).toBe(true);
-  expect(largo.atributo, "o <main> continua descontando a barra que sumiu").toBe("0");
+  // `variavel` e `atributo` eram do publicador antigo (`--rodape-ocupado`), que
+  // a barra de hoje não alimenta: valeriam "" e "0" com ou sem defeito. Ficam só
+  // no log abaixo; a asserção é o `padding-bottom` calculado.
   // E o que a pessoa vê: o piso do `p-6` da casca, não os 54px da barra.
   expect(largo.descontado).toBe(24);
 
