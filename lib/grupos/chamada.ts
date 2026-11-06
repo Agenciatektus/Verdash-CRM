@@ -4,6 +4,8 @@
  * `contextInfo.participant`/`mentionedJid` (telefone OU LID, os dois endereçamentos).
  * Função pura: quem consulta o banco (a citada é nossa?) é `lib/channels/verdash/grupo.ts`.
  */
+import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
+
 export interface ContextoDaMensagem {
   /** Id da mensagem citada (`stanzaId`). */
   citada: string | null;
@@ -55,8 +57,12 @@ function usuario(jid: string): { dom: "lid" | "tel"; d: string } | null {
   return { dom: dom === "lid" ? "lid" : "tel", d };
 }
 
-/** Telefone BR com ou sem o nono dígito: compara pelo prefixo 55+DDD e os 8 últimos. */
-const mesmoTelefone = (a: string, b: string) => a === b || (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8) && a.slice(0, 2) === b.slice(0, 2));
+/** Telefone com ou sem o nono dígito: compara pela forma canônica (55 + DDD + número), nunca só o fim. */
+const mesmoTelefone = (a: string, b: string) => {
+  if (a === b) return true;
+  const ca = canonicalPhoneBR(a);
+  return !!ca && ca === canonicalPhoneBR(b);
+};
 
 export function ehChamada(ctx: ContextoDaMensagem, eu: EuMesmo, citouMensagemDoNumero: boolean): boolean {
   if (citouMensagemDoNumero) return true;

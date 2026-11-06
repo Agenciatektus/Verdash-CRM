@@ -97,7 +97,8 @@ export interface LinhaDoDiretorio {
 
 /** Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo. */
 function modoDaLinha(l: LinhaDeGrupo | undefined): IaModo {
-  return l?.ia_modo ? modoDaIa(l.ia_modo) : l?.ia_responde === true ? "todas" : "off";
+  // Mesma régua do ingest e do drain: `ia_responde` desligado manda.
+  return l?.ia_responde !== true ? "off" : l.ia_modo ? modoDaIa(l.ia_modo) : "todas";
 }
 
 interface LinhaDeGrupo {

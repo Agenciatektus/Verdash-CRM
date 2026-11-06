@@ -142,11 +142,16 @@ describe("canal Verdash: grupo, chamada ao número (9224)", () => {
   }
   const chamadaGravada = () => (gravar.mock.calls[0]![1] as { chamada: boolean }).chamada;
 
-  it("aprende o own_lid na mensagem IsFromMe com Sender @lid, sem apagar outras chaves", async () => {
+  it("aprende o own_lid na mensagem IsFromMe com Sender @lid, pela função atômica (nunca regrava o metadata)", async () => {
     gravar.mockResolvedValue("gravada");
     const a = adminComSessao();
     await entrada(payload({ conversation: "oi" }, { IsFromMe: true, Sender: "98765432100:4@lid" }), a as never);
-    expect(a.updates).toEqual([{ metadata: { outra: 1, own_lid: "98765432100" } }]);
+    expect(a.updates).toEqual([]);
+    expect(a.rpc).toHaveBeenCalledWith("fn_gravar_own_lid", {
+      p_organization_id: "org-1",
+      p_channel_session_id: "sess-1",
+      p_lid: "98765432100",
+    });
   });
 
   it("menção por LID aprendido chama; sem LID aprendido, só a resposta à mensagem do número", async () => {

@@ -394,7 +394,7 @@ async function processEvent(
     `select c.is_group, g.ia_responde, g.ia_modo, (m.metadata->>'group_chamada') = 'true' as chamada
        from conversations c
        left join messages m
-         on m.organization_id = c.organization_id and m.id = $3
+         on m.organization_id = c.organization_id and m.id = $3 and m.conversation_id = c.id
        left join channel_session_groups g
          on g.organization_id = c.organization_id
         and g.channel_session_id = c.channel_session_id
@@ -404,7 +404,8 @@ async function processEvent(
   );
   if (convRows[0]?.is_group !== false) {
     // Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo.
-    const modo = convRows[0]?.ia_modo ?? (convRows[0]?.ia_responde === true ? 'todas' : null);
+    // `ia_responde` desligado manda (mesma régua do ingest): o app anterior à 9224 só grava o boolean.
+    const modo = convRows[0]?.ia_responde === true ? (convRows[0]?.ia_modo ?? 'todas') : null;
     if (!grupoLiberaIa(modo, convRows[0]?.chamada)) {
       log.info('drain: conversa de grupo sem a chave da IA liberada — evento pulado', { event_id: event.id });
     return 'processado';

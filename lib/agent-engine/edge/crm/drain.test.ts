@@ -542,4 +542,7 @@ it('#2729: grupo só passa pela guarda do engine quando a chave por grupo libera
     const c = await chamadas({ is_group: true, ia_responde: modo !== 'off', ia_modo: modo, chamada });
     expect(c.some((s) => s.includes('tem_agente')), `${modo}/${chamada}`).toBe(passa);
   }
+  // Desligado pelo app antigo depois do backfill da 9224 (só `ia_responde=false`): continua calado.
+  const desligadoPeloAntigo = await chamadas({ is_group: true, ia_responde: false, ia_modo: 'todas', chamada: true });
+  expect(desligadoPeloAntigo.some((s) => s.includes('tem_agente'))).toBe(false);
 });

@@ -289,7 +289,8 @@ export function criarIngestDeGrupoDb(admin: SupabaseClient): IngestDeGrupoDb {
             // desligada: não sei se liberaram, e não sei não responde.
             iaResponde: r.ia_responde === true,
             // Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo.
-            iaModo: r.ia_modo ? modoDaIa(r.ia_modo) : r.ia_responde === true ? "todas" : "off",
+            // `ia_responde` desligado manda: o app anterior à 9224 só grava o boolean (P1 do Cassio no #541).
+            iaModo: r.ia_responde !== true ? "off" : r.ia_modo ? modoDaIa(r.ia_modo) : "todas",
           }
         : null;
     },

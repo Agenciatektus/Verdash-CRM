@@ -28,6 +28,10 @@ describe("ehChamada", () => {
   it("citar o autor (participant) pelo LID chama", () => {
     expect(ehChamada(contextoDaMensagem({ extendedTextMessage: { contextInfo: { stanzaId: "X", participant: `${EU.lid}@lid` } } }), EU, false)).toBe(true);
   });
+  it("mesmo número em OUTRO DDD não chama (o fim igual não basta)", () => {
+    expect(ehChamada({ citada: null, jids: ["5511999990000@s.whatsapp.net"] }, EU, false)).toBe(false);
+    expect(ehChamada({ citada: null, jids: ["551199990000@s.whatsapp.net"] }, EU, false)).toBe(false);
+  });
   it("outra pessoa marcada não chama", () => {
     expect(ehChamada({ citada: "X", jids: ["999@lid", "5511988887777@s.whatsapp.net"] }, EU, false)).toBe(false);
   });

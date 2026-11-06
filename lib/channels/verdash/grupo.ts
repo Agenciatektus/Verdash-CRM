@@ -39,11 +39,12 @@ async function chamouEsteNumero(
   if (msg.direction === "outbound") {
     const lid = typeof sender === "string" && sender.endsWith("@lid") ? (sender.split("@")[0] ?? "").split(":")[0] : null;
     if (lid && lid !== ownLid) {
-      await admin
-        .from("channel_sessions")
-        .update({ metadata: { ...meta, own_lid: lid } })
-        .eq("organization_id", input.organizationId)
-        .eq("id", input.channelSessionId);
+      // Atômico (`jsonb_set`): regravar o metadata inteiro desfaria um `disabled`/`ai_gate` gravado no meio.
+      await admin.rpc("fn_gravar_own_lid", {
+        p_organization_id: input.organizationId,
+        p_channel_session_id: input.channelSessionId,
+        p_lid: lid,
+      });
     }
     return false;
   }
