@@ -16,12 +16,32 @@ import { cn } from "@/lib/utils";
  * (`BarraDeTela`), e por isso o título da página some no celular.
  *
  * Só CSS decide desktop x celular: nada lê o navegador no primeiro render.
+ *
+ * `largura="leitura"` é o molde de AJUSTES e FORMULÁRIOS: cada filho para em
+ * 768px, alinhado à esquerda com o título (DS v2, board "Moldes de largura").
+ * Substitui o `max-w-2xl`/`max-w-3xl` que cada tela punha num filho diferente.
+ * Abaixo de 768px nada muda: a coluna já é a largura toda.
  */
-export function Pagina({ children, className, testId }: { children: ReactNode; className?: string; testId?: string }) {
+export function Pagina({
+  children,
+  className,
+  testId,
+  largura = "total",
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+  largura?: "total" | "leitura";
+}) {
   return (
     <div
       data-testid={testId}
-      className={cn("flex w-full flex-col gap-5 p-6 mb:-mx-6 mb:-mt-6 mb:w-auto mb:gap-3 mb:p-0", className)}
+      data-largura={largura}
+      className={cn(
+        "flex w-full flex-col gap-5 p-6 mb:-mx-6 mb:-mt-6 mb:w-auto mb:gap-3 mb:p-0",
+        largura === "leitura" && "*:w-full *:max-w-3xl",
+        className,
+      )}
     >
       {children}
     </div>
