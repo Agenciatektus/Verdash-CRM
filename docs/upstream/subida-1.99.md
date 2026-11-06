@@ -28,18 +28,20 @@ select count(*) from crm_leads l
 ```
 
 ### Objetos redefinidos pelos dois lados → migration `9238`
-`20261106200000_9238_integracao_da_subida_1_99.sql` roda depois de toda migration que mexe nesses objetos (a 9231 da dev, posterior, não mexe).
+`20261106220000_9238_integracao_da_subida_1_99.sql` roda depois de toda migration que mexe nesses objetos.
 
 | objeto | upstream | fork | versão integrada |
 |---|---|---|---|
 | `fn_enfileirar_midia_vencida` | 9050 (#3756: a nota que perdeu o anexo grava `media_expired_at`/`media_retention_days` no passo 2c) | 9222 (prazo de mídia de grupo) | a 9222 letra a letra + o passo 2c da 9050; repete as duas colunas (`add column if not exists`) |
 | grant por coluna de `importacoes_de_historico` | 9033 (colunas da queda: escopo, origem, desde, ate) | 9102 da dev (grant por coluna, sem `credencial_cifrada`) | o bloco da 9102 de novo, depois das duas: onde a 9102 rodou antes da 9033, as colunas novas ficariam sem leitura para `authenticated` |
 | `fn_mesclar_contatos` | 9049 (1.95, #3721) recria a função inteira | 9010 (remendo por âncora: a fusão herda o IGSID e o @ do Instagram) | o bloco da 9010 de novo (pula quando já herda). **Na produção o remendo se perdeu quando a 9049 rodou (subida 1.95)**: a fusão de contatos não herda a identidade do Instagram até a 9238 rodar |
+| `fn_definir_aviso_de_caso` / `fn_definir_aviso_de_agendamento` | 9078 (destino_modo + responsáveis, 9 args) / 9060 (grupo, 7 args) | 9231 da dev (exceção da conexão da própria org, nas assinaturas antigas de 7 e 6 args) | as do upstream com a exceção da 9231 no destino fixo; as assinaturas antigas caem |
+| `channel_sessions_provider_ref_check` | — | 9023 (mesma regra, outra escrita) | recriada com a escrita do baseline |
 | `agent_inbox_items_kind_check` | 9027/9033 | 9099 | sem integração: a lista da 9033 já contém todos os kinds da 9099 (+ `assinatura_desconectada`, `recuperacao_da_queda`, `cliente_sem_resposta_na_queda`) |
 
 ### baseline.sql
-A constraint `channel_sessions_provider_ref_check` do baseline passou a ter a escrita da 9023 (mesma regra; a cerca
-nova do upstream `baseline-e-cadeia-chegam-ao-mesmo-schema` compara o texto do catálogo). A 9033 (miniatura) entrou em
+A cerca nova do upstream `baseline-e-cadeia-chegam-ao-mesmo-schema` compara o catálogo da instalação com o da cadeia;
+por ela a 9238 passou a cobrir também `fn_mesclar_contatos`, a constraint de canal e os avisos. A 9033 (miniatura) entrou em
 `MIGRATIONS_QUE_NAO_RODAM` daquela cerca: cria a trigger sem guarda e o baseline já a tem.
 Montado com `git merge-file --diff3`. Grant de `fn_validate_lost_reason_required`: o nosso (`revoke ... from public, anon`).
 Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndice Tektus segue no fim). Bloco
