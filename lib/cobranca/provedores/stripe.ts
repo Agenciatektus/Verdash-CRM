@@ -31,6 +31,7 @@ import {
   type CobrancaEstornavel,
   type CompraLida,
   type Modo,
+  type PagamentoLido,
   type PlanoParaProvedor,
   type SinalDoWebhook,
   type Situacao,
@@ -101,6 +102,9 @@ export const EVENTOS_DO_WEBHOOK_STRIPE = [
   "customer.subscription.resumed",
   "invoice.paid",
   "invoice.payment_failed",
+  // Só acordam a releitura do histórico (`listarPagamentos`): o `customer` vem em `data.object`.
+  "charge.refunded",
+  "charge.dispute.created",
 ] as const;
 
 /** `teste`/`producao` pelo prefixo; `null` = não é chave secreta nem restrita (inclusive `pk_`). */
@@ -218,6 +222,31 @@ const cobrancaDaStripe = z.object({
   status: z.string(),
 });
 
+/** Fatura paga com os pagamentos dela (`expand[]=data.payments`): é por eles que se acha a cobrança. */
+const faturaComPagamentos = z.object({
+  id: z.string().min(1),
+  amount_paid: z.number().int(),
+  currency: z.string(),
+  hosted_invoice_url: z.string().nullish(),
+  status_transitions: z.object({ paid_at: z.number().nullish() }),
+  parent: z
+    .object({ subscription_details: z.object({ metadata: z.record(z.string(), z.string()).nullish() }).nullish() })
+    .nullish(),
+  payments: z
+    .object({
+      data: z.array(z.object({ payment: z.object({ charge: z.string().nullish(), payment_intent: z.string().nullish() }) })),
+    })
+    .nullish(),
+});
+const cobrancaComEstornos = z.object({
+  id: z.string().min(1),
+  status: z.string(),
+  payment_intent: z.string().nullish(),
+  amount_refunded: z.number().int(),
+  disputed: z.boolean(),
+  refunds: z.object({ data: z.array(z.object({ created: z.number(), status: z.string().nullish() })) }).nullish(),
+});
+
 const listaDe = <T extends z.ZodType>(item: T) => z.object({ data: z.array(item) });
 const emData = (segundos: number) => new Date(segundos * 1000);
 
@@ -258,7 +287,11 @@ const eventoDaStripe = z.object({
   id: z.string().startsWith("evt_"),
   type: z.string().min(1),
   data: z.object({
-    object: z.object({ customer: z.union([z.string(), z.object({ id: z.string() })]).nullish() }),
+    object: z.object({
+      customer: z.union([z.string(), z.object({ id: z.string() })]).nullish(),
+      // A Dispute não tem `customer`: só a cobrança contestada.
+      charge: z.union([z.string(), z.object({ id: z.string() })]).nullish(),
+    }),
   }),
 });
 
@@ -306,11 +339,14 @@ function lerEvento(corpoCru: string): SinalDoWebhook | null {
   }
   const evento = eventoDaStripe.safeParse(json);
   if (!evento.success) return null;
-  const cliente = evento.data.data.object.customer;
+  const { customer: cliente, charge: cobranca } = evento.data.data.object;
+  const clienteRef = typeof cliente === "string" ? cliente : (cliente?.id ?? null);
+  const cobrancaRef = typeof cobranca === "string" ? cobranca : (cobranca?.id ?? null);
   return {
     eventoId: evento.data.id,
     tipo: evento.data.type,
-    clienteRef: typeof cliente === "string" ? cliente : (cliente?.id ?? null),
+    clienteRef,
+    ...(clienteRef === null && cobrancaRef !== null ? { cobrancaRef } : {}),
   };
 }
 
@@ -660,6 +696,59 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
     return c ? { ref: c.id, valorCents: c.amount, estornadoCents: c.amount_refunded, moeda: c.currency, pagaEm: emData(c.created) } : null;
   }
 
+  /**
+   * Faturas pagas (> 0) do cliente, cada uma com a cobrança dela: o estorno e a
+   * disputa moram na cobrança (`amount_refunded`, `disputed`), não na fatura.
+   * shortcut: 100 faturas e 100 cobranças, sem paginar; o pagamento avulso do
+   * ajuste proporcional (sem fatura) fica de fora. Paginar e incluir quando o
+   * histórico ou as comissões precisarem.
+   */
+  async function listarPagamentos(p: { clienteRef: string }): Promise<PagamentoLido[]> {
+    const cliente = encodeURIComponent(p.clienteRef);
+    const [faturas, cobrancas] = await Promise.all([
+      chamar("GET", `/invoices?customer=${cliente}&status=paid&limit=100&expand[]=data.payments`).then(
+        (d) => ler(listaDe(faturaComPagamentos), d).data,
+      ),
+      chamar("GET", `/charges?customer=${cliente}&limit=100&expand[]=data.refunds`).then((d) => ler(listaDe(cobrancaComEstornos), d).data),
+    ]);
+    // Só cobrança PAGA: na nova tentativa o mesmo payment_intent tem a recusada e
+    // a paga. A lista vem da mais nova para a mais antiga; a 1ª paga vence.
+    const porRef = new Map<string, z.infer<typeof cobrancaComEstornos>>();
+    for (const c of cobrancas.filter((x) => x.status === "succeeded")) {
+      if (!porRef.has(c.id)) porRef.set(c.id, c);
+      if (c.payment_intent && !porRef.has(c.payment_intent)) porRef.set(c.payment_intent, c);
+    }
+    // `disputed` segue true com a disputa ganha: só conta como contestado a que não foi `won`.
+    // Disputa é rara: uma leitura por cobrança disputada.
+    const contestadas = new Set<string>();
+    for (const c of new Set(porRef.values())) {
+      if (!c.disputed) continue;
+      const disputas = ler(listaDe(z.object({ status: z.string() })), await chamar("GET", `/disputes?charge=${encodeURIComponent(c.id)}&limit=10`)).data;
+      if (disputas.length === 0 || disputas.some((d) => d.status !== "won")) contestadas.add(c.id);
+    }
+    return faturas.flatMap((f) => {
+      const pagaEm = f.status_transitions.paid_at;
+      if (f.amount_paid <= 0 || !pagaEm) return [];
+      const c = (f.payments?.data ?? [])
+        .map((x) => porRef.get(x.payment.charge ?? "") ?? porRef.get(x.payment.payment_intent ?? ""))
+        .find((x) => x !== undefined);
+      const estornos = (c?.refunds?.data ?? []).filter((r) => r.status !== "failed" && r.status !== "canceled").map((r) => r.created);
+      const plano = f.parent?.subscription_details?.metadata?.plano_id;
+      return [{
+        pagamentoRef: f.id,
+        cobrancaRef: c?.id ?? null,
+        valorCents: f.amount_paid,
+        moeda: f.currency.toLowerCase(),
+        estornadoCents: c?.amount_refunded ?? 0,
+        contestado: c !== undefined && contestadas.has(c.id),
+        pagoEm: emData(pagaEm),
+        estornadoEm: (c?.amount_refunded ?? 0) > 0 && estornos.length > 0 ? emData(Math.max(...estornos)) : null,
+        planoId: plano !== undefined && UUID.safeParse(plano).success ? plano : null,
+        urlDoRecibo: linkSeguro(f.hosted_invoice_url),
+      }];
+    });
+  }
+
   async function estornarCobranca(p: { cobrancaRef: string; valorCents: number; chaveIdempotencia: string }): Promise<void> {
     await chamar("POST", "/refunds", { charge: p.cobrancaRef, amount: p.valorCents, reason: "requested_by_customer" }, p.chaveIdempotencia);
   }
@@ -793,6 +882,7 @@ export function criarAdaptadorStripe(dep: DependenciasDaStripe): AdaptadorDeCobr
     cancelarAgora,
     lerUltimaCobranca,
     estornarCobranca,
+    listarPagamentos,
     prepararWebhook,
     removerWebhooks,
     clienteExiste,

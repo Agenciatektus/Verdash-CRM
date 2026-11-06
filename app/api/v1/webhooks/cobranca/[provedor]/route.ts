@@ -100,6 +100,8 @@ export async function POST(req: NextRequest, { params }: Rota) {
   }
 
   const agora = new Date().toISOString();
+  // Disputa da Stripe não traz `customer`: a org sai da cobrança já gravada no
+  // histórico (sem chamada externa aqui). Cobrança ainda não relida: a reconciliação cura.
   const { data: dona, error: erroDaDona } = sinal.clienteRef
     ? await admin
         .from("cobranca_assinaturas")
@@ -107,7 +109,15 @@ export async function POST(req: NextRequest, { params }: Rota) {
         .eq("provedor", provedor)
         .eq("provedor_cliente_id", sinal.clienteRef)
         .maybeSingle()
-    : { data: null, error: null };
+    : sinal.cobrancaRef
+      ? await admin
+          .from("cobranca_pagamentos")
+          .select("organization_id")
+          .eq("provedor", provedor)
+          .eq("cobranca_ref", sinal.cobrancaRef)
+          .limit(1)
+          .maybeSingle()
+      : { data: null, error: null };
   if (erroDaDona) return fail("internal_error", "Não foi possível identificar a empresa.", 500, { requestId });
   const org = (dona as { organization_id: string } | null)?.organization_id ?? null;
   if (!org && provedor === "asaas") {

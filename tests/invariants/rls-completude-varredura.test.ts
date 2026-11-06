@@ -414,6 +414,14 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "conferido no catálogo; FK composta recusa resposta apontando para grupo de outra " +
       "organização e on delete set null (grupo_id) devolve a resposta à lista plana sem apagá-la.",
   },
+  {
+    tabela: "cobranca_pagamentos",
+    razao:
+      "tests/invariants/cobranca-isolamento.test.ts (bloco do histórico de pagamentos) — " +
+      "dois tenants reais por JWT: admin de A lê 1 linha de A e 0 de B, admin de B o " +
+      "espelho, agent de A lê 0 (leitura é de admin; por isso não cabe em TABLES), e " +
+      "UPDATE/INSERT/DELETE pela sessão e a leitura por anon dão permission denied. Migration 9230.",
+  },
 ];
 
 /**
