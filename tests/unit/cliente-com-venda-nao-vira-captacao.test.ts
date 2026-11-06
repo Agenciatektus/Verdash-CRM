@@ -217,6 +217,7 @@ const DADOS = {
   contactId: CONTATO,
   conversationId: CONVERSA,
   nomeDoContato: "Marina",
+  origem: { rotulo: "WhatsApp", source: "whatsapp", motivo: "primeira mensagem recebida no WhatsApp" },
 };
 
 function vendaHa(dias: number, extra: Partial<VendaNaCena> = {}): VendaNaCena {

@@ -263,7 +263,7 @@ export async function GET(
   // quadro. A leitura de etapas que existe (`agent-mapping`) é de manager; esta
   // vai pelo MESMO cliente com RLS do resto da rota, então quem vê o lead vê as
   // etapas do funil dele e nada além. Uma consulta só para os até 3 funis.
-  const funis = [...new Set((leads.data ?? []).map((l) => (l as { pipeline_id: string }).pipeline_id))];
+  const funis = [...new Set(leadsResolvidos.map((l) => (l as { pipeline_id: string }).pipeline_id))];
   const etapas = funis.length
     ? await supabase
         .from("crm_stages")

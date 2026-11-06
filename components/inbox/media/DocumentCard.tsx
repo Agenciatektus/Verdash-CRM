@@ -15,8 +15,6 @@ interface Props {
   fileName?: string | null;
   /** Fonte alternativa para mídia de NOTA interna (#1863, F3) — ver ImageMedia. */
   src?: string;
-  /** Nome ORIGINAL do documento (`media_filename`, #2613 do upstream). */
-  fileName?: string | null;
 }
 
 /**

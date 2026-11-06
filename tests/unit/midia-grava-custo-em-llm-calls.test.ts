@@ -73,10 +73,7 @@ vi.mock("@/lib/supabase/admin", () => ({
           if (tabela === "llm_calls") llmCallsInsertMock(row);
           return { error: null };
         },
-        update: (patch: Record<string, unknown>) => {
-          if (tabela === "messages") atualizacoesDaMensagem(patch);
-          return { eq: () => ({ eq: async () => ({ error: null }) }) };
-        },
+        update: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const chain: any = new Proxy(terminais, {
