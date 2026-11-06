@@ -11,6 +11,8 @@ interface Props {
   files: File[];
   /** A legenda que a prévia mostra ao abrir (o texto da resposta pronta com imagem). */
   legendaInicial: string | null;
+  /** Anexo de NOTA interna: a legenda é o corpo dela, vale com áudio também. */
+  notaInterna?: boolean;
   sending: boolean;
   onCancelarAnexo: () => void;
   onRemoverAnexo: (indice: number, caption: string) => void;
@@ -32,7 +34,7 @@ interface Props {
  * `useCreateNote`, #1863 F3).
  */
 export function DialogosDoComposer({
-  conversationId, currentContactId, files, legendaInicial, sending,
+  conversationId, currentContactId, files, legendaInicial, notaInterna, sending,
   onCancelarAnexo, onRemoverAnexo, onEnviarAnexos,
   contactPickerOpen, setContactPickerOpen, send,
 }: Props) {
@@ -41,6 +43,7 @@ export function DialogosDoComposer({
       <AttachmentPreviewDialog
         files={files}
         legendaInicial={legendaInicial}
+        notaInterna={notaInterna}
         sending={sending}
         onCancel={onCancelarAnexo}
         onRemove={onRemoverAnexo}

@@ -1,11 +1,16 @@
 import webpush from "web-push";
 
 import { usuariosQueSilenciaram } from "@/lib/inbox/estado-por-atendente.servidor";
+import { roleAtLeast, type Role } from "@/lib/auth/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { env } from "@/lib/env";
 import { vapidPronto, vapidPublica, vapidSubject } from "./vapid";
+import { ehServicoDePushConhecido } from "./servicos-de-push";
 import type { PushPayload } from "./push_payload";
+import { lerTelaBloqueada, redigirParaATelaBloqueada } from "./tela-bloqueada";
+
+type Admin = ReturnType<typeof createAdminClient>;
 
 export type PushSubRow = {
   id: string;
@@ -16,67 +21,65 @@ export type PushSubRow = {
   user_id?: string | null;
 };
 
-/** Opções do envio para a organização. */
-export interface OpcoesDoPush {
-  /**
-   * A conversa da mensagem (migration 9042): quem a SILENCIOU não recebe.
-   * Falha na leitura do silêncio não cala ninguém (o aviso sai como antes).
-   */
-  conversationId?: string | null;
-}
+type Inscricao = PushSubRow & { user_id: string };
 
-type AdminLike = {
-  from: (table: string) => {
-    select: (cols: string) => {
-      eq: (col: string, val: string) => Promise<{ data: PushSubRow[] | null; error: { message: string } | null }>;
-    };
-    delete: () => {
-      eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>;
-    };
-  };
-};
+const NADA = { sent: 0, gone: 0 } as const;
 
-function store(admin: AdminLike) {
-  return admin.from("push_subscriptions");
-}
-
-export async function enviarPushDaOrg(
+/**
+ * Quem tem vínculo ativo na organização — e, com `papelMinimo`, o papel que o
+ * alcança. `null` quando a leitura falha: ninguém recebe.
+ */
+async function membrosAtivos(
+  admin: Admin,
   organizationId: string,
-  payload: PushPayload,
-  admin: AdminLike = createAdminClient() as unknown as AdminLike,
-  opcoes: OpcoesDoPush = {},
-): Promise<{ sent: number; gone: number }> {
-  if (!vapidPronto()) return { sent: 0, gone: 0 };
-
-  const { data, error } = await store(admin)
-    .select("id, endpoint, p256dh, auth, user_id")
-    .eq("organization_id", organizationId);
+  papelMinimo?: Role,
+): Promise<Set<string> | null> {
+  const { data, error } = await admin
+    .from("user_organizations")
+    .select("user_id, role")
+    .eq("organization_id", organizationId)
+    .is("revoked_at", null);
   if (error) {
-    logger.warn("push_subscriptions_list_failed", { detail: error.message });
-    return { sent: 0, gone: 0 };
+    logger.warn("push_membros_ativos_falhou", { detail: error.message });
+    return null;
   }
-  // O MESMO client injetado (revisão do Cassio): sem abrir outro service role.
-  // Qualquer falha, inclusive síncrona, não cala ninguém.
-  let exceto: Set<string> | undefined;
-  if (opcoes.conversationId) {
-    try {
-      exceto = await usuariosQueSilenciaram(
-        admin as unknown as Parameters<typeof usuariosQueSilenciaram>[0],
-        organizationId,
-        opcoes.conversationId,
-      );
-    } catch {
-      exceto = undefined;
-    }
-  }
-  const rows = (data ?? []).filter((r) => !exceto || !r.user_id || !exceto.has(r.user_id));
-  if (rows.length === 0) return { sent: 0, gone: 0 };
+  const membros = (data ?? []) as Array<{ user_id: string; role: string | null }>;
+  return new Set(
+    membros.filter((m) => !papelMinimo || roleAtLeast(m.role, papelMinimo)).map((m) => m.user_id),
+  );
+}
+
+/**
+ * O FUNIL: todo push do produto sai daqui, e só daqui (vigiado por
+ * `tests/unit/push-sai-so-pelo-funil.test.ts`). Só sai para inscrições de quem
+ * tem vínculo ativo na organização (e o papel mínimo, quando pedido), e só para
+ * serviço de push conhecido (`servicos-de-push.ts`). A regra de host mora no
+ * envio, não só na rota de inscrição: vale para toda linha gravada, qualquer
+ * que seja a origem. O conteúdo segue a opção da empresa sobre o que aparece
+ * com a tela bloqueada (`./tela-bloqueada.ts`). Inscrição morta (404/410) é
+ * apagada.
+ */
+async function enviarAsInscricoes(
+  admin: Admin,
+  organizationId: string,
+  inscricoes: Inscricao[],
+  payload: PushPayload,
+  papelMinimo?: Role,
+): Promise<{ sent: number; gone: number }> {
+  const conhecidas = inscricoes.filter((i) => ehServicoDePushConhecido(i.endpoint));
+  if (conhecidas.length === 0) return NADA;
+  const membros = await membrosAtivos(admin, organizationId, papelMinimo);
+  if (!membros) return NADA;
+  const rows = conhecidas.filter((i) => membros.has(i.user_id));
+  if (rows.length === 0) return NADA;
+
+  const { modo, idioma } = await lerTelaBloqueada(admin, organizationId);
+  const body = JSON.stringify(redigirParaATelaBloqueada(payload, modo, idioma));
 
   webpush.setVapidDetails(await vapidSubject(), vapidPublica()!, env.VAPID_PRIVATE_KEY.trim());
 
   let sent = 0;
   let gone = 0;
-  const body = JSON.stringify(payload);
 
   await Promise.all(
     rows.map(async (row) => {
@@ -90,7 +93,11 @@ export async function enviarPushDaOrg(
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
           gone += 1;
-          await store(admin).delete().eq("id", row.id);
+          await admin
+            .from("push_subscriptions")
+            .delete()
+            .eq("id", row.id)
+            .eq("organization_id", organizationId);
           return;
         }
         logger.warn("web_push_send_failed", { status: status ?? 0 });
@@ -101,23 +108,66 @@ export async function enviarPushDaOrg(
   return { sent, gone };
 }
 
+export type DestinoDoPush = {
+  soUsuario?: string;
+  papelMinimo?: Role;
+  /** A conversa da mensagem (migration 9042): quem a SILENCIOU não recebe. */
+  conversationId?: string | null;
+};
+
+/**
+ * Tira de `linhas` quem silenciou a conversa. Falha na leitura do silêncio não cala
+ * ninguém: o aviso sai como antes.
+ */
+async function semSilenciados(
+  admin: Admin,
+  organizationId: string,
+  conversationId: string | null | undefined,
+  linhas: Inscricao[],
+): Promise<Inscricao[]> {
+  if (!conversationId) return linhas;
+  let silenciaram: Set<string> | undefined;
+  try {
+    silenciaram = await usuariosQueSilenciaram(
+      admin as unknown as Parameters<typeof usuariosQueSilenciaram>[0],
+      organizationId,
+      conversationId,
+    );
+  } catch {
+    silenciaram = undefined;
+  }
+  return silenciaram ? linhas.filter((l) => !l.user_id || !silenciaram.has(l.user_id)) : linhas;
+}
+
+/** Push às inscrições da organização — ou só às de `soUsuario`, e só a quem alcança `papelMinimo`. */
+export async function enviarPushDaOrg(
+  organizationId: string,
+  payload: PushPayload,
+  quem: DestinoDoPush = {},
+  admin: Admin = createAdminClient(),
+): Promise<{ sent: number; gone: number }> {
+  if (!vapidPronto()) return NADA;
+
+  let query = admin
+    .from("push_subscriptions")
+    .select("id, user_id, endpoint, p256dh, auth")
+    .eq("organization_id", organizationId);
+  if (quem.soUsuario) query = query.eq("user_id", quem.soUsuario);
+  const { data, error } = await query;
+  if (error) {
+    logger.warn("push_subscriptions_list_failed", { detail: error.message });
+    return NADA;
+  }
+  const linhas = await semSilenciados(admin, organizationId, quem.conversationId, (data ?? []) as Inscricao[]);
+  return enviarAsInscricoes(admin, organizationId, linhas, payload, quem.papelMinimo);
+}
+
 export async function enviarPushAoUsuario(
   organizationId: string,
   userId: string,
   payload: PushPayload,
 ): Promise<{ sent: number; gone: number }> {
-  if (!vapidPronto()) return { sent: 0, gone: 0 };
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
-    .eq("organization_id", organizationId)
-    .eq("user_id", userId);
-  if (error) {
-    logger.warn("push_subscriptions_user_list_failed", { detail: error.message });
-    return { sent: 0, gone: 0 };
-  }
-  return enviarPushDaOrg(organizationId, payload, inscricoesJaFiltradas(admin, data ?? []));
+  return enviarPushDaOrg(organizationId, payload, { soUsuario: userId });
 }
 
 /**
@@ -135,52 +185,20 @@ export async function enviarPushAQuemVeAConversa(
   conversationId: string,
   payload: PushPayload,
   soUsuarios?: ReadonlyArray<string>,
-  admin: ReturnType<typeof createAdminClient> = createAdminClient(),
+  admin: Admin = createAdminClient(),
 ): Promise<{ sent: number; gone: number }> {
-  if (!vapidPronto() || soUsuarios?.length === 0) return { sent: 0, gone: 0 };
+  if (!vapidPronto() || soUsuarios?.length === 0) return NADA;
   const { data, error } = await admin.rpc("fn_push_inscricoes_que_veem_a_conversa", {
     p_org: organizationId,
     p_conversation: conversationId,
   });
   if (error) {
     logger.warn("push_subscriptions_visible_list_failed", { detail: error.message });
-    return { sent: 0, gone: 0 };
+    return NADA;
   }
   // O admin client não é tipado pelo schema: a forma vem de `lib/database.types.ts`.
-  const visiveis: Array<PushSubRow & { user_id: string }> = data ?? [];
-  // 9042: quem silenciou a conversa não recebe. O filtro roda AQUI, com o admin
-  // de verdade: o `enviarPushDaOrg` abaixo recebe a lista já filtrada, e o seu
-  // `opcoes.conversationId` consultaria o client falso de `inscricoesJaFiltradas`.
-  // Falha na leitura não cala ninguém (a mesma regra do `enviarPushDaOrg`).
-  let silenciaram: Set<string> | undefined;
-  try {
-    silenciaram = await usuariosQueSilenciaram(
-      admin as unknown as Parameters<typeof usuariosQueSilenciaram>[0],
-      organizationId,
-      conversationId,
-    );
-  } catch {
-    silenciaram = undefined;
-  }
-  const linhas = visiveis.filter(
-    (l) => (!soUsuarios || soUsuarios.includes(l.user_id)) && !silenciaram?.has(l.user_id),
-  );
-  return enviarPushDaOrg(organizationId, payload, inscricoesJaFiltradas(admin, linhas));
-}
-
-/** Lista já filtrada para `enviarPushDaOrg`; a faxina de inscrição morta (404/410) segue indo ao banco. */
-function inscricoesJaFiltradas(admin: ReturnType<typeof createAdminClient>, rows: PushSubRow[]): AdminLike {
-  return {
-    from: (table: string) => ({
-      select: () => ({
-        eq: async () => ({ data: rows, error: null }),
-      }),
-      delete: () => ({
-        eq: async (col: string, val: string) => {
-          const { error: delErr } = await admin.from(table).delete().eq(col, val);
-          return { error: delErr };
-        },
-      }),
-    }),
-  };
+  const visiveis: Inscricao[] = data ?? [];
+  const linhas = visiveis.filter((l) => !soUsuarios || soUsuarios.includes(l.user_id));
+  // 9042: quem silenciou a conversa não recebe.
+  return enviarAsInscricoes(admin, organizationId, await semSilenciados(admin, organizationId, conversationId, linhas), payload);
 }

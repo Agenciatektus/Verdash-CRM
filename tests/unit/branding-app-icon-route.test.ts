@@ -57,6 +57,8 @@ describe("ícone do app público, sem escolher tenant", () => {
     expect(isPublicPath("/app-icon/64")).toBe(false);
     expect(isPublicPath("/app-icon/192/outro")).toBe(false);
     expect(isPublicPath("/app-icon/maskable-64")).toBe(false);
+    expect(isPublicPath("/app-icon/maskable/outro")).toBe(false);
+    expect(isPublicPath("/app-icon/180x")).toBe(false);
   });
   it("valida o tamanho antes de ler marca/Storage", async () => {
     const resposta = await GET(new Request("https://crm.example/app-icon/999"), {

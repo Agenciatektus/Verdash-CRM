@@ -54,7 +54,8 @@ export default async function MetaAdsPage() {
     /*
       Superfície clara — mesmo escopo de Desempenho, a vizinha no menu. `-m-6`
       cancela o respiro do `<main>` do AppShell para o Paper alcançar a borda, e
-      o `p-6` o repõe.
+      o `p-6` o repõe. Abaixo de `sm` o respiro do `<main>` é `p-4`, e um `-m-6`
+      ali alargava a página 16px além da tela: o par acompanha o do AppShell.
     */
     <div
       data-superficie="clara"

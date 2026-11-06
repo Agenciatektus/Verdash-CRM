@@ -64,6 +64,8 @@ export const ERRO_EM_PORTUGUES: Record<string, string> = {
   mfa_required: "Confirme o segundo fator para mudar as etiquetas.",
   forbidden_tenant: "Você não está em nenhuma organização ativa.",
   // 9038: a etiqueta `cliente` reservada pela regra da agenda.
+  destino_inexistente:
+    "Essa etiqueta não existe. Juntar só leva para uma etiqueta que já existe; para dar um nome novo, use Renomear.",
   etiqueta_do_sistema:
     "A etiqueta cliente é posta pelo sistema enquanto a regra Clientes pela agenda estiver ligada. Desligue-a em Tipos de agendamento para editá-la aqui.",
 };

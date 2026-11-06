@@ -31,6 +31,13 @@ import { semAssinatura } from "@/lib/messaging/assinatura";
  */
 const JANELA_DO_ECO_MS = 60_000;
 
+/**
+ * Estados em que uma linha NOSSA já SAIU para o canal, e portanto o eco dela pode
+ * estar voltando. `sent` SEM `external_id` é desfecho escrito de propósito quando
+ * o eco vence o unique (upstream #3138); `failed` fica fora: nada foi ao canal.
+ */
+const STATUS_DE_ENVIO_NOSSO = ["queued", "sending", "sent", "delivered", "read"];
+
 /** `chat` é o nome do WAHA; `text` é o que a tabela `messages` grava. */
 const TIPOS_DE_TEXTO = new Set(["chat", "text"]);
 
@@ -38,12 +45,13 @@ export async function ehEcoDeEnvioNosso(
   admin: SupabaseClient,
   organizationId: string,
   conversationId: string,
-  eco: { corpo: string | null; midia: boolean },
+  // `ids`: formas do id que o canal entregou nesta mensagem (composto e cauda).
+  eco: { corpo: string | null; midia: boolean; ids?: string[] },
 ): Promise<boolean> {
   const desde = new Date(Date.now() - JANELA_DO_ECO_MS).toISOString();
   const { data, error } = await admin
     .from("messages")
-    .select("id, body, type")
+    .select("id, body, type, external_id, status")
     .eq("organization_id", organizationId)
     .eq("conversation_id", conversationId)
     .eq("direction", "outbound")
@@ -53,10 +61,12 @@ export async function ehEcoDeEnvioNosso(
     // `automation` (#652) e `system` (token de servidor, #866) nasceram aqui
     // tanto quanto a IA e o composer.
     .in("sent_via", ["ai", "user", "automation", "system"])
-    // Sem `external_id` = ainda não confirmada pelo canal = ainda em voo.
-    .is("external_id", null)
-    .in("status", ["queued", "sending"])
-    .gte("created_at", desde)
+    // O `external_id` NÃO é filtro de SQL (upstream #3165): "sem id" (em voo) e "id
+    // igual ao do eco" (carimbado durante a ingestão) são decididos no laço, sobre
+    // a MESMA leitura, para o carimbo que cai no meio não escapar.
+    .in("status", STATUS_DE_ENVIO_NOSSO)
+    // `updated_at`: o reenvio põe na fila uma linha criada há muito tempo.
+    .gte("updated_at", desde)
     .limit(20);
 
   if (error) {
@@ -67,7 +77,11 @@ export async function ehEcoDeEnvioNosso(
 
   const corpo = (eco.corpo ?? "").trim();
   for (const linha of data ?? []) {
-    const l = linha as { body: string | null; type?: string | null };
+    const l = linha as { body: string | null; type?: string | null; external_id?: string | null };
+    // Marca 2: o carimbo do envio já está na linha, com o id que acabou de chegar.
+    if (l.external_id != null && eco.ids?.includes(l.external_id)) return true;
+    // Marca 1: só linha ainda sem id; linha com id de outro envio nunca foi deste eco.
+    if (l.external_id != null) continue;
     if (eco.midia) {
       if (!TIPOS_DE_TEXTO.has(l.type ?? "text")) return true;
       continue;

@@ -256,7 +256,7 @@ export function Sidebar({
         // coluna do grupo quando expandida. Recolhida, a coluna abre POR CIMA do
         // conteúdo ("peek"), presa dentro desta `<aside>`, e a largura que a
         // casca enxerga continua sendo uma só: a desta caixa.
-        "sticky top-0 z-30 flex h-dvh shrink-0 flex-col bg-transparent transition-[width] duration-base",
+        "sticky top-[var(--faixas-de-cima,0px)] z-30 flex h-[calc(100dvh-var(--faixas-de-cima,0px))] shrink-0 flex-col bg-transparent transition-[width] duration-base",
         collapsed ? "w-[72px]" : "w-[304px] max-lg:w-[72px]",
       )}
     >

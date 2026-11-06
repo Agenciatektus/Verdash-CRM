@@ -11,6 +11,7 @@ import { camadaLigada } from '../../../guardrails/camadas-da-org';
 import { esperarComoHumano } from '../../atraso-humano';
 import { sendInBubbles, splitForSend } from '../../split-message';
 import { enviarComFotos, type FotoParaEnvio } from '../../fotos-do-produto';
+import { enviarComSaidaConfiguravel } from '@/lib/prospecting/saida-configuravel';
 import type { ContextoDoTurno } from '../portoes-de-entrada';
 import type { EstadoDoTurno } from '../estado-do-turno';
 import type { DependenciasDoEnvio } from './guardrails-do-envio';
@@ -23,9 +24,9 @@ export function montarArgumentosDoEnvio(
   estado: EstadoDoTurno,
   envio: { body: string; hasOpenCase: boolean; fotosDoProduto: FotoParaEnvio[] },
 ) {
-  const { deps, pool, input, tenantId, leadId, clock, runLog, liveJob } = c;
+  const { deps, pool, input, preview, tenantId, leadId, clock, runLog, liveJob } = c;
   const {
-    agentConfig, agentOperation, liveChannel, optedOutThisTurn, lgpd, camadas, maxSendsPerTurn, semanticClassifier,
+    agentConfig, agentOperation, liveChannel, optedOutThisTurn, lgpd, camadas, restricaoComercial, maxSendsPerTurn, semanticClassifier,
     conferirAfirmacoes, knobsDeAtrasoHumano, pacingDoTurno, inicioDoProcessamento, pararDigitando, followupDisponivel,
   } = r;
   const { body, hasOpenCase, fotosDoProduto } = envio;
@@ -72,6 +73,8 @@ export function montarArgumentosDoEnvio(
     // `GateContext.clinicalClaimEnforced`. Sem linha, desligada: não há padrão de
     // ambiente para uma proteção que só faz sentido em saúde.
     enforceClinicalClaim: camadaLigada(camadas.afirmacao_clinica, false),
+    // Valores e negociação só com a equipe (#2877), lida uma vez nos portões.
+    enforceCommercialRestriction: restricaoComercial,
     // Mesmo padrão do vocabulário interno: só o `send_message` arma — é o único
     // corpo escrito pelo modelo. `active` é ter QUALQUER ferramenta de agenda:
     // um agente que só CONSULTA promete "vou verificar" igual, e enquanto a
@@ -157,7 +160,6 @@ export function montarArgumentosDoEnvio(
     // disclosure via inject); é ELE que vai ao canal, não o `body` capturado da tool.
     send: (finalBody: string) => {
       pararDigitando(); // a mensagem sai agora; renovar depois dela mentiria
-      estado.corposEnviados.push(finalBody);
       const sleep =
         deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
       const jitter = () =>
@@ -184,28 +186,39 @@ export function montarArgumentosDoEnvio(
           ...(media ? { media } : {}),
         });
       };
-      // Cada foto é uma mensagem física: só vão as que cabem no que resta do teto
-      // do turno (a checagem de `max_sends_per_turn` acima roda uma vez, antes).
-      // O resto é medido ANTES DE CADA FOTO, depois do texto: o texto acima do
-      // teto de legenda sai à parte e também gasta o teto.
-      return enviarComFotos(finalBody, fotosDoProduto, {
-        sleep,
-        jitter,
-        restantes: () => maxSendsPerTurn - estado.seq,
-        enviarFoto: (foto, legenda) => enviar(legenda, foto),
-        enviarTexto: (texto) =>
-          sendInBubbles(texto, {
-            enabled: agentConfig?.splitMessages ?? false,
-            maxChars: agentConfig?.splitMaxChars ?? 600,
-            // O teto do turno vale para as bolhas: o que passa dele vai junto na última.
-            maxBubbles: Math.max(1, maxSendsPerTurn - estado.seq),
-            sleep,
-            jitter,
-            // A pausa humana do turno NÃO mora mais aqui: ela subiu para
-            // `esperaForaDoLock` (paga antes de o guardrail tomar o lock do número) —
-            // issue #654. Neste ponto fica só o jitter anti-ban entre bolhas.
-            send: (bubble) => enviar(bubble),
-          }),
+      // Saída configurável da prospecção (fora de prévia); ver saida-configuravel.ts.
+      const saida = {
+        db: pool,
+        organizationId: tenantId,
+        conversationId: preview ? null : input.conversationId,
+        via: 'inbound_turn' as const,
+        mensagem: { jobId: preview ? '' : liveJob().id, seq: estado.seq + 1 },
+        avisar: (m: string, ctx: Record<string, unknown>) => runLog.warn(m, ctx),
+      };
+      return enviarComSaidaConfiguravel(saida, finalBody, (corpoComSaida) => {
+        estado.corposEnviados.push(corpoComSaida);
+        // Cada foto é uma mensagem física: só vão as que cabem no que resta do teto
+        // do turno, medido ANTES DE CADA FOTO, depois do texto: o texto acima do
+        // teto de legenda sai à parte e também gasta o teto.
+        return enviarComFotos(corpoComSaida, fotosDoProduto, {
+          sleep,
+          jitter,
+          restantes: () => maxSendsPerTurn - estado.seq,
+          enviarFoto: (foto, legenda) => enviar(legenda, foto),
+          enviarTexto: (texto) =>
+            sendInBubbles(texto, {
+              enabled: agentConfig?.splitMessages ?? false,
+              maxChars: agentConfig?.splitMaxChars ?? 600,
+              // O teto do turno vale para as bolhas: o que passa dele vai junto na última.
+              maxBubbles: Math.max(1, maxSendsPerTurn - estado.seq),
+              sleep,
+              jitter,
+              // A pausa humana do turno NÃO mora mais aqui: ela subiu para
+              // `esperaForaDoLock` (paga antes de o guardrail tomar o lock do número) —
+              // issue #654. Neste ponto fica só o jitter anti-ban entre bolhas.
+              send: (bubble) => enviar(bubble),
+            }),
+        });
       });
     },
   };

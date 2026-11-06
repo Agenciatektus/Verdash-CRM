@@ -32,7 +32,7 @@ const sessao = vi.hoisted(() => ({
     activeOrg: { role: string };
   } | null,
 }));
-vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true, useAuthOpcional: () => sessao.valor }));
+vi.mock("@/hooks/auth/AuthProvider", () => ({ usePermission: () => true, useAuthOpcional: () => sessao.valor, usePaisDaOrgAtiva: () => null }));
 vi.mock("@/lib/api/client", () => ({
   apiClient: { get: vi.fn().mockResolvedValue({ data: { drafts: [] } }), post: vi.fn() },
 }));

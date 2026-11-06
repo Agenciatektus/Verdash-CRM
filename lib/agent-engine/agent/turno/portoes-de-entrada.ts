@@ -20,6 +20,7 @@ import { isLeadInHandoff } from '../human-handoff';
 import { fusoDaOrganizacao } from '../fuso-da-org';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 import { conversaEmLacoComRobo } from '@/lib/ai/elegibilidade/consulta-laco';
+import { comercialExigeHumano } from '@/lib/escalacao/assunto-comercial';
 import type { TurnPreview } from '../preview';
 // Valores lidos só dentro da função (nunca na carga do módulo): o ciclo de import é seguro.
 import {
@@ -52,6 +53,8 @@ export interface ContextoDoTurno {
 export interface SaidaDosPortoes {
   camadas: Awaited<ReturnType<typeof lerCamadasDaOrg>>;
   fusoDaOrg: string;
+  /** Valores e negociação só com a equipe (#2877). */
+  restricaoComercial: boolean;
 }
 
 export async function avaliarPortoesDeEntrada(
@@ -71,6 +74,9 @@ export async function avaliarPortoesDeEntrada(
   // linhas de distância um do outro, e duas queries para a mesma pergunta viram,
   // com o tempo, duas respostas.
   const camadas = await lerCamadasDaOrg(pool, tenantId);
+  // Valores e negociação só com a equipe (#2877): lida à parte porque falha
+  // FECHADA (ver `comercialExigeHumano`) — e uma vez, para a prévia e para o envio.
+  const restricaoComercial = await comercialExigeHumano(pool, tenantId);
   // O fuso da ORGANIZAÇÃO — o que o bloco `## Agora` usa lá embaixo, na montagem
   // da abertura. Lido aqui pela mesma razão da linha acima: uma query por turno,
   // longe do ponto de uso, para não virar duas respostas para a mesma pergunta.
@@ -226,5 +232,5 @@ export async function avaliarPortoesDeEntrada(
     }
   }
 
-  return { seguir: true, valor: { camadas, fusoDaOrg } };
+  return { seguir: true, valor: { camadas, fusoDaOrg, restricaoComercial } };
 }

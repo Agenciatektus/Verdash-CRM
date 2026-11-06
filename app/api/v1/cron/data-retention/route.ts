@@ -144,6 +144,10 @@ export interface ResultadoDaRetencao {
   eventos_apagados: number;
   lotes_eventos: number;
   eventos_tem_resto: boolean;
+  /** O registro de entrega do aviso de agendamento no WhatsApp do dono (0753). */
+  avisos_de_agendamento_apagados: number;
+  lotes_avisos_de_agendamento: number;
+  avisos_de_agendamento_tem_resto: boolean;
   /** O candidato de prospecção nativa vencido (migration 0408, issue #1313). */
   prospeccao_apagada: number;
   lotes_prospeccao: number;
@@ -236,6 +240,7 @@ export interface PodaDb {
       | "fn_expurgar_conversa_do_caso_vencida"
       | "fn_expurgar_passagens_vencidas"
       | "fn_expurgar_avisos_de_caso_vencidos"
+      | "fn_expurgar_avisos_de_agendamento_vencidos"
       | "fn_expurgar_prospeccao_vencida"
       | "fn_expurgar_observacoes_do_jev"
       | "fn_expurgar_candidatos_do_golden"
@@ -304,6 +309,7 @@ async function drenar(
     | "fn_expurgar_conversa_do_caso_vencida"
     | "fn_expurgar_passagens_vencidas"
     | "fn_expurgar_avisos_de_caso_vencidos"
+    | "fn_expurgar_avisos_de_agendamento_vencidos"
     | "fn_expurgar_prospeccao_vencida"
     | "fn_expurgar_observacoes_do_jev"
     | "fn_expurgar_candidatos_do_golden"
@@ -612,6 +618,10 @@ export async function podarHistorico(
   // poda aqui é volume de operação — e é a poda de horizonte mais curto das
   // sete, porque a única pergunta que a linha responde é de semanas.
   const avisosDeCaso = await executarDreno(falhas, "fn_expurgar_avisos_de_caso_vencidos", () => drenar(db, "fn_expurgar_avisos_de_caso_vencidos", avisoDeCaso.dias), zerado);
+  // A do aviso de agendamento (0753) é a mesma pergunta de semanas sobre o
+  // mesmo canal, e por isso segue o MESMO knob e o mesmo piso do aviso de caso:
+  // dois knobs para "o aviso saiu?" seriam dois números para o operador errar.
+  const avisosDeAgendamento = await executarDreno(falhas, "fn_expurgar_avisos_de_agendamento_vencidos", () => drenar(db, "fn_expurgar_avisos_de_agendamento_vencidos", avisoDeCaso.dias), zerado);
   // Oitava poda: o candidato de prospecção nativa vencido (migration 0408,
   // issue #1313). Padrão 365 / piso 90 — decisão do dono, alinhada ao
   // horizonte da conversa do caso e da captação. O piso mora no CORPO da
@@ -675,6 +685,7 @@ export async function podarHistorico(
     passagens_apagadas: passagens.apagadas,
     avisos_de_caso_apagados: avisosDeCaso.apagadas,
     eventos_apagados: eventosDoBus.apagadas,
+    avisos_de_agendamento_apagados: avisosDeAgendamento.apagadas,
     prospeccao_apagada: prospeccaoDrenada.apagadas,
     observacoes_do_jev_apagadas: observacoesDrenadas.apagadas,
     candidatos_do_golden_apagados: candidatosDrenados.apagadas,
@@ -685,6 +696,7 @@ export async function podarHistorico(
     lotes_passagens: passagens.lotes,
     lotes_avisos_de_caso: avisosDeCaso.lotes,
     lotes_eventos: eventosDoBus.lotes,
+    lotes_avisos_de_agendamento: avisosDeAgendamento.lotes,
     lotes_prospeccao: prospeccaoDrenada.lotes,
     lotes_observacoes_do_jev: observacoesDrenadas.lotes,
     lotes_candidatos_do_golden: candidatosDrenados.lotes,
@@ -695,6 +707,7 @@ export async function podarHistorico(
     passagens_tem_resto: passagens.temResto,
     avisos_de_caso_tem_resto: avisosDeCaso.temResto,
     eventos_tem_resto: eventosDoBus.temResto,
+    avisos_de_agendamento_tem_resto: avisosDeAgendamento.temResto,
     prospeccao_tem_resto: prospeccaoDrenada.temResto,
     observacoes_do_jev_tem_resto: observacoesDrenadas.temResto,
     rascunhos_apagados: rascunhosDrenados.apagadas,
@@ -783,6 +796,8 @@ export function houveEfeito(resultado: ResultadoDaRetencao): boolean {
     // apagaria linhas e não deixaria registro — e o CLAUDE.md
     // manda auditar QUANDO HÁ EFEITO, nunca parar de auditar.
     resultado.avisos_de_caso_apagados > 0 ||
+    // A do aviso de agendamento, pela mesma razão.
+    resultado.avisos_de_agendamento_apagados > 0 ||
     // A oitava, pela MESMA razão das sete anteriores: uma rodada que só podou
     // candidato de prospecção vencido apagaria linhas e não deixaria registro.
     // Esta é a poda de dado de PESSOA que nunca falou com a empresa (0408) —

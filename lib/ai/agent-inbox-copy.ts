@@ -114,9 +114,11 @@ export const KIND_LABEL = {
   // Régua de cobrança ou teto de IA do plano: quem resolve é o admin, em Plano e cobrança.
   cobranca: "Plano e cobrança da empresa precisam de atenção",
   email_de_login_trocado: "O e-mail de login de uma pessoa da equipe foi trocado",
-  // Diz que chegou a HORA, não que a tarefa "venceu": o aviso sai no prazo, e
-  // quem lê precisa saber que é para fazer agora, não que já perdeu.
-  task_due: "Chegou a hora de uma tarefa",
+  // Diz QUANDO o prazo está, não que "a tarefa vence": os dois avisos da mesma
+  // família (#2529) têm de se ler diferentes num relance, e o que muda é se
+  // ainda dá tempo de concluir ou se já é o vencimento que aconteceu.
+  task_due: "Uma tarefa está perto do vencimento",
+  task_overdue: "Uma tarefa venceu sem conclusão",
   other: "Aviso do assistente",
 } as const satisfies Record<InboxKind, string>;
 

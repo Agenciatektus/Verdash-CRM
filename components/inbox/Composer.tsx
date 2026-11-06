@@ -12,6 +12,9 @@ import { CaixaOuFaixaDoDono } from "@/components/inbox/composer/FaixaDoDono";
 import { FaixaDeContatoBloqueado, FaixaDeConversaFechada } from "@/components/inbox/composer/FaixaDeEstado";
 import { AbasDoComposer, AvisoDoRascunho, FaixaDaCitacao } from "@/components/inbox/composer/FaixasDoComposer";
 import { ReplyReviewPanel } from "@/components/inbox/composer/ReplyReviewPanel";
+import { anexoLevaLegenda, indiceDaLegenda } from "@/components/inbox/media/legenda-do-anexo";
+import { BarraDeRecursos } from "@/components/inbox/composer/BarraDeRecursos";
+import { type Recurso } from "@/lib/inbox/recursos";
 import {
   MentionMenu,
   opcoesDeMencao,
@@ -22,7 +25,7 @@ import { resolveSlash, TemplateMenu } from "@/components/inbox/composer/Template
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useSugestaoDeResposta } from "@/components/inbox/composer/useSugestaoDeResposta";
 import { useCreateNote } from "@/hooks/inbox/useCreateNote";
-import { useMessageTemplates, type MessageTemplate } from "@/hooks/inbox/useMessageTemplates";
+import { useMessageTemplates } from "@/hooks/inbox/useMessageTemplates";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { useSendMessage } from "@/hooks/inbox/useSendMessage";
 import { useUploadMedia, type DestinoDoUpload } from "@/hooks/inbox/useUploadMedia";
@@ -56,6 +59,12 @@ interface Props {
   blockedReason?: string | null;
   /** Janela de 24h fechada: barra a RESPOSTA, e só ela (a nota nunca chega ao cliente). */
   janelaFechada?: string | null;
+  /**
+   * A caixa travada até alguém ASSUMIR a conversa (#3012). Entra pela MESMA porta
+   * do bloqueio de canal (`isDisabled`) e trava a caixa INTEIRA, nota inclusive:
+   * é regra da organização, já resolvida de fora (`composerBloqueadoAteAssumir`).
+   */
+  aguardandoAssumir?: boolean;
   /** A mensagem que esta resposta CITA (escolhida no fio). `null` = envio solto. */
   respondendo?: Pick<Message, "id" | "body" | "direction" | "type" | "metadata"> | null;
   /** Desfaz a escolha — o `x` da faixa de citação. */
@@ -78,13 +87,15 @@ interface Props {
   fechada?: boolean;
   /** Contato bloqueado (id dele): a faixa ganha "Desbloquear" para quem pode (C8). */
   contatoBloqueadoId?: string | null;
+  /** O usuário logado (#3282): a barra de recursos lembra o recolhimento POR usuário. */
+  usuarioId?: string | null;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   {
     conversationId, initialDraft = "", initialMode = "reply", active = true, onDraftChange, disabled,
-    blockedReason, janelaFechada, contactName, contactDisplayName, currentContactId, respondendo, onCancelarResposta,
-    rascunho = null, conversa = null, fechada = false, contatoBloqueadoId = null,
+    blockedReason, janelaFechada, aguardandoAssumir = false, contactName, contactDisplayName, currentContactId, respondendo, onCancelarResposta,
+    rascunho = null, conversa = null, fechada = false, contatoBloqueadoId = null, usuarioId = null,
   },
   ref,
 ) {
@@ -146,12 +157,16 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [folhaDeRespostas, setFolhaDeRespostas] = useState(false);
   const sugestao = useSugestaoDeResposta(conversationId, mode === "reply");
   const slash = resolveSlash(text);
+  // O Esc/escolha vale só para o `/` em curso: saiu do `/` por QUALQUER caminho
+  // (digitado ou escrito pelo `applyTemplate`, inclusive o clique da barra), o
+  // próximo `/` volta a abrir o menu.
+  if (menuDismissed && !slash.open) setMenuDismissed(false);
   const menuOpen = mode === "reply" && slash.open && !menuDismissed;
   // SÓ em nota: a menção é assunto interno; no campo de resposta ela sairia
   // para o cliente como texto solto.
   const gatilho = mode === "note" && !mencaoDispensada ? resolverMencao(text, caret) : null;
   const membros = useAssignableMembers(gatilho !== null);
-  const opcoes = gatilho ? opcoesDeMencao(membros.data ?? [], gatilho.query, t("Atendente")) : [];
+  const opcoes = gatilho ? opcoesDeMencao(membros.data ?? [], gatilho.query, t) : [];
   const mencaoAberta = gatilho !== null;
   const opcaoAtual = opcoes[mencaoIndice] ?? opcoes[0];
 
@@ -169,7 +184,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   // send/createNote fora do disable: o texto some na hora do envio; travar o campo
   // até a API voltar impedia digitar a próxima mensagem com o campo ainda cheio.
-  const isDisabled = disabled || !!blockedReason || upload.isPending;
+  // `aguardandoAssumir` (#3012) entra AQUI: um termo a mais na trava de sempre,
+  // nunca um desabilitar paralelo que pudesse divergir dela.
+  const isDisabled = disabled || !!blockedReason || upload.isPending || aguardandoAssumir;
   // A janela só alcança o que SAI. Em modo nota o composer segue liberado.
   const respostaBarrada = isDisabled || (mode === "reply" && !!janelaFechada);
   const campoBarrado = mode === "note" ? isDisabled : respostaBarrada;
@@ -342,16 +359,31 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       });
   }
 
-  /** Escreve no campo e poe o cursor no fim — o de sempre, isolado para reuso. */
-  function escreverNoCampo(conteudo: string) {
+  /**
+   * Escreve no campo e poe o cursor no fim — o de sempre, isolado para reuso.
+   * `focar: false` é de quem devolve texto com o diálogo de anexos ABERTO (#3151):
+   * o foco pertence ao diálogo.
+   */
+  function escreverNoCampo(conteudo: string, focar = true) {
     setText(conteudo);
     const ta = taRef.current;
     if (!ta) return;
     requestAnimationFrame(() => {
-      ta.focus();
-      ta.selectionStart = ta.selectionEnd = conteudo.length;
+      if (focar) {
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = conteudo.length;
+      }
       autoresize();
     });
+  }
+
+  /**
+   * A escolha de um recurso na barra (#2833) — o MESMO caminho do `/`: entrega ao
+   * `applyTemplate`, que separa texto (campo editável) de mídia (fila de anexos).
+   * Nada é enviado aqui.
+   */
+  function escolherRecurso(recurso: Recurso) {
+    void applyTemplate(recurso);
   }
 
   /**
@@ -391,7 +423,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    * preview: sem o Blob não há o que mostrar, e o operador só poderia aprovar
    * às cegas.
    */
-  async function applyTemplate(template: MessageTemplate) {
+  async function applyTemplate(template: Recurso) {
     const payload = payloadDeUso(template, contato);
     setMenuDismissed(true);
 
@@ -418,9 +450,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         payload.midias.map((midia, indice) => arquivoDaMidia(template.id, midia, indice)),
       );
       setPendingEm("reply");
-      setLegendaInicial(payload.texto);
       setPendingFiles(arquivos);
-      setText("");
+      // Áudio NÃO leva legenda em nenhum canal (#3151): sem anexo na fila que a
+      // leve, o corpo volta para o CAMPO. Com anexo que a leve, vira a legenda.
+      if (arquivos.some(anexoLevaLegenda)) {
+        setLegendaInicial(payload.texto);
+        setText("");
+      } else {
+        setLegendaInicial(null);
+        // Sem foco: o diálogo de prévia está abrindo POR CIMA do campo.
+        escreverNoCampo(payload.texto, false);
+      }
     } catch (erro) {
       // Sem os bytes não há prévia nem envio. O caminho honesto é o de texto,
       // com o aviso de que a imagem não veio — sumir em silêncio seria entregar
@@ -447,8 +487,11 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       return;
     }
     const destino: DestinoDoUpload = pendingEm === "note" ? "nota" : "mensagem";
+    // `-1` (fila só de áudio) não casa com índice nenhum: a legenda não sai com
+    // anexo algum, em vez de sair com um áudio que a descarta (#3151).
+    const indiceLegenda = indiceDaLegenda(pendingFiles);
     const legenda =
-      destino === "nota" ? caption : indice === 0 ? caption || undefined : undefined;
+      destino === "nota" ? caption : indice === indiceLegenda ? caption || undefined : undefined;
     void upload
       .mutateAsync({ conversationId, file: arquivo, destino })
       .then((uploaded) => {
@@ -555,8 +598,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
+      if (menuOpen) {
+        e.preventDefault(); // deixa o Enter pro menu; não envia /query como mensagem
+        return;
+      }
+      // No toque, a tecla de retorno do teclado virtual QUEBRA LINHA; quem envia é
+      // o botão. Ctrl/Cmd+Enter envia sempre (iPad com teclado físico).
+      const forcaEnvio = e.ctrlKey || e.metaKey;
+      if (!forcaEnvio && window.matchMedia?.("(pointer: coarse)").matches) return;
       e.preventDefault();
-      if (menuOpen) return; // deixa o Enter pro menu; não envia /query como mensagem
       handleSubmit();
     }
   }
@@ -591,6 +641,17 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       <div className="relative bg-bg px-4 pb-3.5 pt-2.5" data-modo={mode}>
         {!nota && <ReplyReviewPanel sugestao={sugestao} disabled={isDisabled} />}
         {rascunho && !rascunhoUsado && !nota && <AvisoDoRascunho rascunho={rascunho} />}
+        {/* O AVISO DO BLOQUEIO ATÉ ASSUMIR (#3012): o motivo junto da caixa travada. */}
+        {aguardandoAssumir && (
+          <div
+            data-testid="aviso-assumir"
+            className="mb-1.5 flex items-start gap-2 rounded-md border-l-2 border-primary bg-muted/60 px-2 py-1.5 text-xs"
+          >
+            <p className="min-w-0 flex-1 text-muted-foreground">
+              {t("Assuma esta conversa para responder.")}
+            </p>
+          </div>
+        )}
         <AbasDoComposer mode={mode} onMode={setMode} dicaId={dicaId} />
         <CaixaOuFaixaDoDono
           conversa={!nota && !semAssumir ? conversa : null}
@@ -617,6 +678,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           </div>
         )}
         {respondendo && !nota && <FaixaDaCitacao respondendo={respondendo} onCancelar={onCancelarResposta} />}
+        {/* A BARRA DE RECURSOS (#2833): o clique NÃO envia, entrega ao `applyTemplate`. */}
+        {!nota && (
+          <BarraDeRecursos
+            recursos={templates.data ?? []}
+            disabled={respostaBarrada}
+            onEscolher={escolherRecurso}
+            usuarioId={usuarioId}
+          />
+        )}
         <div
           // A caixa ganha a borda e o anel do accent no foco, e a nota interna
           // vira tracejada no tom de aviso: quem digita sabe, sem ler nada, se
@@ -642,7 +712,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             value={text}
             onChange={(e) => {
               setText(e.target.value);
-              if (!resolveSlash(e.target.value).open) setMenuDismissed(false);
               const pos = e.target.selectionStart ?? e.target.value.length;
               setCaret(pos);
               setMencaoIndice(0);
@@ -692,7 +761,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       </div>
       <DialogosDoComposer
         conversationId={conversationId} currentContactId={currentContactId}
-        files={pendingFiles} legendaInicial={legendaInicial}
+        files={pendingFiles} legendaInicial={legendaInicial} notaInterna={pendingEm === "note"}
         sending={upload.isPending || send.isPending || createNote.isPending}
         onCancelarAnexo={() => {
           const devolver = legendaInicial;
@@ -704,11 +773,14 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         }}
         onRemoverAnexo={(indice, caption) => {
           const resto = pendingFiles.filter((_, i) => i !== indice);
-          // Fila vazia = nada a enviar: a legenda volta para o campo, como no cancelar.
-          if (resto.length === 0) {
-            setPendingFiles([]);
+          // Sobra SEM anexo que leve legenda (fila vazia ou só de áudio) é nada a
+          // legendar: o texto volta para o campo (#3151). Na NOTA o texto é o corpo
+          // dela e vale com áudio também: só a fila vazia o devolve.
+          if (resto.length === 0 || (pendingEm !== "note" && indiceDaLegenda(resto) === -1)) {
+            setPendingFiles(resto);
             setLegendaInicial(null);
-            if (caption) escreverNoCampo(caption);
+            // Sem foco: o diálogo continua ABERTO com o áudio que sobrou.
+            if (caption) escreverNoCampo(caption, false);
             return;
           }
           setLegendaInicial(caption);

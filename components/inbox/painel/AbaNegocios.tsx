@@ -89,6 +89,8 @@ export function AbaNegocios({
           onOpenChange={setLeadDialogOpen}
           pipelineId={defaultPipeline.data.pipeline.id}
           stages={defaultPipeline.data.stages}
+          // #3038: os campos exigidos pela etapa vão no `settings` do funil padrão.
+          settings={defaultPipeline.data.pipeline.settings}
           contactId={contactId}
           onCreated={() => {
             onSelecionarLead(null);

@@ -78,8 +78,9 @@ export async function GET(_req: NextRequest, { params }: Rota) {
   const requestId = randomUUID();
   try {
     await requirePlatformAdmin();
-  } catch {
-    return fail("forbidden", "Platform admin required", 403, { requestId });
+  } catch (err) {
+    // A recusa nomeada (mfa_required) sobrevive: um catch próprio a engolia como `forbidden`.
+    return falhaDaEscritaDePlatformAdmin(err, requestId);
   }
   const admin = createAdminClient();
   if (!(await moduloLigado(admin, "cobranca")) || !z.string().uuid().safeParse(tenantId).success) {

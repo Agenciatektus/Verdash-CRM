@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
 
@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import { useT } from "@/hooks/i18n/useT";
 import { CaseDetail } from "./CaseDetail";
 
-export function CaseList() {
+export function CaseList({ heading }: { heading?: ReactNode } = {}) {
   const t = useT();
   const [tab, setTab] = useState<"open" | "resolved">("open");
   // Deep link: o aviso "um atendimento espera decisão" na Central manda para cá
@@ -30,11 +30,30 @@ export function CaseList() {
   const idDaUrl = useSearchParams()?.get("caso") ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(idDaUrl);
   const { data, isLoading } = useCases(tab);
+  const listRef = useRef<HTMLDivElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const selectedTrigger = useRef<HTMLButtonElement | null>(null);
+  const hasOpenedDetail = useRef(false);
+
+  useEffect(() => {
+    if (selectedId !== null) {
+      hasOpenedDetail.current = true;
+      if (window.matchMedia?.("(max-width: 767px)").matches) backRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!hasOpenedDetail.current) return;
+    hasOpenedDetail.current = false;
+    const target = selectedTrigger.current?.isConnected ? selectedTrigger.current
+      : listRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
+    target?.focus({ preventScroll: true });
+  }, [selectedId]);
 
   return (
-    <div className="flex min-h-0 flex-1 gap-6 mb:flex-col mb:gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 mb:gap-3">
+      {heading ? <div className={cn("shrink-0", selectedId && "mb:hidden")}>{heading}</div> : null}
+      <div className="flex min-h-0 flex-1 gap-6 mb:flex-col mb:gap-3">
       {/* Celular: lista OU caso, como a Inbox. Só CSS decide (sem ler a tela). */}
-      <div className={cn("flex w-full max-w-xs shrink-0 flex-col gap-4 mb:max-w-none", selectedId && "mb:hidden")}>
+      <div ref={listRef} data-testid="case-list" className={cn("flex min-h-0 w-full max-w-xs shrink-0 flex-col gap-4 mb:max-w-none", selectedId && "mb:hidden")}>
         <Tabs value={tab} onValueChange={(v) => setTab(v as "open" | "resolved")}>
           <TabsList>
             <TabsTrigger value="open">{t("Abertos")}{data ? ` (${data.open_count})` : ""}</TabsTrigger>
@@ -60,21 +79,22 @@ export function CaseList() {
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border rounded-lg border border-border">
+            <ul className="min-h-0 overflow-y-auto divide-y divide-border rounded-lg border border-border">
             {data.cases.map((c) => (
               <CaseRow
                 key={c.id}
                 item={c}
                 selected={c.id === selectedId}
-                onSelect={() => setSelectedId(c.id)}
+                  onSelect={(trigger) => { selectedTrigger.current = trigger; setSelectedId(c.id); }}
               />
             ))}
           </ul>
         )}
       </div>
 
-      <div className={cn("min-w-0 flex-1", !selectedId && "mb:hidden")}>
+      <div data-testid="case-detail" role="region" aria-label={t("Detalhes do caso")} className={cn("min-w-0 flex-1", !selectedId && "mb:hidden")}>
         <Button
+          ref={backRef}
           variant="ghost"
           size="sm"
           className="mb-2 hidden w-fit gap-1 mb:inline-flex"
@@ -84,6 +104,7 @@ export function CaseList() {
         </Button>
         <CaseDetail caseId={selectedId} />
       </div>
+    </div>
     </div>
   );
 }
@@ -95,7 +116,7 @@ function CaseRow({
 }: {
   item: CaseListItem;
   selected: boolean;
-  onSelect: () => void;
+  onSelect: (trigger: HTMLButtonElement) => void;
 }) {
   const localeDaData = useLocaleDeData();
   const t = useT();
@@ -104,7 +125,7 @@ function CaseRow({
     <li>
       <button
         type="button"
-        onClick={onSelect}
+        onClick={(event) => onSelect(event.currentTarget)}
         aria-current={selected ? "true" : undefined}
         data-testid="case-item"
         className={cn(

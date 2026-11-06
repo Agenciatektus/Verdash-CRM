@@ -37,7 +37,7 @@ function montar(gatilho: Record<string, unknown> | null) {
     // upstream a05ac8fcd). Sem `status` o dreno consome o evento antes de olhar a
     // mensagem, e o controle negativo e o anti-backlog nem chegavam a rodar.
     if (sql.includes('ai_dispatch_mode')) return { rows: [{ mode: null, status: 'active' }] };
-    if (sql.includes('select is_group')) return { rows: [{ is_group: false }] };
+    if (sql.includes('select c.is_group')) return { rows: [{ is_group: false, ia_responde: null }] };
     if (sql.includes('select type, body, media_url')) return { rows: gatilho ? [gatilho] : [] };
     if (sql.includes('as tem_agente')) return { rows: [{ tem_agente: true, tem_roteador: false }] };
     if (sql.includes("direction = 'inbound'")) return { rows: [{ id: MSG }] };

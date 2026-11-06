@@ -53,6 +53,9 @@ export {
   Dot,
   // actions
   ArrowBendUpLeft,
+  // encaminhar (#2835): a seta espelhada do "Responder" — mesma família,
+  // mesmo peso, para os dois gestos da bolha lerem como par.
+  ArrowBendUpRight,
   // videochamada (#2440): ícone de câmera, não Video (que no Phosphor é a
   // janela de player) — junto do Phone do DialButton, a família é a mesma.
   VideoCamera,
@@ -60,6 +63,7 @@ export {
   List,
   Bell,
   BellSlash,
+  DeviceMobile,
   EnvelopeSimple,
   EnvelopeOpen,
   PaperPlaneTilt,
@@ -128,6 +132,8 @@ export {
   GitBranch,
   Flag,
   TreeStructure,
+  // reordenar por arrastar e soltar (#3244): a alça da lista de respostas rápidas
+  DotsSixVertical as DragHandle,
   // misc
   DotsThree,
   CaretDown,

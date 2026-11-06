@@ -59,6 +59,12 @@ const campanha: CampanhaCarregada = {
   teto_diario: 50,
   teto_horario: null,
   description: null,
+  message_mode: "text",
+  provider_template_name: null,
+  provider_template_language: null,
+  provider_template_variables: null,
+  velocidade: "gradual",
+  split_messages: false,
 };
 
 interface Operacao {

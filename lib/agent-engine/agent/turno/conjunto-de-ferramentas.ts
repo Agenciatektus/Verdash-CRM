@@ -16,6 +16,7 @@ import { capacidadesEntreguesAoOperador, catalogoEntregueAoOperador } from '../e
 import { copiarFotoNoStorage, PASTA_DE_TESTE_DE_MIDIA, prepararFotosDoProduto } from '../fotos-do-produto';
 import { applyPreviewPolicy, previewGateContext } from '../preview';
 import { READ_ONLY_TOOLS, wrapToolsWithBreaker } from '../tool-breaker';
+import { envolverFerramentasComTraco } from '../traco-do-turno';
 import { restringirAConducao } from '@/lib/cadencia/conducao/ferramentas';
 import { filtrarRawTools } from '@/lib/cadencia/conducao/presets';
 import { restringirConfigAConducao } from '@/lib/cadencia/conducao/turno';
@@ -252,11 +253,16 @@ export async function montarConjuntoDeFerramentas(
           conferirAfirmacoes,
         )
       : rawTools;
-  const tools = wrapToolsWithBreaker(previewTools, {
-    thresholds: deps.knobs.breaker,
-    readOnlyTools: READ_ONLY_TOOLS,
-    log: runLog, // os warns dos gates do breaker saem carimbados com o run
-  });
+  const tools = envolverFerramentasComTraco(
+    wrapToolsWithBreaker(previewTools, {
+      thresholds: deps.knobs.breaker,
+      readOnlyTools: READ_ONLY_TOOLS,
+      log: runLog, // os warns dos gates do breaker saem carimbados com o run
+    }),
+    // O envoltório do traço fica POR FORA do breaker: assim a chamada que o
+    // breaker bloqueou também aparece na linha, marcada como `bloqueada` (#2869).
+    input.tracoDoTurno?.coletor,
+  );
 
   return { tools, entregues };
 }

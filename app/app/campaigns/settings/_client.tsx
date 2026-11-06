@@ -40,6 +40,7 @@ import {
 import { useT } from "@/hooks/i18n/useT";
 import { RITMO_RECOMENDADO } from "@/lib/campanhas/ritmo-recomendado";
 import { minutosParaSegundos, segundosParaMinutos } from "@/lib/campanhas/unidades";
+import { useTelefoneExemplo } from "@/hooks/contacts/useTelefoneExemplo";
 import { ArrowBendUpLeft } from "@/lib/ui/icons";
 
 export function ConfiguracaoDeCampanhas() {
@@ -229,6 +230,7 @@ function TextosSalvos() {
 
 function ListaDeExclusao() {
   const t = useT();
+  const telefoneExemplo = useTelefoneExemplo();
   const q = useExclusoes();
   const excluir = useExcluirNumero();
   const tirar = useTirarDaExclusao();
@@ -247,7 +249,7 @@ function ListaDeExclusao() {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="x-tel">{t("Telefone com DDI e DDD")}</Label>
-          <Input id="x-tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="+5548999990000" />
+          <Input id="x-tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder={telefoneExemplo} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="x-motivo">{t("Motivo (opcional)")}</Label>

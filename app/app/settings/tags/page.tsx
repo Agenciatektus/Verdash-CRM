@@ -26,20 +26,27 @@ import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
  * as regras dos agentes. Mesmo gate do roteamento de filas — configuração, não
  * atendimento.
  */
+import Link from "next/link";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { tagsPageQuerySchema, tagsPageResultSchema } from "@/lib/schemas/tags";
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { inventarioDeTagsSchema, type LinhaDeVocabulario } from "@/lib/schemas/tags";
+import { tagsInternasDaOrg } from "@/lib/schemas/settings";
 import { createClient } from "@/lib/supabase/server";
 
 import { PainelDeTags } from "./_painel";
+import { TagsInternasForm } from "./_tags-internas-form";
 
 export const metadata = { title: "Tags" };
 export const dynamic = "force-dynamic";
 
-export default async function TagsPage() {
+export default async function TagsPage({ searchParams }: { searchParams: Promise<{ page?: string; busca?: string }> }) {
+  const query = tagsPageQuerySchema.safeParse(await searchParams);
   const user = await requireAuth();
   const activeOrg = await resolveActiveOrg(user);
   if (!activeOrg) redirect("/app");
@@ -65,18 +72,37 @@ export default async function TagsPage() {
   // ─── DIVERGÊNCIA TEKTUS (9038): as duas leituras, em paralelo ────────────
   // Desde a 9038 esta é a única tela de etiquetas, e ela mostra também as
   // SUGESTÕES da curadoria do fork (`fn_tags_inventario`, migration 9005,
-  // `security invoker` como a de cima). Pelo MESMO client de sessão, pelo mesmo
-  // motivo do comentário acima.
+  // `security invoker`). Pelo MESMO client de sessão.
   const [vocabulario, inventario] = await Promise.all([
-    supabase.rpc("fn_vocabulario_de_tags", { p_org: activeOrg.orgId }),
+    query.success ? supabase.rpc("fn_vocabulario_de_tags_pagina", {
+      p_org: activeOrg.orgId, p_busca: query.data.busca,
+      p_offset: (query.data.page - 1) * 100, p_limit: 100,
+    }) : Promise.resolve({ data: null, error: { message: "invalid_query" } }),
     supabase.rpc("fn_tags_inventario", { p_org: activeOrg.orgId }),
   ]);
   const { data } = vocabulario;
   // A falha de QUALQUER das duas vira o aviso de erro: mostrar a lista sem as
-  // sugestões faria toda etiqueta parecer "fora das sugestões", e o operador
-  // promoveria de novo o que já estava sugerido.
+  // sugestões faria toda etiqueta parecer "fora das sugestões".
   const error = vocabulario.error ?? inventario.error;
   const sugestoes = error ? null : inventarioDeTagsSchema.parse(inventario.data ?? {});
+  const result = tagsPageResultSchema.safeParse(data);
+  const pageNumber = query.success ? query.data.page : 1;
+  const search = query.success ? query.data.busca : "";
+  const total = result.success ? result.data.total : 0;
+  const pageCount = Math.max(1, Math.ceil(total / 100));
+  const pageUrl = (page: number) => "/app/settings/tags?" + new URLSearchParams({ page: String(page), busca: search });
+
+  // A lista de contato interno (#2353) lê o `settings` da própria organização
+  // pela SESSÃO: a policy `orgs_select` isola a linha, e o admin client aqui
+  // mostraria o settings de qualquer tenant se alguém trocasse o id.
+  const { data: linhaDaOrganizacao } = await supabase
+    .from("organizations")
+    .select("settings")
+    .eq("id", activeOrg.orgId)
+    .maybeSingle();
+  const tagsInternas = tagsInternasDaOrg(
+    (linhaDaOrganizacao as { settings?: unknown } | null)?.settings,
+  );
 
   const idioma = user.idioma;
   const t = (texto: string) => traduzir(texto, idioma);
@@ -91,19 +117,32 @@ export default async function TagsPage() {
       />
       <SecaoDaPagina>
 
-        {error ? (
+      <form method="get" className="flex max-w-xl items-center gap-2">
+        <Input name="busca" aria-label={t("Buscar etiquetas")} placeholder={t("Buscar etiquetas")}
+          defaultValue={search} maxLength={60}/>
+        <Button type="submit">{t("Buscar")}</Button>
+      </form>
+      {error || !result.success ? (
           // A falha NÃO vira lista vazia: "nenhuma etiqueta" e "não consegui ler"
           // levam o operador a decisões opostas (uma convida a criar tudo de novo).
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
             {t("Não foi possível carregar as etiquetas agora. Recarregue a página.")}
           </div>
         ) : (
-          <PainelDeTags
-            tags={(data ?? []) as LinhaDeVocabulario[]}
-            idioma={idioma}
-            sugestoes={sugestoes}
-          />
-        )}
+        <>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span>{total} {total === 1 ? t("Etiqueta") : t("etiquetas")} · {t("Página")} {pageNumber} / {pageCount}</span>
+            {pageNumber > 1 && <Link className="underline" href={pageUrl(pageNumber-1)}>{t("Anterior")}</Link>}
+            {pageNumber < pageCount && <Link className="underline" href={pageUrl(pageNumber+1)}>{t("Próxima")}</Link>}
+          </div>
+          {total === 0 ? <p>{t("Nenhuma etiqueta encontrada.")}</p> :
+            <PainelDeTags key={pageNumber+":"+search} tags={result.data.items as LinhaDeVocabulario[]} idioma={idioma} sugestoes={sugestoes} paginado />}
+        </>
+      )}
+
+      {/* #2353: a lista de contato interno não depende do vocabulário (que pode
+          ter falhado acima) — vive em `settings` e é independente dele. */}
+      <TagsInternasForm tags={tagsInternas} idioma={idioma} />
       </SecaoDaPagina>
     </Pagina>
   );

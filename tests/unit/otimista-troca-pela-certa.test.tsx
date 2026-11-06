@@ -110,10 +110,15 @@ describe("troca da bolha otimista pela real", () => {
     });
     espiao.mockRestore();
     expect(idDaBolha).toMatch(/^temp-/);
-    expect(post).toHaveBeenCalledWith("/api/v1/messages", {
-      conversation_id: CONV,
-      body: "ok",
-      metadata: { origem: "teste", client_id: idDaBolha },
-    });
+    // O 3º argumento é a chave de idempotência do envio (upstream 1.90).
+    expect(post).toHaveBeenCalledWith(
+      "/api/v1/messages",
+      {
+        conversation_id: CONV,
+        body: "ok",
+        metadata: { origem: "teste", client_id: idDaBolha },
+      },
+      { idempotencyKey: expect.any(String) },
+    );
   });
 });

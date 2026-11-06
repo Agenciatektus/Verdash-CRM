@@ -38,6 +38,8 @@ export interface FiltrosDeTarefa {
    * cada render, senão a chave da consulta mudaria e ela releria sem parar.
    */
   encerradasDesde?: string;
+  /** De quem é: `me` (a rota resolve quem é), `ninguem` (sem responsável) ou o id de um membro. Ausente = de todos. */
+  assigned_to?: string;
 }
 
 export interface OpcoesDeTarefas {
@@ -75,7 +77,7 @@ export function useTasks(filtros: FiltrosDeTarefa = {}, opcoes: OpcoesDeTarefas 
   if (filtros.contact_id) params.set("contact_id", filtros.contact_id);
   if (filtros.demanda_id) params.set("demanda_id", filtros.demanda_id);
   if (filtros.aberto) params.set("aberto", "true");
-  if (filtros.responsavel) params.set("assigned_to", filtros.responsavel);
+  if (filtros.assigned_to ?? filtros.responsavel) params.set("assigned_to", (filtros.assigned_to ?? filtros.responsavel)!);
   if (filtros.aberto && filtros.encerradasDesde) params.set("encerradas_desde", filtros.encerradasDesde);
   const qs = params.toString();
 

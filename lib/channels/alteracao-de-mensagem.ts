@@ -96,12 +96,18 @@ export async function aplicarAlteracaoDeMensagem(
     ? { ...(pedido.texto ? { body: pedido.texto } : {}), edited_at: agora }
     : { revoked_at: agora };
 
-  const { error: erroUpdate } = await admin
+  let consulta = admin
     .from("messages")
     .update(patch)
     .eq("id", original.id)
     .eq("organization_id", pedido.organizationId);
+  // Só a linha que AINDA não estava apagada (upstream #3279): o WAHA ecoa o apagar
+  // feito pela tela do CRM e a reentrega do mesmo evento; sem o filtro, o eco
+  // recarimbava a hora e gravava uma segunda trilha de "apagou pelo celular".
+  if (pedido.acao === "apagar") consulta = consulta.is("revoked_at", null);
+  const { data: alteradas, error: erroUpdate } = await consulta.select("id");
   if (erroUpdate) throw new Error(`alteracao_update_falhou: ${erroUpdate.message}`);
+  if (pedido.acao === "apagar" && (alteradas ?? []).length === 0) return { aplicada: false, motivo: "apagar_ja_apagada" };
 
   return { aplicada: true, messageId: original.id, conversationId: original.conversation_id };
 }

@@ -7,6 +7,7 @@ import { getWahaClient } from "@/lib/waha/client";
 import { ConnectWhatsappClient } from "./_client";
 import { wahaHabilitado } from "@/lib/env";
 import { traduzir } from "@/lib/i18n/dicionario";
+import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ export default async function ConnectWhatsappPage() {
         wahaDesligado={wahaDesligado}
         sessionName={nomeCurtoDaSessao(activeOrg.orgId)}
         oficialPodeReceber={oficialPodeReceber}
+        telefoneExemplo={perfilDoPais(activeOrg.country).telefoneExemplo}
       />
     </div>
   );

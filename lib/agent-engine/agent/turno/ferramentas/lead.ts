@@ -54,20 +54,29 @@ export function criarUpdateLeadState(
               : {}),
           });
           if (!mirror.ok) {
+            // `to_stage` continua sendo o PASSO INTERNO do agente — o log é
+            // diagnóstico de quem depura, não texto para o dono (#3148).
             runLog.warn('espelho de stage no CRM falhou — harness mantido', {
               to_stage: update.transition.to,
               reason: mirror.reason,
             });
             // QUAL aviso cada recusa produz, e como ele deixa de se repetir, é
-            // decisão de `move-lead-stage` — aqui só se passa o motivo e o
-            // lead. Ver `abreAvisoDoEspelhoRecusado`: escrever o
+            // decisão de `move-lead-stage` — aqui só se passa o motivo, o negócio e
+            // o NOME da etapa do funil. Ver `abreAvisoDoEspelhoRecusado`: escrever o
             // `insertInboxItem` à mão neste ponto é o que deixava o `dedupe`
             // sem guarda.
+            //
+            // ⚠️ `etapaDoFunil` (o `stageName` que o resolvedor devolve) e NÃO
+            // `update.transition.to`: o aviso da Central nomeia a etapa do quadro
+            // do dono ("Perdido"), não o passo interno ("lost", #3148).
             await abreAvisoDoEspelhoRecusado(pool, tenantId, {
-              leadId,
+              // O NEGÓCIO resolvido pelo espelho, não `leadId` (que aqui é o
+              // contact_id): a Central abre o aviso por `crm_leads.id`.
+              ...(mirror.negocioId !== undefined ? { negocioId: mirror.negocioId } : {}),
               motivo: mirror.reason,
               detalhe: mirror.detail,
               etapaDeDestino: update.transition.to,
+              ...(mirror.stageName !== undefined ? { etapaDoFunil: mirror.stageName } : {}),
             });
           }
         }

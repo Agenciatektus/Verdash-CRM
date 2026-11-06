@@ -17,6 +17,7 @@ import { requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { nomesDeMembros } from "@/lib/users/nomes-de-membros";
+import { normalizarEtiqueta } from "@/lib/metrics/mediana-e-recorte-por-etiqueta";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,10 @@ const querySchema = z.object({
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   owner_user_id: z.string().uuid().optional(),
+  // #3212: etiqueta do contato cujas conversas saem da conta. Teto de 120
+  // caracteres é o da etiqueta digitável; o que passa disso é 422, não recorte
+  // silencioso. `""`/só-espaço não é etiqueta (ver `normalizarEtiqueta`).
+  excluir_etiqueta: z.string().max(120).optional(),
 });
 
 interface AttendantRow {
@@ -34,11 +39,17 @@ interface AttendantRow {
   lost: number;
   conversations_handled: number;
   avg_first_response_seconds: number | null;
+  /** #3212: a mediana entra AO LADO da média; `null` = não medida, nunca 0. */
+  median_first_response_seconds: number | null;
 }
 
 interface MetricsPayload {
   funnel: { stage_id: string; stage_name: string; position: number; count: number }[];
   attendants: AttendantRow[];
+  /** #3212: a etiqueta usada no recorte (`null` = sem recorte). */
+  excluded_tag?: string | null;
+  /** #3212: conversas da janela que a etiqueta tirou da conta. */
+  excluded_conversations?: number;
 }
 
 export async function GET(req: NextRequest): Promise<Response> {
@@ -55,6 +66,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     from: url.searchParams.get("from") ?? undefined,
     to: url.searchParams.get("to") ?? undefined,
     owner_user_id: url.searchParams.get("owner_user_id") ?? undefined,
+    excluir_etiqueta: url.searchParams.get("excluir_etiqueta") ?? undefined,
   });
   if (!parsed.success) {
     return fail("validation_failed", t("Query inválida."), 422, {
@@ -74,11 +86,16 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const supabase = await createClient();
+  // #3212: a etiqueta do recorte passa pela MESMA normalização do banco
+  // (`normalizarEtiqueta` = `btrim` da RPC): `""`/só-espaço viram `null`, e
+  // `null` desliga o recorte em vez de excluir todo contato sem etiqueta.
+  const excluirEtiqueta = normalizarEtiqueta(parsed.data.excluir_etiqueta);
   const { data, error } = await supabase.rpc("fn_attendant_metrics", {
     p_org: activeOrg.orgId,
     p_from: from.toISOString(),
     p_to: to.toISOString(),
     p_owner: parsed.data.owner_user_id,
+    p_excluir_etiqueta: excluirEtiqueta,
   });
   if (error) return fail("internal_error", error.message, 500, { requestId });
 
@@ -93,6 +110,9 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const attendants = metrics.attendants.map((a) => ({
     ...a,
+    // #3212: `?? null` é deliberado — linha sem o campo (banco anterior à 0754)
+    // vira "não medida", nunca `undefined` que some do JSON nem `0` que mente.
+    median_first_response_seconds: a.median_first_response_seconds ?? null,
     name: names.get(a.user_id)?.name ?? null,
     email: names.get(a.user_id)?.email ?? null,
   }));
@@ -101,6 +121,10 @@ export async function GET(req: NextRequest): Promise<Response> {
     {
       window: { from: from.toISOString(), to: to.toISOString() },
       owner_user_id: parsed.data.owner_user_id ?? null,
+      // #3212: o recorte é DECLARADO na resposta — qual etiqueta e quantas
+      // conversas da janela ela tirou da conta (0 quando não houve recorte).
+      excluded_tag: metrics.excluded_tag ?? null,
+      excluded_conversations: metrics.excluded_conversations ?? 0,
       funnel: metrics.funnel,
       attendants,
     },

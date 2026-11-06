@@ -48,7 +48,7 @@ function montar(c: Cenario) {
     }
     // A mesma leitura traz o status da org: parada consome o evento sem job (0501).
     if (sql.includes('ai_dispatch_mode')) return { rows: [{ mode: null, status: 'active' }] };
-    if (sql.includes('select is_group')) return { rows: [{ is_group: false }] };
+    if (sql.includes('select c.is_group')) return { rows: [{ is_group: false, ia_responde: null }] };
     if (sql.includes('from cadencia_conducoes c') && sql.includes('as reguas'))
       return { rows: [{ conducao_id: c.conducaoId ?? null, reguas: c.reguas ?? null }] };
     if (sql.includes('fn_cadencia_lead_respondeu')) return { rows: [{ r: c.respostaDaFn ?? { ja_encerrada: true } }] };

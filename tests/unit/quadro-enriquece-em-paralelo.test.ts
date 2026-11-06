@@ -179,7 +179,7 @@ describe("a rota não pode voltar a encadear as famílias", () => {
   ];
 
   it.each(FAMILIAS)("%s roda dentro do bloco paralelo, sobre o quadro base", (familia) => {
-    expect(bloco).toMatch(new RegExp(`${familia}\\(\\s*supabase,\\s*organizationId,\\s*leadsVisiveis`));
+    expect(bloco).toMatch(new RegExp(`${familia}\\(\\s*supabase,\\s*organizationId,\\s*leadsDoQuadro`));
   });
 
   it.each(FAMILIAS)("%s não é mais aguardada em série no GET", (familia) => {
@@ -189,7 +189,7 @@ describe("a rota não pode voltar a encadear as famílias", () => {
 
   it("a resposta sai da fusão por id e carrega o Server-Timing", () => {
     expect(fonte).toMatch(/leads:\s*leadsEnriquecidos/);
-    expect(fonte).toMatch(/const leadsEnriquecidos = fundirEnriquecimentos\(leadsVisiveis,/);
+    expect(fonte).toMatch(/const leadsEnriquecidos = fundirEnriquecimentos\(leadsDoQuadro,/);
     expect(fonte).toMatch(/return ok\(board, \{ requestId, headers \}\)/);
   });
 });

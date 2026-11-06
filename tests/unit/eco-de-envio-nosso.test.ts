@@ -22,8 +22,10 @@ describe("ehEcoDeEnvioNosso", () => {
   it("texto igual a um envio nosso em voo é eco nosso", async () => {
     const { admin, filtros } = fazerAdmin([{ body: " claro, temos sim! ", type: "text" }]);
     expect(await ehEcoDeEnvioNosso(admin, "org", "conv", { corpo: "claro, temos sim!", midia: false })).toBe(true);
-    // Só linha NOSSA, ainda sem `external_id`, na mesma conversa.
-    expect(filtros).toContainEqual(["is", "external_id", null]);
+    // Só linha NOSSA, na mesma conversa. O `external_id` não é mais filtro de SQL (upstream #3165):
+    // "sem id" (em voo) e "id já devolvido" são decididos em código, e o status entra na consulta.
+    expect(filtros).not.toContainEqual(["is", "external_id", null]);
+    expect(filtros.some(([m, c]) => m === "in" && c === "status")).toBe(true);
     expect(filtros).toContainEqual(["in", "sent_via", ["ai", "user", "automation", "system"]]);
     expect(filtros).toContainEqual(["eq", "conversation_id", "conv"]);
   });
