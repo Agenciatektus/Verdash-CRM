@@ -46,8 +46,7 @@ export function agruparEstoque(itens: unknown[]): GrupoEstoque[] {
   const grupos = new Map<string, GrupoEstoque>();
   for (const raw of itens) {
     const i = (raw ?? {}) as Record<string, unknown>;
-    // shortcut: nome do campo de disponibilidade não confirmado em produção; ajustar se vier outro.
-    if (norm(texto(i.disponibilidadeDescricao)) !== DISPONIVEL) continue;
+    if (norm(texto(i.disponibilidade)) !== DISPONIVEL) continue;
     const aparelho = (texto(i.aparelhoDescricao) || texto(i.descricao)).slice(0, 120);
     if (!aparelho) continue;
     const n = typeof i.valorVenda === "string" || typeof i.valorVenda === "number" ? Number(i.valorVenda) : NaN;

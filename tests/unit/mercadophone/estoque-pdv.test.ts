@@ -22,11 +22,12 @@ const linha = (over: Record<string, unknown> = {}) => ({
   corDescricao: "Preto",
   estadoProdutoDescricao: "Seminovo",
   tipoProdutoDescricao: "Aparelho",
-  disponibilidadeDescricao: "Disponível para venda",
+  disponibilidade: "Disponível para venda",
+  produtoDisponibilidadeId: 1,
   valorVenda: "3200.00",
   valorCusto: "2100.00",
-  lucro: "1100.00",
-  numeroSerie: "SERIE123",
+  quantidade: 1,
+  serialNumber: "SERIE123",
   ...over,
 });
 
@@ -39,9 +40,9 @@ describe("agruparEstoque", () => {
   it("agrupa aparelhos iguais, conta e esconde o que não está disponível", () => {
     const g = agruparEstoque([
       linha(),
-      linha({ numeroSerie: "B" }),
+      linha({ serialNumber: "B" }),
       linha({ corDescricao: "Azul" }),
-      linha({ disponibilidadeDescricao: "Laboratório" }),
+      linha({ disponibilidade: "Laboratório", produtoDisponibilidadeId: 2 }),
       linha({ aparelhoDescricao: "", descricao: "Capa", tipoProdutoDescricao: "Acessório", gbDescricao: "" }),
     ]);
     expect(g).toHaveLength(3);
@@ -57,14 +58,14 @@ describe("agruparEstoque", () => {
 });
 
 describe("crm_check_pdv_stock", () => {
-  it("pagina, nunca devolve custo, lucro, série nem token", async () => {
+  it("pagina, nunca devolve custo, série nem token", async () => {
     listar
       .mockResolvedValueOnce({ totalItens: 201, itens: Array.from({ length: 200 }, () => linha()) })
       .mockResolvedValueOnce({ totalItens: 201, itens: [linha({ corDescricao: "Azul" })] });
     const r = await crmCheckPdvStock.handler({ termo: "iphone" }, ctx);
     expect(listar).toHaveBeenCalledTimes(2);
     const json = JSON.stringify(r);
-    expect(json).not.toMatch(/valorCusto|lucro|2100|1100|SERIE123|numeroSerie/);
+    expect(json).not.toMatch(/valorCusto|2100|SERIE123|serialNumber/);
     expect(json).not.toContain(TOKEN);
     expect((r as { itens: Array<{ quantidade: number }> }).itens.map((i) => i.quantidade).sort()).toEqual([1, 200]);
   });
