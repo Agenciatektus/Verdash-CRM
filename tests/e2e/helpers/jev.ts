@@ -59,11 +59,25 @@ export async function limparOJev(orgId: string): Promise<void> {
   if (gravou.error) throw new Error(`limpar settings.jev: ${gravou.error.message}`);
 }
 
+/**
+ * As tarefas do Jev ficam recolhidas ("N observando, M decidindo" › "Ver tarefas").
+ * Abre o recolhimento, se existir e estiver fechado: os botões e as frases por tarefa
+ * só ficam visíveis depois disso, como para a pessoa.
+ */
+export async function abrirAsTarefasDoJev(cartao: Locator): Promise<void> {
+  const detalhe = cartao.getByTestId("jev-tarefas");
+  if ((await detalhe.count()) === 0) return;
+  if (await detalhe.evaluate((e) => (e as HTMLDetailsElement).open)) return;
+  await detalhe.getByTestId("jev-tarefas-resumo").click();
+  await expect(detalhe).toHaveAttribute("open", "");
+}
+
 /** O cartão, lido do servidor a cada chamada — é a rota que o worker obedece. */
 export async function abrirOCartao(page: Page): Promise<Locator> {
   await page.goto("/app/ai/providers");
   const cartao = page.getByTestId("cartao-do-jev");
   await expect(cartao).toBeVisible({ timeout: 30_000 });
+  await abrirAsTarefasDoJev(cartao);
   return cartao;
 }
 
@@ -91,6 +105,7 @@ export async function esperarEstado(page: Page, estados: string[], timeout = 30_
 export async function esperarNoCartao(page: Page, estados: string[], timeout = 30_000): Promise<string> {
   const cartao = page.getByTestId("cartao-do-jev");
   await expect(cartao).toHaveAttribute("data-estado", new RegExp(`^(${estados.join("|")})$`), { timeout });
+  await abrirAsTarefasDoJev(cartao);
   return (await cartao.getAttribute("data-estado")) ?? "";
 }
 

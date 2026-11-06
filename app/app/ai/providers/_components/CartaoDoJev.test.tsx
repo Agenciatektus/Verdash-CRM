@@ -20,6 +20,7 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 import { selectDaEscolha } from "@/tests/unit/helpers/controles-do-ds";
 
 import { CartaoDoJev, corpoComAceiteDoPadrao, jevNoPonto, useDadosDoJev, type DadosDoJev } from "./CartaoDoJev";
+import type { TarefaNoCartao } from "./jev-dados";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/app/app/ai/credentials/_actions", () => ({ refreshCredentialsView: vi.fn() }));
@@ -1596,6 +1597,48 @@ describe("CartaoDoJev — a tarefa do follow-up, que só observa", () => {
   });
 });
 
+describe("CartaoDoJev — o resumo das tarefas segue a régua do selo", () => {
+  const resumo = () => screen.getByTestId("jev-tarefas-resumo");
+  const CLIMA = { id: "clima", ponto: "sentiment_classify", rotulo: "Medir o clima da conversa", oQueFaz: "Mede.", novo: false } as const;
+  const HUMANO = {
+    id: "humano",
+    ponto: null,
+    rotulo: TAREFA_DO_PEDIDO_DE_HUMANO.rotulo,
+    oQueFaz: TAREFA_DO_PEDIDO_DE_HUMANO.oQueFaz,
+    observacao: null,
+  } as const;
+  const avisando: TarefaNoCartao = { ...HUMANO, estado: "decidindo", novo: false, percebidos: { dias: 30, mensagens: 0, conversas: [] } };
+
+  it("avisar a equipe não é decidir: conta à parte, com 0 decidindo", () => {
+    montar(
+      dados({ config: { ligado: true, modo: "observacao" }, por_tarefa: [{ ...CLIMA, estado: "observando" }, avisando] }),
+    );
+    expect(resumo()).toHaveTextContent("1 observando, 0 decidindo, 1 avisando a equipe");
+  });
+
+  it("chave recusada (parado): o resumo não afirma que alguém decide", () => {
+    montar(
+      dados({
+        config: { ligado: true, modo: "decide" },
+        chave: { validada: false, erro_de_validacao: "auth_failed_401" },
+        por_tarefa: [{ ...CLIMA, estado: "decidindo" }],
+      }),
+    );
+    expect(cartao()).toHaveAttribute("data-estado", "parado");
+    expect(resumo()).not.toHaveTextContent(/decidindo/i);
+  });
+
+  it("tarefa parada pela camada não conta como observando", () => {
+    montar(
+      dados({
+        config: { ligado: true, modo: "observacao" },
+        por_tarefa: [{ ...CLIMA, estado: "observando" }, { ...HUMANO, estado: "observando", novo: false, sem_atendente: "ninguem_no_ar" }],
+      }),
+    );
+    expect(resumo()).toHaveTextContent("1 observando, 0 decidindo");
+  });
+});
+
 describe("CartaoDoJev — o aviso da área da saúde (DEC-012 #2)", () => {
   it("avisa quem é da área da saúde que o dado é sensível e que o contrato da TypeSafe precisa cobri-lo", () => {
     montar(dados());
@@ -1603,6 +1646,8 @@ describe("CartaoDoJev — o aviso da área da saúde (DEC-012 #2)", () => {
     expect(aviso).toHaveTextContent(/Se a sua empresa é da área da saúde/);
     expect(aviso).toHaveTextContent(/LGPD trata como sensível/);
     expect(aviso).toHaveTextContent(/contrato da TypeSafe/);
+    // Sempre à vista, como era: nunca recolhido num <details> fechado.
+    expect(aviso.closest("details")).toBeNull();
   });
 });
 

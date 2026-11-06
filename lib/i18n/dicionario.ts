@@ -20001,6 +20001,12 @@ export const DICIONARIO: Traducoes = {
   "Endereço de captura": { es: "Dirección de captura" },
   "Script no site": { es: "Script en el sitio" },
   "Ligue uma captura": { es: "Activa una captura" },
+  "Qual IA faz cada tarefa": { es: "¿Qué IA hace cada tarea?" },
+  "Área da saúde? Leia antes de ligar": { es: "¿Área de la salud? Lee antes de activar" },
+  "observando": { es: "observando" },
+  "decidindo": { es: "decidiendo" },
+  "Ver tarefas": { es: "Ver tareas" },
+  "avisando a equipe": { es: "avisando al equipo" },
 };
 
 /**
