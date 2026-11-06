@@ -130,7 +130,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await admin
       .from("webhook_events_log")
       .update({ status, error_message: detalhe, processed_at: new Date().toISOString() })
-      .eq("id", log.id);
+      .eq("id", log.id)
+      .eq("organization_id", orgId);
   }
   await audit({
     action: "mercadophone.webhook_received",

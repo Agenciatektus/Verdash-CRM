@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { CampoDeData } from "@/components/ui/campo-de-data";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { connectMercadoPhone } from "@/app/actions/integrations/connectMercadoPhone";
@@ -42,7 +43,7 @@ export function ConexaoMercadoPhone({ conectado, isAdmin, orgId }: { conectado: 
         <div className="flex items-end gap-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="mp-desde">{t("Importar vendas desde (até 90 dias)")}</Label>
-            <Input id="mp-desde" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} disabled={!isAdmin || pending} />
+            <CampoDeData tipo="date" id="mp-desde" value={desde} onValorChange={setDesde} disabled={!isAdmin || pending} />
           </div>
           <Button
             disabled={!isAdmin || pending || !desde}
@@ -52,7 +53,9 @@ export function ConexaoMercadoPhone({ conectado, isAdmin, orgId }: { conectado: 
                 if (!res.ok) return falhou(res.error);
                 if (res.parcial) setDesde(res.proximaData ?? desde);
                 toast.success(
-                  t(`${res.vendas} vendas e ${res.margens} margens importadas.`) +
+                  t("{vendas} vendas e {margens} margens importadas.")
+                    .replace("{vendas}", String(res.vendas))
+                    .replace("{margens}", String(res.margens)) +
                     (res.parcial ? " " + t("Faltou tempo: clique de novo para continuar.") : ""),
                 );
               })
