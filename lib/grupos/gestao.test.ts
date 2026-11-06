@@ -65,12 +65,18 @@ describe("executarAcaoDeGrupo", () => {
     await rodar(d, { acao: "so_admins_enviam", ligado: true });
     expect(d.ajustarDiretorio).toHaveBeenCalledWith(ORG, SESS, G, { is_announce: true });
   });
-  it("link só audita com reset", async () => {
+  it("ler o link também audita (ele dá entrada no grupo), com reset no metadata", async () => {
     const d = montar();
     await rodar(d, { acao: "link" });
-    expect(d.audit).not.toHaveBeenCalled();
     await rodar(d, { acao: "link", reset: true });
-    expect(d.audit).toHaveBeenCalledTimes(1);
+    expect(d.audit).toHaveBeenCalledTimes(2);
+    expect(d.audit.mock.calls.map((c) => (c[0] as { metadata: { reset: boolean } }).metadata.reset)).toEqual([false, true]);
+  });
+  it("WhatsApp aceitou e o efeito local falhou: responde ok mesmo assim", async () => {
+    const d = montar({ ligado: true });
+    d.apagarDoDiretorio.mockRejectedValue(new Error("rede"));
+    await rodar(d, { acao: "sair" }); // não lança
+    expect(d.apagarDoDiretorio).toHaveBeenCalled();
   });
   it("sair apaga do diretório e desliga o grupo se estava ligado", async () => {
     const d = montar({ ligado: true });

@@ -15,7 +15,11 @@ export function lerTelefones(texto: string): string[] {
   return [...new Set(tels)];
 }
 
-const campoCsv = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+// O nome vem do WhatsApp (o participante escolhe): `=`, `+`, `-`, `@`, tab ou CR no começo viraria fórmula na planilha.
+const campoCsv = (bruto: string) => {
+  const v = /^[=+\-@\t\r]/.test(bruto) ? `'${bruto}` : bruto;
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+};
 
 export function csvDeParticipantes(lista: ParticipanteDoGrupo[], papel: (p: ParticipanteDoGrupo) => string): string {
   const linhas = lista.map((p) => [p.telefone ?? "", p.nome ?? "", papel(p)].map(campoCsv).join(","));

@@ -14,6 +14,7 @@ import { criarDepsDeGestao, executarAcaoDeGrupo } from "@/lib/grupos/gestao";
 import { GrupoError } from "@/lib/grupos/servico";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { logger } from "@/lib/logger";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,10 @@ function falhaDaAcao(err: unknown, requestId: string): Response {
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const requestId = randomUUID();
   const id = idSchema.safeParse((await ctx.params).id);
+  // A foto (~2,8 MB em base64) é o maior corpo legítimo.
+  if (Number(req.headers.get("content-length") ?? 0) > 3_200_000) {
+    return fail("validation_error", "Arquivo grande demais.", 413, { requestId });
+  }
   const corpo = corpoSchema.safeParse(await req.json().catch(() => null));
   if (!id.success || !corpo.success) return fail("validation_error", "dados inválidos", 400, { requestId });
 
@@ -74,8 +79,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const supportDenied = await requireSupportWrite();
     if (supportDenied) return supportDenied;
   }
-  const authz = await requireRole(leitura ? "viewer" : "manager", { requestId, resource: "channel_session_groups" });
+  const authz = await requireRole(leitura ? "agent" : "manager", { requestId, resource: "channel_session_groups" });
   if (!authz.ok) return authz.response;
+  if (leitura) {
+    // `info` traz telefone e nome de cada participante: só para quem ENXERGA a conversa do grupo (RLS do
+    // usuário aplica `own`/`own_and_unassigned`), não para qualquer um que saiba o JID.
+    const supabase = await createClient();
+    const { data: visivel } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("channel_session_id", id.data)
+      .eq("group_chat_id", groupChatId)
+      .limit(1);
+    if (!visivel?.length) return fail("not_found", "Grupo não encontrado.", 404, { requestId });
+  }
 
   const chamada = montarChamada(entrada);
   if (typeof chamada === "string") return fail("validation_error", MENSAGEM_DE_VALIDACAO[chamada] ?? chamada, 400, { requestId });

@@ -4,6 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn(async () => null) }));
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/grupos/gestao", () => ({ criarDepsDeGestao: vi.fn(() => ({})), executarAcaoDeGrupo: vi.fn() }));
+// Conversa do grupo que o USUÁRIO enxerga (RLS): `visivel` controla o que o select devolve.
+let visivel = true;
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(async () => {
+    const q = { select: () => q, eq: () => q, limit: async () => ({ data: visivel ? [{ id: "c1" }] : [], error: null }) };
+    return { from: () => q };
+  }),
+}));
 
 import { requireRole } from "@/lib/auth/require-role";
 import { GrupoAcaoError } from "@/lib/grupos/acoes";
@@ -19,14 +27,15 @@ const post = (corpo: unknown) => POST(new NextRequest("http://x", { method: "POS
 
 beforeEach(() => {
   vi.clearAllMocks();
+  visivel = true;
   vi.mocked(requireRole).mockResolvedValue({ ok: true, user: { id: "u1" }, org: { orgId: ORG, role: "manager" } } as never);
 });
 
 describe("POST groups/acao", () => {
-  it("info pede só viewer; as outras pedem gerente", async () => {
+  it("info pede atendente; as outras pedem gerente", async () => {
     vi.mocked(executarAcaoDeGrupo).mockResolvedValue({});
     await post({ group_chat_id: G, acao: "info" });
-    expect(requireRole).toHaveBeenLastCalledWith("viewer", expect.anything());
+    expect(requireRole).toHaveBeenLastCalledWith("agent", expect.anything());
     await post({ group_chat_id: G, acao: "sair" });
     expect(requireRole).toHaveBeenLastCalledWith("manager", expect.anything());
   });
@@ -45,6 +54,15 @@ describe("POST groups/acao", () => {
   it("grupo de outra sessão: 404", async () => {
     vi.mocked(executarAcaoDeGrupo).mockRejectedValue(new GrupoError("grupo_nao_encontrado"));
     expect((await post({ group_chat_id: G, acao: "info" })).status).toBe(404);
+  });
+  it("info de grupo cuja conversa o usuário não enxerga: 404 e o FZAP não é chamado", async () => {
+    visivel = false;
+    expect((await post({ group_chat_id: G, acao: "info" })).status).toBe(404);
+    expect(executarAcaoDeGrupo).not.toHaveBeenCalled();
+  });
+  it("corpo acima de 3,2 MB: 413 antes do parse", async () => {
+    const req = new NextRequest("http://x", { method: "POST", body: "{}", headers: { "content-length": "4000000" } });
+    expect((await POST(req, ctx)).status).toBe(413);
   });
   it("erros do WhatsApp viram mensagem em pt-BR", async () => {
     vi.mocked(executarAcaoDeGrupo).mockRejectedValue(new GrupoAcaoError("whatsapp_recusou", "not admin"));

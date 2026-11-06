@@ -7,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { verdashGrupoAcao } from "@/lib/channels/verdash/client";
 import { resolveVerdashCreds } from "@/lib/channels/verdash/credentials";
+import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { GrupoAcaoError, type PedidoAoFzap } from "./acoes";
@@ -28,18 +29,17 @@ export interface DepsDeGestao extends DepsDeGrupos {
   acao(org: string, sessionRef: string, entrada: Record<string, unknown>, chamada: PedidoAoFzap): Promise<unknown>;
 }
 
-export async function executarAcaoDeGrupo(
-  deps: DepsDeGestao,
-  e: {
-    organizationId: string;
-    channelSessionId: string;
-    /** Já validada por `montarChamada`; `entrada.groupChatId` é o JID. */
-    entrada: Record<string, unknown>;
-    chamada: PedidoAoFzap;
-    actorUserId: string;
-    requestId: string;
-  },
-): Promise<unknown> {
+interface EntradaDaAcao {
+  organizationId: string;
+  channelSessionId: string;
+  /** Já validada por `montarChamada`; `entrada.groupChatId` é o JID. */
+  entrada: Record<string, unknown>;
+  chamada: PedidoAoFzap;
+  actorUserId: string;
+  requestId: string;
+}
+
+export async function executarAcaoDeGrupo(deps: DepsDeGestao, e: EntradaDaAcao): Promise<unknown> {
   const { organizationId: org, channelSessionId: sessionId, entrada } = e;
   const chatId = String(entrada.groupChatId);
   const acao = String(entrada.acao);
@@ -51,10 +51,25 @@ export async function executarAcaoDeGrupo(
   if (!(await deps.grupoDaSessao(org, sessionId, chatId))) throw new GrupoError("grupo_nao_encontrado");
 
   const dados = await deps.acao(org, s.sessionRef, entrada, e.chamada);
+  // Daqui para baixo o WhatsApp JÁ mudou: falha local não vira erro (o retry bateria em 422 e o grupo
+  // nunca seria desligado). Loga e responde ok; o próximo refresh do diretório corrige o resto.
+  try {
+    await efeitosLocais(deps, e, acao, chatId);
+  } catch (err) {
+    logger.warn("grupos: efeito local da ação falhou depois do WhatsApp aceitar", {
+      acao,
+      channelSessionId: sessionId,
+      causa: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return dados;
+}
 
+async function efeitosLocais(deps: DepsDeGestao, e: EntradaDaAcao, acao: string, chatId: string): Promise<void> {
+  const { organizationId: org, channelSessionId: sessionId, entrada } = e;
   const telefones = Array.isArray(entrada.telefones) ? entrada.telefones.length : 0;
-  const mudou = acao !== "info" && (acao !== "link" || entrada.reset === true);
-  if (mudou) {
+  // Ler o link também audita: ele dá entrada no grupo a quem o receber.
+  if (acao !== "info") {
     await deps.audit({
       action: `channel.group_${acao}`,
       organizationId: org,
@@ -69,6 +84,7 @@ export async function executarAcaoDeGrupo(
         ...(acao === "participantes" ? { operacao: entrada.operacao, quantidade: telefones } : {}),
         ...(typeof entrada.ligado === "boolean" ? { ligado: entrada.ligado } : {}),
         ...(acao === "mensagens_temporarias" ? { duracao: entrada.duracao } : {}),
+        ...(acao === "link" ? { reset: entrada.reset === true } : {}),
       },
     });
   }
@@ -88,7 +104,6 @@ export async function executarAcaoDeGrupo(
       });
     }
   }
-  return dados;
 }
 
 export function criarDepsDeGestao(admin: SupabaseClient = createAdminClient()): DepsDeGestao {
