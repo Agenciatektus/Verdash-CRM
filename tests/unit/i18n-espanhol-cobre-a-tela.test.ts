@@ -1022,7 +1022,7 @@ const DADO_DO_OPERADOR_CONGELADO: { arquivo: string; expressao: string; motivo: 
       "rótulo de opção de MODOS_DE_ESPERA, tabela fechada do módulo, iterada via opcoes() na linha 79",
   },
   {
-    arquivo: "app/app/ai/providers/_components/PainelDeProvedores.tsx",
+    arquivo: "app/app/ai/providers/_components/CartaoDoPonto.tsx",
     expressao: "a",
     motivo:
       "aviso que o servidor devolve em ponto.avisos (catálogo fechado do backend), iterado na linha 538: " +
@@ -1516,28 +1516,28 @@ const CHAVE_DE_RUNTIME_CONGELADA: { arquivo: string; expressao: string; motivo: 
       "do servidor, não do código",
   },
   {
-    arquivo: "app/app/ai/providers/_components/CartaoDoJev.tsx",
+    arquivo: "app/app/ai/providers/_components/JevLinhaDaTarefa.tsx",
     expressao: "aoDecidir",
     motivo:
       "registro?.aoDecidir lido dentro do componente (linha 857): frase do registro do Jev, e o índice " +
       "do registro é dado de runtime",
   },
   {
-    arquivo: "app/app/ai/providers/_components/CartaoDoJev.tsx",
+    arquivo: "app/app/ai/providers/_components/JevTarefas.tsx",
     expressao: "oQueFazer",
     motivo:
       "frasesDeFalha[falha.motivo] atribuído dentro do componente (linha 829): tabela fechada usada " +
       "como variável local",
   },
   {
-    arquivo: "app/app/ai/providers/_components/CartaoDoJev.tsx",
+    arquivo: "app/app/ai/providers/_components/JevPecas.tsx",
     expressao: "efeito",
     motivo:
       "doRegistro(tarefa.id)?.aoConfirmarDecidir (linha 1183): texto do registro da tarefa, origem de " +
       "runtime para o resolvedor",
   },
   {
-    arquivo: "app/app/ai/providers/_components/CartaoDoJev.tsx",
+    arquivo: "app/app/ai/providers/_components/JevPecas.tsx",
     expressao: "escolhida",
     motivo:
       "frase escolhida pela contagem de mensagens (linha 1288) e passada por t() antes do replace de " +

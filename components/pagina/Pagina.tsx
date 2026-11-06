@@ -64,6 +64,7 @@ export function CabecalhoDaPagina({
   antes,
   tituloNoCelular = false,
   acoesSoNoDesktop = false,
+  como: Titulo = "h1",
 }: {
   titulo: ReactNode;
   descricao?: ReactNode;
@@ -76,12 +77,14 @@ export function CabecalhoDaPagina({
    * inteira abaixo de 760px, em vez de ficar vazia com o botão `mb:hidden` dentro.
    */
   acoesSoNoDesktop?: boolean;
+  /** Nível do título; só muda quando a página é embutida sob outro título. */
+  como?: "h1" | "h2" | "h3";
 }) {
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 mb:px-4 mb:pt-3">
       <div className={cn("min-w-0", !tituloNoCelular && !descricao && "mb:sr-only")}>
         {antes ? <div className={cn(!tituloNoCelular && "mb:hidden")}>{antes}</div> : null}
-        <h1 className={cn("break-words text-title-lg", !tituloNoCelular && "mb:sr-only")}>{titulo}</h1>
+        <Titulo className={cn("break-words text-title-lg", !tituloNoCelular && "mb:sr-only")}>{titulo}</Titulo>
         {descricao ? <p className="mt-1 text-sm text-muted-foreground">{descricao}</p> : null}
       </div>
       {acoes ? (

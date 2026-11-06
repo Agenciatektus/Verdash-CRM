@@ -46,6 +46,8 @@ export function CartaoDeMapas() {
   const [chave, setChave] = useState("");
   const [ocupado, setOcupado] = useState<null | "salvar" | "testar" | "remover">(null);
   const [teste, setTeste] = useState<Teste | null>(null);
+  // O formulário fica recolhido: a linha já diz se há chave, e "Configurar" o revela.
+  const [aberto, setAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     const res = await fetch("/api/v1/ai/mapas").catch(() => null);
@@ -141,9 +143,10 @@ export function CartaoDeMapas() {
   };
 
   return (
-    <Card className="mt-8 p-4" data-testid="cartao-de-mapas">
+    <Card className="p-4" data-testid="cartao-de-mapas">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold">{t("Mapas (Google)")}</h2>
+        <div className="flex items-center gap-2">
         {estado &&
           (estado.configurada ? (
             <Badge variant="secondary" data-testid="mapas-estado">
@@ -154,8 +157,18 @@ export function CartaoDeMapas() {
               {t("Sem chave")}
             </Badge>
           ))}
+        <Button
+          size="sm"
+          variant="outline"
+          aria-expanded={aberto}
+          onClick={() => setAberto((a) => !a)}
+          data-testid="mapas-configurar"
+        >
+          {aberto ? t("Ocultar") : t("Configurar")}
+        </Button>
+        </div>
       </div>
-      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+      <p className="mt-1 text-sm text-muted-foreground">
         {t(
           "Quando o cliente manda a localização pelo WhatsApp, o sistema consulta o Google e o agente lê a rua e a cidade aproximadas — em vez de só as coordenadas. Sem chave, nada muda.",
         )}
@@ -165,6 +178,8 @@ export function CartaoDeMapas() {
         <p className="mt-3 text-sm text-destructive">{t("Não consegui ler a configuração de mapas.")}</p>
       )}
 
+      {aberto && (
+        <>
       <div className="mt-4 space-y-2">
         <Label htmlFor="chave-de-mapas">
           {estado?.configurada ? t("Trocar a chave da Geocoding API") : t("Chave da Geocoding API")}
@@ -201,7 +216,7 @@ export function CartaoDeMapas() {
 
       {teste && (
         <div
-          className={`mt-3 rounded-md border p-3 text-sm ${teste.ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-destructive/40 bg-destructive/5"}`}
+          className={`mt-3 rounded-md border p-3 text-sm ${teste.ok ? "border-success-fg/40 bg-success-bg" : "border-destructive/40 bg-destructive/5"}`}
           data-testid="mapas-resultado"
         >
           {teste.ok ? (
@@ -215,6 +230,8 @@ export function CartaoDeMapas() {
             </>
           )}
         </div>
+      )}
+        </>
       )}
     </Card>
   );

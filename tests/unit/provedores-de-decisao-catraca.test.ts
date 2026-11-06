@@ -140,7 +140,7 @@ describe("só as superfícies de CHAVE pedem a união", () => {
     "app/api/v1/ai/jev/route.ts", // o cartão do próprio Jev
     // o cartão do Jev escolhe o PROVEDOR da chave que será cadastrada (OpenRouter
     // × TypeSafe) — chave, nunca modelo de conversa
-    "app/app/ai/providers/_components/CartaoDoJev.tsx",
+    "app/app/ai/providers/_components/jev-dados.ts",
     "app/api/v1/ai/credentials/route.ts", // cadastra a chave
     "hooks/ai/useCredentials.ts", // tipo da LINHA de credencial
     "app/api/v1/ai/credentials/[id]/route.ts", // gira a chave (o provedor não muda)

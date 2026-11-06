@@ -64,8 +64,7 @@ export function FunisDoAgente({ funis, value, onChange, cobertura, disabled = fa
   // Funis que o assistente cuida e não sabe percorrer: promessa que não se
   // cumpre. O dono marcou achando que ele ia organizar, e ele não vai.
   const mudosMarcados = funis
-    .filter((f) => marcados.has(f.id) && cobertura?.[f.id]?.mudo)
-    .map((f) => f.name);
+    .filter((f) => marcados.has(f.id) && cobertura?.[f.id]?.mudo);
 
   return (
     <Card className="space-y-3 p-4">
@@ -134,14 +133,18 @@ export function FunisDoAgente({ funis, value, onChange, cobertura, disabled = fa
       {mudosMarcados.length > 0 ? (
         <p data-testid="agente-funis-mudos" className="text-xs text-warning-fg">
           {mudosMarcados.length === 1
-            ? `${t("Você marcou")} ${mudosMarcados[0]}${t(", mas ninguém disse ao assistente o que cada etapa desse funil significa — ele vai atender e deixar os negócios parados onde estão.")}`
+            ? `${t("Você marcou")} ${mudosMarcados[0]!.name}${t(", mas ninguém disse ao assistente o que cada etapa desse funil significa — ele vai atender e deixar os negócios parados onde estão.")}`
             : `${t("Você marcou")} ${mudosMarcados.length} ${t("funis em que ninguém disse ao assistente o que cada etapa significa — ele vai atender e deixar os negócios parados onde estão.")}`}{" "}
           {/* O caminho é o do menu (`lib/navigation/catalogo.ts`): a tela das
               etapas mora no CRM desde a reorganização da navegação, e o texto
               antigo ("Configurações › Funis") mandava para um lugar que não existe. */}
           {t("Isso se configura em")}{" "}
           <Link
-            href="/app/settings/tenant/pipelines"
+            href={
+              mudosMarcados.length === 1
+                ? `/app/settings/tenant/pipelines?funil=${mudosMarcados[0]!.id}`
+                : "/app/settings/tenant/pipelines"
+            }
             className="underline underline-offset-2"
             data-testid="agente-funis-mudos-caminho"
           >

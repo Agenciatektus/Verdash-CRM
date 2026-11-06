@@ -3,6 +3,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ import { LEAD_STAGES, type LeadStage } from "@/lib/agent-engine/agent/lead-state
 import { ApiError } from "@/lib/api/types";
 import { ROTULO_DO_PASSO } from "@/lib/leads/agent-mapping";
 import type { TaxaDaEtapa } from "@/lib/metrics/taxa-da-etapa";
-import { Archive, CaretDown, CaretUp, Plus, Warning } from "@/lib/ui/icons";
+import { Archive, Bell, CaretDown, CaretUp, Megaphone, Plus, Warning } from "@/lib/ui/icons";
 import { SeloDeAutoria } from "@/components/operacao/SeloDeAutoria";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -78,6 +79,13 @@ const ROTULO_DO_PAPEL: Readonly<Record<Papel, string>> = {
   won: "Aqui o cliente fecha",
   lost: "Aqui o cliente desiste",
 };
+
+/** A chance que a linha mostra: ganho e perda valem 100 e 0 na regra; sem calibração, «—». */
+function chanceDaLinha(etapa: EtapaDoFunil): string {
+  if (etapa.is_won) return "100%";
+  if (etapa.is_lost) return "0%";
+  return etapa.win_probability == null ? "—" : `${etapa.win_probability}%`;
+}
 
 export function papelDaEtapa(etapa: EtapaDoFunil): Papel {
   if (etapa.is_won) return "won";
@@ -174,25 +182,6 @@ type Arquivamento = {
   destino: string | null;
   erro: string | null;
 };
-
-/**
- * As larguras das colunas, em UM lugar só.
- *
- * O cabeçalho e a linha precisam medir igual — divergência faz cada rótulo
- * nomear a coluna errada, e nenhum teste pega isso (a prova mede o alinhamento
- * no navegador, mas só depois de alguém rodá-la). Constante compartilhada torna
- * a divergência impossível em vez de indetectável.
- */
-// ⚠️ AS CLASSES SÃO LITERAIS INTEIRAS, com o prefixo `@3xl:` incluído: o Tailwind
-// varre o texto-fonte, então `@3xl:${...}` montado por interpolação NÃO gera CSS.
-// E o prefixo é o certo de qualquer jeito — no celular a linha empilha e largura
-// fixa espremeria os controles.
-const LARGURA = {
-  chance: "@3xl:w-[124px]",
-  ordem: "@3xl:w-[76px]",
-  papel: "@3xl:w-56",
-  arquivar: "@3xl:w-[104px]",
-} as const;
 
 /**
  * O texto de cada rótulo, em UM lugar só — porque ele aparece em DOIS.
@@ -356,6 +345,7 @@ export function StagesSection({
   const [confirmacao, setConfirmacao] = useState<{ etapaId: string; papel: Papel; texto: string } | null>(null);
   const [arquivamento, setArquivamento] = useState<Arquivamento | null>(null);
   const [nova, setNova] = useState<string | null>(null);
+  const [abertas, setAbertas] = useState<Set<string>>(new Set());
 
   if (consulta.isError) {
     return (
@@ -376,6 +366,14 @@ export function StagesSection({
   const passos = passoPorEtapa(consulta.data.mapeamento);
   const ocupado = criar.isPending || editar.isPending || arquivar.isPending || consulta.isFetching;
 
+  function alternar(etapaId: string) {
+    setAbertas((atual) => {
+      const proximo = new Set(atual);
+      if (!proximo.delete(etapaId)) proximo.add(etapaId);
+      return proximo;
+    });
+  }
+
   function aplicar(etapaId: string, patch: PatchDeEtapa) {
     if (Object.keys(patch).length === 0) return;
     setErro(null);
@@ -390,7 +388,11 @@ export function StagesSection({
       { stageId: etapaId, patch },
       {
         onSuccess: () => toast.success(t("Etapa atualizada.")),
-        onError: (e) => setErro({ etapaId, texto: mensagemDeErro(e, t), sobrePapel }),
+        onError: (e) => {
+          setErro({ etapaId, texto: mensagemDeErro(e, t), sobrePapel });
+          // O erro mora nos detalhes: com a linha recolhida ele ficaria escondido.
+          setAbertas((atual) => new Set(atual).add(etapaId));
+        },
       },
     );
   }
@@ -457,8 +459,6 @@ export function StagesSection({
   }
 
   return (
-    // `@container` + `@3xl:`: a linha vira tabela pela largura do CARTÃO (768px), não da tela;
-    // no iPad o cartão tem ~630px e as colunas fixas (528px) espremiam o nome.
     <div className="@container space-y-4" id={ancoraDasEtapas(pipelineId)} data-testid={`etapas-${pipelineId}`}>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{t("Etapas deste funil")}</h3>
@@ -476,28 +476,9 @@ export function StagesSection({
         </p>
       </div>
 
-      {/* ⚠️ O CABEÇALHO NÃO É ENFEITE. Sem ele a linha tem um campo de texto sem
-          rótulo, duas setas sem legenda e um seletor dizendo "Nada especial"
-          sobre coisa nenhuma — a dona da clínica precisa adivinhar o que cada
-          controle faz. No celular a linha EMPILHA e um cabeçalho de colunas não
-          alinha com nada: lá o mesmo texto vai em cima de cada controle
-          (`@3xl:hidden`, mesmas constantes). `aria-label` não substitui nenhum dos
-          dois — é invisível para quem enxerga. */}
-      {/* `border border-transparent`: a lista abaixo tem borda de 1px, que empurra
-          o conteúdo dela 1px para dentro. Sem a mesma borda aqui, cada rótulo
-          fica 1px à direita do controle que nomeia — medido, não estimado. */}
-      <div
-        className="hidden gap-3 border border-transparent px-4 text-xs font-medium text-text-muted @3xl:flex"
-        data-testid="etapas-cabecalho"
-      >
-        <span className="w-6 shrink-0" />
-        <span className="min-w-0 flex-1">{t(ROTULO.nome)}</span>
-        <span className={`${LARGURA.chance} shrink-0`}>{t(ROTULO.chance)}</span>
-        <span className={`${LARGURA.ordem} shrink-0 text-center`}>{t(ROTULO.ordem)}</span>
-        <span className={`${LARGURA.papel} shrink-0`}>{t(ROTULO.papel)}</span>
-        <span className={`${LARGURA.arquivar} shrink-0`} />
-      </div>
-
+      {/* Cada etapa é UMA linha; clicar abre os detalhes no lugar. Os detalhes ficam
+          montados e só ESCONDIDOS (`hidden`): recolher não pode apagar um rascunho
+          de nome, chance ou frase ainda não confirmado. */}
       <ul className="flex flex-col divide-y divide-border rounded-md border border-border">
         {etapas.map((etapa, i) => {
           const passo = passos.get(etapa.id) ?? null;
@@ -510,24 +491,71 @@ export function StagesSection({
           const confirmandoAqui = confirmacao?.etapaId === etapa.id ? confirmacao : null;
           const arquivandoAqui = arquivamento?.etapaId === etapa.id ? arquivamento : null;
           const destinos = destinosPossiveis(etapas, etapa.id);
+          const aberta = abertas.has(etapa.id);
+          const painel = `detalhes-${etapa.id}`;
+          const papel = papelDaEtapa(etapa);
 
           return (
-            <li
-              key={`${etapa.id}:${etapa.name}`}
-              className="flex flex-col gap-3 p-4"
-              data-testid={`etapa-${etapa.id}`}
-            >
-              <div className="flex flex-col gap-3 @3xl:flex-row @3xl:items-center">
-                <span className="w-6 shrink-0 text-xs tabular-nums text-text-muted">
-                  {i + 1}.
+            <li key={`${etapa.id}:${etapa.name}`} data-testid={`etapa-${etapa.id}`}>
+              <button
+                type="button"
+                aria-expanded={aberta}
+                aria-controls={painel}
+                data-testid={`abrir-etapa-${etapa.id}`}
+                onClick={() => alternar(etapa.id)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-surface-elevated focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+              >
+                <span className="w-6 shrink-0 text-xs tabular-nums text-text-muted">{i + 1}.</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{etapa.name}</span>
+                <span className="hidden w-12 shrink-0 text-right tabular-nums text-text-muted sm:block">
+                  {chanceDaLinha(etapa)}
+                  {!etapa.is_won && !etapa.is_lost && etapa.win_probability == null && (
+                    <span className="sr-only">{t("sem chance definida")}</span>
+                  )}
                 </span>
-
-                {/* No empilhado, cada controle carrega o rótulo que no desktop
-                    vive no cabeçalho — mesmas constantes, `@3xl:hidden`. */}
-                <div className="min-w-0 flex-1 space-y-1">
-                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
-                    {t(ROTULO.nome)}
+                <span className="flex shrink-0 sm:w-32">
+                  {papel === "won" ? (
+                    <Badge variant="success">{t("Fechamento")}</Badge>
+                  ) : papel === "lost" ? (
+                    <Badge variant="error">{t("Perda")}</Badge>
+                  ) : (
+                    <span className="hidden text-xs text-text-muted sm:inline">
+                      {t(ROTULO_DO_PAPEL.nenhum)}
+                    </span>
+                  )}
+                </span>
+                <span className="hidden shrink-0 items-center gap-2 sm:flex">
+                  <span
+                    className={etapa.avisar_na_central === true ? "text-accent-text" : "text-text-muted opacity-40"}
+                    title={t("Avisa a equipe")}
+                  >
+                    <Bell size={16} aria-hidden />
+                    <span className="sr-only">
+                      {etapa.avisar_na_central === true ? t("Avisa a equipe") : t("Não avisa a equipe")}
+                    </span>
                   </span>
+                  <span
+                    className={etapa.envia_conversao === true ? "text-accent-text" : "text-text-muted opacity-40"}
+                    title={t("Envia conversão")}
+                  >
+                    <Megaphone size={16} aria-hidden />
+                    <span className="sr-only">
+                      {etapa.envia_conversao === true ? t("Envia conversão") : t("Não envia conversão")}
+                    </span>
+                  </span>
+                </span>
+                <CaretDown
+                  size={16}
+                  aria-hidden
+                  className={`shrink-0 text-text-muted transition-transform ${aberta ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              <div id={painel} hidden={!aberta}>
+              <div className="flex flex-col gap-3 border-t border-border bg-surface-elevated p-4">
+              <div className="grid gap-3 @xl:grid-cols-2">
+                <div className="min-w-0 space-y-1">
+                  <span className="block text-xs font-medium text-text-muted">{t(ROTULO.nome)}</span>
                   <NomeDaEtapa
                     etapa={etapa}
                     desabilitado={ocupado}
@@ -535,13 +563,34 @@ export function StagesSection({
                   />
                 </div>
 
+                <div className="space-y-1">
+                  <span className="block text-xs font-medium text-text-muted">{t(ROTULO.papel)}</span>
+                  <Select
+                    value={papel}
+                    onValueChange={(v) => escolherPapel(etapa, v as Papel)}
+                    disabled={ocupado}
+                  >
+                    <SelectTrigger
+                      aria-label={`${t("Papel de")} «${etapa.name}» ${t("no funil")}`}
+                      data-testid={`papel-${etapa.id}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(["nenhum", "won", "lost"] as const).map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {t(ROTULO_DO_PAPEL[p])}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* A calibração da previsão (issue #1535). Ganho e perda valem
                     100 e 0 NA REGRA, então o campo fica desabilitado ali —
                     digitar um número seria uma promessa que a regra ignora. */}
-                <div className={`${LARGURA.chance} shrink-0 space-y-1`}>
-                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
-                    {t(ROTULO.chance)}
-                  </span>
+                <div className="min-w-0 space-y-1">
+                  <span className="block text-xs font-medium text-text-muted">{t(ROTULO.chance)}</span>
                   <ProbabilidadeDaEtapa
                     key={`prob-${etapa.id}-${etapa.win_probability ?? "sem"}`}
                     etapa={etapa}
@@ -581,89 +630,55 @@ export function StagesSection({
                   ) : null}
                 </div>
 
-                {/* No empilhado o rótulo vai EM CIMA, como os outros dois: ao
-                    lado, ele desalinhava com as setas (medido no celular:
-                    rótulo em y=4893, setas em y=4883) e a linha ficava com três
-                    rótulos em duas convenções diferentes. */}
-                <div
-                  className={`flex flex-col gap-1 ${LARGURA.ordem} shrink-0 @3xl:flex-row @3xl:items-center @3xl:justify-center @3xl:gap-1`}
-                >
-                  <span className="text-xs font-medium text-text-muted @3xl:hidden">
-                    {t(ROTULO.ordem)}
-                  </span>
+                <div className="space-y-1">
+                  <span className="block text-xs font-medium text-text-muted">{t(ROTULO.ordem)}</span>
                   <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`${t("Mover")} «${etapa.name}» ${t("uma coluna para trás")}`}
-                    data-testid={`subir-${etapa.id}`}
-                    disabled={i === 0 || ocupado}
-                    onClick={() =>
-                      aplicar(etapa.id, { depois_de: vizinhoAoMover(etapas, i, "subir") })
-                    }
-                  >
-                    <CaretUp size={16} aria-hidden />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`${t("Mover")} «${etapa.name}» ${t("uma coluna para frente")}`}
-                    data-testid={`descer-${etapa.id}`}
-                    disabled={i === etapas.length - 1 || ocupado}
-                    onClick={() =>
-                      aplicar(etapa.id, { depois_de: vizinhoAoMover(etapas, i, "descer") })
-                    }
-                  >
-                    <CaretDown size={16} aria-hidden />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`${t("Mover")} «${etapa.name}» ${t("uma coluna para trás")}`}
+                      data-testid={`subir-${etapa.id}`}
+                      disabled={i === 0 || ocupado}
+                      onClick={() =>
+                        aplicar(etapa.id, { depois_de: vizinhoAoMover(etapas, i, "subir") })
+                      }
+                    >
+                      <CaretUp size={16} aria-hidden />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`${t("Mover")} «${etapa.name}» ${t("uma coluna para frente")}`}
+                      data-testid={`descer-${etapa.id}`}
+                      disabled={i === etapas.length - 1 || ocupado}
+                      onClick={() =>
+                        aplicar(etapa.id, { depois_de: vizinhoAoMover(etapas, i, "descer") })
+                      }
+                    >
+                      <CaretDown size={16} aria-hidden />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      data-testid={`arquivar-${etapa.id}`}
+                      disabled={ocupado}
+                      onClick={() => {
+                        setErro(null);
+                        setArquivamento({ etapaId: etapa.id, negocios: null, destino: null, erro: null });
+                      }}
+                    >
+                      <Archive size={16} className="mr-1" aria-hidden />
+                      {t("Arquivar")}
+                    </Button>
                   </div>
                 </div>
-
-                <div className={`w-full shrink-0 space-y-1 ${LARGURA.papel} @3xl:space-y-0`}>
-                  <span className="block text-xs font-medium text-text-muted @3xl:hidden">
-                    {t(ROTULO.papel)}
-                  </span>
-                  <Select
-                    value={papelDaEtapa(etapa)}
-                    onValueChange={(v) => escolherPapel(etapa, v as Papel)}
-                    disabled={ocupado}
-                  >
-                    <SelectTrigger
-                      aria-label={`${t("Papel de")} «${etapa.name}» ${t("no funil")}`}
-                      data-testid={`papel-${etapa.id}`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(["nenhum", "won", "lost"] as const).map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {t(ROTULO_DO_PAPEL[p])}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={`${LARGURA.arquivar} shrink-0`}
-                  data-testid={`arquivar-${etapa.id}`}
-                  disabled={ocupado}
-                  onClick={() => {
-                    setErro(null);
-                    setArquivamento({ etapaId: etapa.id, negocios: null, destino: null, erro: null });
-                  }}
-                >
-                  <Archive size={16} className="mr-1" aria-hidden />
-                  {t("Arquivar")}
-                </Button>
               </div>
 
               {/* #1532: a janela de "esfriando" é configuração da etapa, não
                   coluna do quadro — ela mora aqui, na segunda linha, com
                   rótulo próprio. Ganhar uma coluna no cabeçalho exigiria
-                  medir `LARGURA` em dois lugares e apertar uma linha que já
+                  apertar uma linha que já
                   carrega nome, chance, ordem, papel e arquivar. */}
               <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted">
                 <span className="font-medium">
@@ -875,6 +890,8 @@ export function StagesSection({
                   </p>
                 </Card>
               )}
+              </div>
+              </div>
             </li>
           );
         })}

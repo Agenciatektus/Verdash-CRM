@@ -14,7 +14,7 @@
  * e mostra as opções para TODO tipo de lista fechada — não só para `select`.
  */
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { customFieldSchema } from "@/lib/schemas/settings";
@@ -660,29 +660,30 @@ describe("'Este campo pertence a' só no funil padrão (#2791)", () => {
   });
 
   it("com is_default no segundo, o seletor sai do primeiro e vai para ele", () => {
-    const { container } = render(
-      <PipelinesClient
-        pipelines={[funil(A, "Vendas", { is_default: false }), funil(B, "Pos", { is_default: true })]}
-        podeEditarConfig
-      />,
+    const pipelines = [funil(A, "Vendas", { is_default: false }), funil(B, "Pos", { is_default: true })];
+    const { unmount } = render(
+      <PipelinesClient pipelines={pipelines} podeEditarConfig funilEscolhido={A} />,
     );
     abrirEditores();
-    const cards = container.querySelectorAll("h2");
-    expect(cards[0]?.textContent).toBe("Vendas");
+    expect(screen.queryAllByLabelText(/Escopo do campo 1/i)).toHaveLength(0);
+    unmount();
+
+    render(<PipelinesClient pipelines={pipelines} podeEditarConfig funilEscolhido={B} />);
+    abrirEditores();
     expect(screen.getAllByLabelText(/Escopo do campo 1/i)).toHaveLength(1);
-    const cardDoPos = cards[1]?.closest("div.space-y-6");
-    expect(cardDoPos?.textContent).toContain("Este campo pertence a:");
+    expect(screen.getByText("Este campo pertence a:")).toBeInTheDocument();
   });
 
   it("num funil secundário, um campo JÁ marcado Contato mantém o seletor para desfazer", () => {
     render(
       <PipelinesClient
-        pipelines={[funil(A, "Vendas"), funil(B, "Pos", { settings: campo("contato") })]}
+        pipelines={[funil(A, "Vendas", { is_default: true }), funil(B, "Pos", { settings: campo("contato") })]}
         podeEditarConfig
+        funilEscolhido={B}
       />,
     );
     abrirEditores();
-    expect(screen.getAllByLabelText(/Escopo do campo 1/i)).toHaveLength(2);
+    expect(screen.getAllByLabelText(/Escopo do campo 1/i)).toHaveLength(1);
   });
 });
 
@@ -822,8 +823,14 @@ describe("o botão de acrescentar campo e a cota do negócio (#3111)", () => {
 describe("Configurações › Funis com listas longas (#3176)", () => {
   const VIAGENS_1 = funilDeViagens(1, "Viagens 1");
   const VIAGENS_2 = funilDeViagens(2, "Viagens 2");
-  const telaDeViagens = () =>
-    render(<PipelinesClient pipelines={[VIAGENS_1, VIAGENS_2]} podeEditarConfig />);
+  const telaDeViagens = (funilEscolhido?: string) =>
+    render(
+      <PipelinesClient
+        pipelines={[VIAGENS_1, VIAGENS_2]}
+        podeEditarConfig
+        funilEscolhido={funilEscolhido}
+      />,
+    );
 
   const DESTINOS_VAZIO: PipelineRow = {
     id: "55555555-5555-4555-8555-555555555555",
@@ -868,27 +875,30 @@ describe("Configurações › Funis com listas longas (#3176)", () => {
   });
 
   it("com centenas de opções em mais de um funil, as listas nascem RECOLHIDAS com o resumo", () => {
-    const { container } = telaDeViagens();
-    abrirEditores();
+    // Um funil por vez na tela: o resumo vale para o primeiro e para o segundo.
+    for (const funil of [VIAGENS_1, VIAGENS_2]) {
+      const { container, unmount } = telaDeViagens(funil.id);
+      abrirEditores();
 
-    // O resumo aparece nos DOIS funis, com a contagem do campo.
-    const resumos = screen.getAllByTestId("resumo-opcoes-2");
-    expect(resumos).toHaveLength(2);
-    for (const resumo of resumos) {
+      const resumo = screen.getByTestId("resumo-opcoes-2");
       expect(resumo.textContent).toContain("756 opções");
       expect(resumo.textContent).toContain("Importar CSV");
       expect(resumo.textContent).toContain("Exportar CSV");
+      // O primeiro campo do funil (297 opções, com apelido) também vem resumido.
+      expect(screen.getByTestId("resumo-opcoes-1").textContent).toContain("297 opções");
+      expectListasRecolhidas(container);
+      unmount();
     }
-    // O primeiro campo do funil (297 opções, com apelido) também vem resumido.
-    expect(screen.getAllByTestId("resumo-opcoes-1")[0]?.textContent).toContain("297 opções");
+  });
 
+  function expectListasRecolhidas(container: HTMLElement) {
     // E NADA das opções está montado: nem o input de edição da lista, nem a
     // caixa de importação CSV, nem os rótulos das 297+756 opções.
     expect(screen.queryAllByLabelText(/^Opções do campo/)).toHaveLength(0);
     expect(container.querySelectorAll("textarea")).toHaveLength(0);
     expect(container.textContent).not.toContain("hotel 755");
     expect(container.textContent).not.toContain("destino 296");
-  });
+  }
 
   it("abrir a lista mostra as opções DAQUELE campo, com busca, e não mais que uma página", () => {
     const { container } = telaDeViagens();
@@ -1048,13 +1058,21 @@ describe("etapa de entrada das conversas do Inbox na tela (#3011)", () => {
     const etapas = { ...ETAPAS_DE_ENTRADA, [SECUNDARIO.id]: ETAPAS_DE_ENTRADA[FUNIL.id]! };
     const rotulo = "Etapa de entrada das conversas do Inbox";
 
+    const dois = [{ ...FUNIL, is_default: true }, SECUNDARIO];
     const { unmount } = render(
-      <PipelinesClient pipelines={[{ ...FUNIL, is_default: true }, SECUNDARIO]} etapas={etapas} podeEditarConfig />,
+      <PipelinesClient pipelines={dois} etapas={etapas} podeEditarConfig funilEscolhido={FUNIL.id} />,
     );
     abrirEditores();
-    expect(screen.getAllByRole("button", { name: /Salvar vocabulário e campos/i })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /Salvar vocabulário e campos/i })).toHaveLength(1);
     expect(screen.queryAllByLabelText(rotulo)).toHaveLength(1);
     unmount();
+
+    const { unmount: semPadrao } = render(
+      <PipelinesClient pipelines={dois} etapas={etapas} podeEditarConfig funilEscolhido={SECUNDARIO.id} />,
+    );
+    abrirEditores();
+    expect(screen.queryAllByLabelText(rotulo)).toHaveLength(0);
+    semPadrao();
 
     const { unmount: desmontar } = render(
       <PipelinesClient pipelines={[SECUNDARIO]} etapas={etapas} podeEditarConfig />,
@@ -1249,5 +1267,51 @@ describe("o recorte de encerrados antigos do quadro (#2995)", () => {
     // O schema recusaria o save inteiro com a mensagem genérica de validação;
     // barrar na tela é o que permite dizer QUAL campo está errado.
     expect(updatePipelineConfig).not.toHaveBeenCalled();
+  });
+});
+
+describe("um funil por vez, escolhido na lista (?funil=)", () => {
+  const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const funil = (id: string, nome: string): PipelineRow => ({
+    id,
+    name: nome,
+    slug: nome.toLowerCase(),
+    vocabulary: null,
+    settings: null,
+  });
+  const etapas = {
+    [A]: [{ id: "a1", name: "Nova", is_archived: false }],
+    [B]: [
+      { id: "b1", name: "Triagem", is_archived: false },
+      { id: "b2", name: "Fechada", is_archived: false },
+    ],
+  };
+  const tela = (funilEscolhido?: string) =>
+    render(
+      <PipelinesClient
+        pipelines={[funil(A, "Vendas"), funil(B, "Pos")]}
+        etapas={etapas}
+        podeEditarConfig
+        funilEscolhido={funilEscolhido}
+      />,
+    );
+
+  it("sem escolha mostra só o primeiro; a lista leva ao outro por ?funil=", () => {
+    tela();
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Vendas"]);
+    const lista = within(screen.getByRole("navigation", { name: "Funis" }));
+    expect(lista.getByTestId(`funil-${A}`)).toHaveAttribute("aria-current", "page");
+    expect(lista.getByTestId(`funil-${B}`)).toHaveAttribute("href", `?funil=${B}`);
+    expect(lista.getByTestId(`funil-${B}`)).toHaveTextContent("2");
+  });
+
+  it("escolher outro funil mostra só o cabeçalho dele; id desconhecido cai no primeiro", () => {
+    const { unmount } = tela(B);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Pos"]);
+    expect(screen.getByTestId(`funil-${B}`)).toHaveAttribute("aria-current", "page");
+    unmount();
+    tela("nao-existe");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Vendas"]);
   });
 });

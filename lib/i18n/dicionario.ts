@@ -8603,6 +8603,12 @@ export const DICIONARIO: Traducoes = {
   },
   "atualizado.": { es: "actualizado." },
   "Vocabulário e campos": { es: "Vocabulario y campos" },
+  "Fechamento": { es: "Cierre" },
+  "Perda": { es: "Pérdida" },
+  "Envia conversão": { es: "Envía conversión" },
+  "sem chance definida": { es: "sin probabilidad definida" },
+  "Não avisa a equipe": { es: "No avisa al equipo" },
+  "Não envia conversão": { es: "No envía conversión" },
   "Motivos de perda (separados por vírgula)": { es: "Motivos de pérdida (separados por comas)" },
   "Ex:": { es: "Ej.:" },
   "Salvar vocabulário e campos": { es: "Guardar vocabulario y campos" },
@@ -10590,6 +10596,17 @@ export const DICIONARIO: Traducoes = {
 
   // ─── LGPD: solicitações (fila, ficha, SLA, aprovação, prévia, auditoria) ───
   "Solicitações LGPD": { es: "Solicitudes LGPD" },
+  "Nenhuma solicitação neste filtro": { es: "Ninguna solicitud en este filtro" },
+  "Há mais resultados na próxima página.": { es: "Hay más resultados en la página siguiente." },
+  "Titular anonimizado": { es: "Titular anonimizado" },
+  "Vence hoje": { es: "Vence hoy" },
+  "dia em atraso": { es: "día de atraso" },
+  "dias em atraso": { es: "días de atraso" },
+  "Urgentes": { es: "Urgentes" },
+  "Em alerta": { es: "En alerta" },
+  "No prazo": { es: "En plazo" },
+  "Ver só as urgentes": { es: "Ver solo las urgentes" },
+  "Dados que serão afetados": { es: "Datos que serán afectados" },
   "Anonimizações e solicitações de dados de titulares. Apenas admins.": {
     es: "Anonimizaciones y solicitudes de datos de titulares. Solo admins.",
   },
@@ -20557,6 +20574,12 @@ export const DICIONARIO: Traducoes = {
   "Endereço de captura": { es: "Dirección de captura" },
   "Script no site": { es: "Script en el sitio" },
   "Ligue uma captura": { es: "Activa una captura" },
+  "Qual IA faz cada tarefa": { es: "¿Qué IA hace cada tarea?" },
+  "Área da saúde? Leia antes de ligar": { es: "¿Área de la salud? Lee antes de activar" },
+  "observando": { es: "observando" },
+  "decidindo": { es: "decidiendo" },
+  "Ver tarefas": { es: "Ver tareas" },
+  "avisando a equipe": { es: "avisando al equipo" },
 };
 
 /**

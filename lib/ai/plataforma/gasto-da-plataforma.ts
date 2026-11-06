@@ -47,15 +47,19 @@ export interface LimitesDaPlataforma {
   corteCents: number;
   /** Alerta quando o saldo cobre menos que estes dias de consumo médio. Padrão 3. */
   diasDeSaldo: number;
+  /** Alerta quando o saldo restante chega a estes valores (centavos). Sem padrão: vazio = nenhum. */
+  saldoUsdCents: number[];
 }
 
 export function limitesDaPlataforma(env: Record<string, string | undefined> = process.env): LimitesDaPlataforma {
   const alertasCents = (env.AI_PLATAFORMA_ALERTA_USD_DIA ?? '').split(/[;|]/).map((v) => usdParaCents(v, 0)).filter((c) => c > 0);
   const dias = Number.parseFloat((env.AI_PLATAFORMA_ALERTA_DIAS_DE_SALDO ?? '').trim());
+  const saldoUsdCents = (env.AI_PLATAFORMA_ALERTA_SALDO_USD ?? '').split(/[;|]/).map((v) => usdParaCents(v, 0)).filter((c) => c > 0).sort((a, b) => a - b);
   return {
     alertasCents: (alertasCents.length ? alertasCents : [50, 100]).sort((a, b) => a - b),
     corteCents: usdParaCents(env.AI_PLATAFORMA_CORTE_USD_DIA, 300),
     diasDeSaldo: Number.isFinite(dias) && dias > 0 ? dias : 3,
+    saldoUsdCents,
   };
 }
 

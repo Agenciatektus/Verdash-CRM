@@ -312,7 +312,8 @@ export function InboxLayout({
       tag: filterValue.tag,
       tagMode: filterValue.tagMode,
       unread: filterValue.onlyUnread || undefined,
-      is_group: filterValue.onlyGroups || undefined,
+      // Grupo nunca se mistura ao atendimento: desligado = sem grupos; ligado = só grupos.
+      is_group: !!filterValue.onlyGroups,
       sem_passo: filterValue.semPasso || undefined,
       canal: filterValue.canal,
       atendimento: filterValue.atendimento,

@@ -154,7 +154,8 @@ describe("a lacuna de tradução (passo 4)", () => {
     );
     const caminho = screen.getByTestId("agente-funis-mudos-caminho");
     expect(caminho.textContent).toBe(`${grupo!.label} › ${grupo!.hub!.label} › ${etapas!.label}`);
-    expect(caminho.getAttribute("href")).toBe(etapas!.href);
+    // O link abre o funil mudo, não só a tela (um funil por vez desde o redesign).
+    expect(caminho.getAttribute("href")).toBe(`${etapas!.href}?funil=${ANDREA.id}`);
     expect(screen.getByTestId("agente-funis-mudos").textContent).not.toContain("Configurações");
   });
 

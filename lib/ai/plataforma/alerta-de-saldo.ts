@@ -3,7 +3,8 @@
  *
  * Os agentes dos clientes com plano de IA usam a OPENROUTER_API_KEY da plataforma: o saldo dela
  * nunca pode zerar sem aviso. Níveis: cada valor de AI_PLATAFORMA_ALERTA_USD_DIA, o corte de não
- * essenciais (AI_PLATAFORMA_CORTE_USD_DIA) e "saldo cobre menos de N dias do consumo médio".
+ * essenciais (AI_PLATAFORMA_CORTE_USD_DIA), "saldo cobre menos de N dias do consumo médio" e cada valor
+ * de AI_PLATAFORMA_ALERTA_SALDO_USD (saldo restante em dólares).
  * Um envio por nível por dia (claim em `ia_plataforma_alertas`, migration 9097).
  *
  * Envio pelo "Aviso no WhatsApp" da org AI_PLATAFORMA_ALERTA_ORG_ID (o mesmo transporte do aviso de
@@ -33,6 +34,7 @@ export function niveisCruzados(e: {
   saldoCents: number | null;
   mediaDiariaCents: number;
   diasDeSaldo: number;
+  saldoUsdCents: number[];
 }): Nivel[] {
   const niveis: Nivel[] = [];
   for (const a of e.alertasCents) {
@@ -52,6 +54,14 @@ export function niveisCruzados(e: {
       niveis.push({
         id: 'saldo_dias',
         texto: `O saldo da OpenRouter está em ${usd(e.saldoCents)}, perto de ${dias.toFixed(1).replace('.', ',')} dia(s) do consumo médio. Recarregue antes que os agentes dos clientes parem.`,
+      });
+    }
+  }
+  for (const v of e.saldoUsdCents) {
+    if (e.saldoCents !== null && e.saldoCents <= v) {
+      niveis.push({
+        id: `saldo_usd_${v}`,
+        texto: `O saldo da OpenRouter chegou a ${usd(e.saldoCents)} (aviso em ${usd(v)}). Recarregue antes que os agentes dos clientes parem.`,
       });
     }
   }
@@ -114,6 +124,7 @@ export async function rodadaDoAlertaDaPlataforma(deps: {
       saldoCents: saldo,
       mediaDiariaCents: Number(media.rows[0]?.cents ?? 0),
       diasDeSaldo: lim.diasDeSaldo,
+      saldoUsdCents: lim.saldoUsdCents,
     });
     resumo.niveis = niveis.map((n) => n.id);
     if (!deps.orgDoAviso) return resumo;
