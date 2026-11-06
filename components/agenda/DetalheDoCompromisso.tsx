@@ -50,6 +50,10 @@ type Detalhe = {
 export function detalheAindaMuda(d: Detalhe | undefined): boolean {
   if (!d) return false;
   if (d.status === "pending" || d.status === "confirmed") return true;
+  // A falta marcada dispara a decisão de recuperação de forma assíncrona (o
+  // drain do event_log). Até o recibo chegar não há `recovery`, e parar aqui
+  // deixava o painel aberto sem nunca mostrar "Recuperação iniciada".
+  if (d.status === "no_show" && d.contact_id && !d.recovery) return true;
   const inscricao = d.recovery?.enrollment_status;
   return !!inscricao && !["cancelled", "completed", "dead"].includes(inscricao);
 }

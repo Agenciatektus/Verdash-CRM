@@ -14,6 +14,14 @@ describe("polling só enquanto há pendência", () => {
     expect(detalheAindaMuda(compromisso("no_show", "active"))).toBe(true);
   });
 
+  it("agenda: falta com contato segue atualizando até o recibo da recuperação chegar", () => {
+    const semRecibo = { status: "no_show", contact_id: "c1", recovery: null } as unknown as Detalhe;
+    expect(detalheAindaMuda(semRecibo)).toBe(true);
+    // Controle: sem contato não há recuperação a esperar.
+    const semContato = { status: "no_show", contact_id: null, recovery: null } as unknown as Detalhe;
+    expect(detalheAindaMuda(semContato)).toBe(false);
+  });
+
   it("agenda: concluído, cancelado ou recuperação encerrada param", () => {
     expect(detalheAindaMuda(undefined)).toBe(false);
     expect(detalheAindaMuda(compromisso("completed"))).toBe(false);
