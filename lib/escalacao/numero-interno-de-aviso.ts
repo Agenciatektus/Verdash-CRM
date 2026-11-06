@@ -344,6 +344,20 @@ export async function ehConexaoDaPropriaOrg(
   return (conexoesDaPropriaOrg ?? []).some((n) => phoneLookupVariants(n).includes(telefone));
 }
 
+/** `ehConexaoDaPropriaOrg` + rastro no contador, para o ingestor nativo. */
+export async function ignoraConexaoDaPropriaOrg(
+  db: SupabaseClient,
+  input: { organizationId: string; channelSessionId: string },
+  msg: { identity: { phone: string | null }; direction: "inbound" | "outbound" },
+): Promise<boolean> {
+  if (!(await ehConexaoDaPropriaOrg(db, input.organizationId, msg.identity.phone))) return false;
+  await registrarMensagemIgnorada(db, input.organizationId, {
+    direction: msg.direction,
+    sessionId: input.channelSessionId,
+  });
+  return true;
+}
+
 /** A pergunta que os ingestores fazem, com a leitura já resolvida. */
 export async function ehNumeroInternoDeAviso(
   db: SupabaseClient,

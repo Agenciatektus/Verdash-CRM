@@ -52,7 +52,7 @@ import { pausarIaPorAtendimentoManual } from "@/lib/escalacao/atendimento-manual
 
 import { estamparAtribuicaoDoContato } from "@/lib/leads/atribuicao-de-anuncio";
 import { aplicarEfeitosPosEntrada } from "../pos-entrada";
-import { ehConexaoDaPropriaOrg, registrarMensagemIgnorada } from "@/lib/escalacao/numero-interno-de-aviso";
+import { ignoraConexaoDaPropriaOrg } from "@/lib/escalacao/numero-interno-de-aviso";
 import { extrairAtribuicaoVerdash } from "./atribuicao-de-anuncio";
 
 import { aplicarAlteracaoDeMensagem } from "../alteracao-de-mensagem";
@@ -151,15 +151,8 @@ export async function ingestVerdashInbound(
     return { status: "ignored", reason: "sem_identidade_utilizavel" };
   }
 
-  // 9224: com a exceção da plataforma, o aviso que outra conexão da própria org
-  // manda para esta não vira contato, conversa, roteador nem IA (laço robô↔robô).
-  if (await ehConexaoDaPropriaOrg(admin, input.organizationId, msg.identity.phone)) {
-    await registrarMensagemIgnorada(admin, input.organizationId, {
-      direction: msg.direction,
-      sessionId: input.channelSessionId,
-    });
-    return { status: "ignored", reason: "conexao_da_propria_org" };
-  }
+  // 9224: aviso vindo de outra conexão da própria org não vira contato nem IA.
+  if (await ignoraConexaoDaPropriaOrg(admin, input, msg)) return { status: "ignored", reason: "conexao_da_propria_org" };
 
   const contactId = await upsertContact(admin, input.organizationId, msg, identity);
   if (!contactId) return { status: "ignored", reason: "contato_nao_resolvido" };
