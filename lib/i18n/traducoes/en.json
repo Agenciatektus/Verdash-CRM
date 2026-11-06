@@ -9488,5 +9488,16 @@
   "Horários livres": "Free time slots",
   "Próximos hoje": "Upcoming today",
   "Ver todos": "View all",
-  "Nada mais marcado para hoje.": "Nothing else scheduled for today."
+  "Nada mais marcado para hoje.": "Nothing else scheduled for today.",
+  "Vence hoje": "Due today",
+  "dia em atraso": "day overdue",
+  "dias em atraso": "days overdue",
+  "Urgentes": "Urgent",
+  "Em alerta": "On alert",
+  "No prazo": "On time",
+  "Ver só as urgentes": "Show urgent only",
+  "Dados que serão afetados": "Data that will be affected",
+  "Nenhuma solicitação neste filtro": "No requests in this filter",
+  "Há mais resultados na próxima página.": "There are more results on the next page.",
+  "Titular anonimizado": "Data subject anonymized"
 }

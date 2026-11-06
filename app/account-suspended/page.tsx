@@ -178,7 +178,7 @@ export default async function AccountSuspendedPage({
               </p>
             </header>
             {pedidoAberto ? (
-              <LgpdRequestDetail id={pedidoAberto} hrefDaLista="/account-suspended" />
+              <LgpdRequestDetail id={pedidoAberto} hrefDaLista="/account-suspended" titulo="h3" />
             ) : (
               <RequestsTable baseDoPedido="/account-suspended?pedido=" />
             )}

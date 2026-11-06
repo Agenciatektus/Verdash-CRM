@@ -82,6 +82,17 @@ const JANELA_CRITICA_EM_DIAS = 2;
 /** `horas < 24` — o "menos de um dia" do selo `at_risk`. */
 const JANELA_DE_RISCO_EM_HORAS = 24;
 
+/**
+ * O corte do filtro "urgentes" feito no BANCO: `due_at < corte` é o mesmo que
+ * `diasAtePrazo(due_at) < JANELA_CRITICA_EM_DIAS` (vencido ou crítico). `due_at` é
+ * a meia-noite UTC do dia civil do prazo; o corte é a do dia civil de hoje + 2.
+ * `fimDoPrazo(agora)` já é a meia-noite UTC de hoje + 1.
+ */
+export function corteDosUrgentes(agora: Date = new Date()): string {
+  const amanha = fimDoPrazo(agora)!; // `agora` é uma data válida
+  return new Date(amanha.getTime() + (JANELA_CRITICA_EM_DIAS - 1) * 86_400_000).toISOString();
+}
+
 /** Balde da ORGANIZAÇÃO, em dias civis. Ver o cabeçalho. */
 export function computeSlaBucket(
   dueAt: string | null,
