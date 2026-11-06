@@ -49,7 +49,7 @@ export function ParticipantesDoGrupo({
           <Button
             type="button"
             size="sm"
-            disabled={ocupado || telefones.length === 0 || telefones.length > 20}
+            disabled={ocupado || telefones.length === 0 || 20 < telefones.length}
             onClick={() => {
               onOperar("add", telefones);
               setNovos("");
