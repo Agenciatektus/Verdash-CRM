@@ -10315,6 +10315,14 @@ export const DICIONARIO: Traducoes = {
 
   // ─── LGPD: solicitações (fila, ficha, SLA, aprovação, prévia, auditoria) ───
   "Solicitações LGPD": { es: "Solicitudes LGPD" },
+  "Vence hoje": { es: "Vence hoy" },
+  "dia em atraso": { es: "día de atraso" },
+  "dias em atraso": { es: "días de atraso" },
+  "Urgentes": { es: "Urgentes" },
+  "Em alerta": { es: "En alerta" },
+  "No prazo": { es: "En plazo" },
+  "Ver só as urgentes": { es: "Ver solo las urgentes" },
+  "Dados que serão afetados": { es: "Datos que serán afectados" },
   "Anonimizações e solicitações de dados de titulares. Apenas admins.": {
     es: "Anonimizaciones y solicitudes de datos de titulares. Solo admins.",
   },
