@@ -13,6 +13,7 @@
  */
 import { redirect } from "next/navigation";
 
+import { CabecalhoDaPagina, Pagina } from "@/components/pagina";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { AI_DECIDE_PADRAO, CHAVE_DAS_AUTOMACOES } from "@/lib/automation/ai-decide-da-org";
@@ -55,19 +56,16 @@ export default async function AutomacoesSettingsPage() {
   const idioma = user.idioma;
 
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">{traduzir("Automações", idioma)}</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">{traduzir(DESCRICAO, idioma)}</p>
-      </header>
+    <Pagina largura="leitura">
+      <CabecalhoDaPagina titulo={traduzir("Automações", idioma)} descricao={traduzir(DESCRICAO, idioma)} />
 
       {error ? (
-        <p role="alert" className="max-w-2xl rounded-md border border-destructive/40 p-4 text-sm text-destructive">
+        <p role="alert" className="rounded-md border border-destructive/40 p-4 text-sm text-destructive">
           {traduzir(ERRO_DE_LEITURA, idioma)}
         </p>
       ) : (
         <InterruptorAiDecide ligado={ligado} idioma={idioma} />
       )}
-    </div>
+    </Pagina>
   );
 }
