@@ -8,7 +8,7 @@ import type { Idioma } from "@/lib/i18n/idiomas";
 
 const ESTILO: Record<Saude, string> = {
   ok: "border-success-fg/30 bg-success-bg",
-  atencao: "border-warning-line bg-warning-bg",
+  atencao: "border-warning-fg/30 bg-warning-bg",
   problema: "border-error-fg/30 bg-error-bg",
 };
 

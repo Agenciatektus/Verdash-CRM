@@ -83,7 +83,7 @@ export function PreviewPanel({ requestId }: PreviewPanelProps) {
           {preview && (
             <div className="space-y-4">
               {preview.no_local_footprint && (
-                <div className="rounded-md border border-warning-line bg-warning-bg px-3 py-2 text-sm text-warning-fg">
+                <div className="rounded-md border border-warning-fg/30 bg-warning-bg px-3 py-2 text-sm text-warning-fg">
                   {t("Nenhum dado local encontrado para este titular.")}
                 </div>
               )}
