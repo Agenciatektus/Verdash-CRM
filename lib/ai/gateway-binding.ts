@@ -99,13 +99,16 @@ export async function resolverModeloDoPonto(
     // O log da execução: provedor, modelo, propósito e origem da configuração,
     // em TODO ponto — é o que a tela e o operador usam para dizer qual modelo
     // efetivamente rodou em cada finalidade (issue #2377).
+    // Só é RECUSA quando nada foi resolvido. Resolver por um degrau de queda
+    // (a chave da instalação, o piso do produto) é sucesso com nota: logar
+    // "recusado" aí mandou caçar, em 05/11, um sentimento que rodava normal.
     logarResolucaoDeModelo(logger, {
       organization_id: organizationId,
       purpose,
       provider,
       model,
       origem,
-      motivo,
+      ...(resolvido === null ? { motivo } : { queda: motivo }),
     });
     return resolvido;
   };

@@ -185,12 +185,12 @@ describe("a troca do code por tokens", () => {
 });
 
 describe("a renovação proativa", () => {
-  it("renova quando faltam menos de 8 dias, e NÃO renova quando ainda falta muito", async () => {
+  it("renova quando faltam 5 minutos ou menos, e NÃO renova um token de 1 hora recém-emitido", async () => {
     const agora = Date.now();
-    const dentroDaJanela = agora + 2 * 24 * 60 * 60 * 1000;
-    const foraDaJanela = agora + 30 * 24 * 60 * 60 * 1000;
+    const dentroDaJanela = agora + 2 * 60 * 1000;
+    const foraDaJanela = agora + 60 * 60 * 1000;
 
-    expect(JANELA_DE_RENOVACAO_MS).toBe(8 * 24 * 60 * 60 * 1000);
+    expect(JANELA_DE_RENOVACAO_MS).toBe(5 * 60 * 1000);
     expect(renovacaoProxima(dentroDaJanela, agora)).toBe(true);
     expect(renovacaoProxima(foraDaJanela, agora)).toBe(false);
     // Sem prazo conhecido, não decide por conta própria.

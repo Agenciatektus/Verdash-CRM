@@ -33,7 +33,8 @@ import { guardarCredencialDoLogin, rotacionarCredencial } from "@/lib/ai/credenc
 import { moduloLigado } from "@/lib/instalacao/modulos";
 import { PROVEDOR_POR_ASSINATURA } from "@/lib/ai/pontos/provedores";
 import { renovacaoProxima, renovarSeProxima } from "@/lib/ai/pontos/renovacao-da-assinatura";
-import { renovarPorRefreshToken, type TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { renovarPorRefreshToken, vencimentoDoJwt, type TokensDoCodex } from "@/lib/ai/pontos/pkce-da-assinatura";
+import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -44,7 +45,7 @@ export const ROTULO_DO_LOGIN_CODEX = "Assinatura do ChatGPT";
 /**
  * A janela da trava de renovação no BANCO. Quem vence o `UPDATE` condicional
  * segura a renovação por este tempo; quem chega dentro dele perde (`em_curso`).
- * 30 s é ordem de grandeza de UMA troca de refresh_token, contra 8 dias de
+ * 30 s é ordem de grandeza de UMA troca de refresh_token, contra 5 minutos de
  * janela de renovação — perder aqui custa uma espera, ganhar duas vezes custa a
  * sessão da empresa (refresh_token rotativo: o segundo POST chega com um token
  * que o primeiro acabou de trocar).
@@ -178,7 +179,8 @@ export async function lerLoginCodex(p: {
       scopes: json.scopes,
       ...(typeof json.ext_agent_host_id === "string" ? { ext_agent_host_id: json.ext_agent_host_id } : {}),
       ...(typeof json.token_type === "string" ? { token_type: json.token_type } : {}),
-      expires_at: typeof json.expires_at === "number" ? json.expires_at : null,
+      // Par gravado sem `expires_at` (resposta sem `expires_in`): o `exp` do JWT.
+      expires_at: typeof json.expires_at === "number" ? json.expires_at : vencimentoDoJwt(json.access_token),
     };
   } catch {
     return null;
@@ -378,7 +380,7 @@ export async function renovarComTravaDeBanco(p: {
  * Duas decisões aqui, e só duas:
  *
  *  1. **`userId: null`.** Ninguém pediu esta renovação: é o relógio batendo na
- *     janela de 8 dias, dentro de uma chamada de conversa. A auditoria grava
+ *     janela de 5 minutos, dentro de uma chamada de conversa. A auditoria grava
  *     `null` de propósito, e não um usuário qualquer — quem nunca pediu nada não
  *     pode aparecer como quem pediu. O caminho MANUAL (botão "revalidar" em
  *     `revalidate/route.ts`) continua levando o `userId` de quem clicou.
@@ -405,6 +407,7 @@ export async function lerLoginCodexRenovandoSeProxima(p: {
   if (linha === null) return tokens;
 
   let renovados: TokensDoCodex | null = null;
+  let motivo: string | null = null;
   try {
     await renovarSeProxima({
       expiraEm: tokens.expires_at,
@@ -420,15 +423,70 @@ export async function lerLoginCodexRenovandoSeProxima(p: {
             return renovarPorRefreshToken({ refreshToken: atuais.refresh_token, clientId: atuais.client_id });
           },
         });
-        if (!r.ok) throw new Error(`renovacao_automática_recusada: ${r.motivo}`);
+        if (!r.ok) {
+          motivo = r.motivo;
+          throw new Error(`renovacao_automática_recusada: ${r.motivo}`);
+        }
         renovados = r.tokens;
         return r.tokens;
       },
     });
-  } catch {
-    // Renovação recusada, em curso noutro processo ou módulo desligado no meio
-    // do caminho. O token que já temos segue em uso; a queda, se for o caso,
-    // acontece na política da reserva e não aqui.
+  } catch (erro) {
+    motivo ??= erro instanceof Error ? erro.message : String(erro);
   }
-  return renovados ?? tokens;
+  if (renovados) return renovados;
+
+  // PERDEU A TRAVA: outro processo está trocando o par AGORA. Seguir com o token
+  // lido é mandar à OpenAI um access_token que vence (ou já venceu) — foi o 401
+  // do Salão em 05/11, com a resposta e o classificador do mesmo turno lendo
+  // juntos. Espera o vencedor gravar e usa o par NOVO.
+  if (motivo === "em_curso") {
+    const doVencedor = await esperarParNovo(p, linha.id, tokens.access_token);
+    // A conta foi desconectada (ou o módulo desligado) durante a espera: o
+    // token velho NÃO sai, a reserva assume — desconectar é revogar.
+    if (doVencedor === "sumiu") return null;
+    if (doVencedor) return doVencedor;
+  }
+  // Renovação recusada ou módulo desligado no meio do caminho: o token que já
+  // temos segue em uso, e a queda, se for o caso, acontece na política da
+  // reserva. Mas sem silêncio: falha de renovação calada vira 401 sem pista.
+  logger.warn("assinatura: renovação automática não aconteceu; segue o token lido", {
+    organization_id: p.orgId,
+    motivo,
+    vencido: tokens.expires_at !== null && tokens.expires_at <= (p.agora ?? Date.now()),
+  });
+  return tokens;
+}
+
+/** Quanto quem perdeu a trava espera o vencedor (uma troca de refresh leva ~1 s). */
+const ESPERA_PELO_VENCEDOR_MS = 10_000;
+const PASSO_DA_ESPERA_MS = 300;
+
+/**
+ * Relê a linha até o access_token mudar. `"sumiu"` = a linha deixou de ser
+ * legível (desconectada, módulo desligado); `null` = o vencedor soltou a trava
+ * sem gravar par novo (falhou e devolveu o `updated_at` antigo) ou não gravou a
+ * tempo. Sair cedo no primeiro caso evita 10 s de espera em todo turno quando
+ * o refresh_token já foi revogado.
+ */
+async function esperarParNovo(
+  p: { admin: Admin; orgId: string },
+  credentialId: string,
+  tokenAntigo: string,
+): Promise<TokensDoCodex | "sumiu" | null> {
+  const limite = Date.now() + ESPERA_PELO_VENCEDOR_MS;
+  while (Date.now() < limite) {
+    await new Promise((r) => setTimeout(r, PASSO_DA_ESPERA_MS));
+    const lido = await lerLoginCodex(p);
+    if (lido === null) return "sumiu";
+    if (lido.access_token !== tokenAntigo) return lido;
+    const { data } = await p.admin
+      .from("ai_provider_credentials")
+      .select("updated_at")
+      .eq("id", credentialId)
+      .maybeSingle();
+    const atualizadoEm = (data as { updated_at?: string } | null)?.updated_at;
+    if (atualizadoEm && Date.parse(atualizadoEm) < Date.now() - JANELA_DA_TRAVA_MS) return null;
+  }
+  return null;
 }
