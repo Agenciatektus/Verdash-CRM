@@ -178,7 +178,7 @@ export function RevisaoDoDocumento({ leadId, podeDecidir, aoDecidir }: Props) {
   return (
     <div
       data-peca="revisao-do-documento"
-      className="mb-4 rounded-md border border-warning-fg/30 bg-warning-bg/40 p-3"
+      className="mb-4 rounded-md border border-warning-line bg-warning-bg/40 p-3"
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <p className="text-sm font-medium">{t("Dados lidos no documento")}</p>

@@ -116,7 +116,7 @@ export function PropostasDeDado({ contactId, podeDecidir, aoDecidir }: Props) {
   if (!podeDecidir && (itens === null || itens.length === 0)) return null;
 
   return (
-    <Card className="border-warning-fg/30 bg-warning-bg/40 p-4">
+    <Card className="border-warning-line bg-warning-bg/40 p-4">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-sm font-semibold">{t("O assistente ouviu isto na conversa")}</h2>
         <Badge variant="warning">{itens?.length ?? 0} {t("aguardando você")}</Badge>

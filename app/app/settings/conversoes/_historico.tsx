@@ -45,7 +45,7 @@ const ESTILO_DA_SITUACAO: Record<Exclude<Situacao, "todas">, string> = {
   entregue: "border-success-fg/30 bg-success-bg",
   falha: "border-error-fg/30 bg-error-bg",
   aguardando: "border-info-fg/30 bg-info-bg",
-  nao_enviado: "border-warning-fg/30 bg-warning-bg",
+  nao_enviado: "border-warning-line bg-warning-bg",
 };
 
 const ROTULO_CURTO: Record<Exclude<Situacao, "todas">, string> = {

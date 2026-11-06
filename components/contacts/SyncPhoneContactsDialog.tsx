@@ -171,7 +171,7 @@ export function SyncPhoneContactsDialog({ open, onOpenChange }: Props) {
                 aviso fica no caminho do clique, não escondido na descrição. */}
             <div
               role="note"
-              className="flex items-start gap-2 rounded-md border border-warning-fg/30 bg-warning-bg p-3 text-sm"
+              className="flex items-start gap-2 rounded-md border border-warning-line bg-warning-bg p-3 text-sm"
             >
               <Warning size={18} weight="duotone" aria-hidden className="mt-0.5 shrink-0 text-warning-fg" />
               <p>
