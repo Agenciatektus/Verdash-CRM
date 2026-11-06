@@ -158,7 +158,7 @@ describe("a recusa não é silêncio — o registro do desfecho", () => {
       join(process.cwd(), "lib", "escalacao", "aviso-ao-suporte.ts"),
       "utf8",
     );
-    const i = motor.indexOf("destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino)");
+    const i = motor.indexOf("destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino, canal.id)");
     expect(
       i,
       "o motor deixou de conferir o destino antes de enviar — o laço volta a ser possível",

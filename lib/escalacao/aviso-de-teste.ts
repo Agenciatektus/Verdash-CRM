@@ -148,7 +148,7 @@ export async function enviarAvisoDeTeste(
   // aviso real é recusado — o desfecho que este módulo existe para evitar.
   let destinoProprio: boolean;
   try {
-    destinoProprio = await deps.db.destinoEhDaPropriaOrganizacao(orgId, telefone);
+    destinoProprio = await deps.db.destinoEhDaPropriaOrganizacao(orgId, telefone, channelSessionId);
   } catch {
     return recusa("indeterminado");
   }

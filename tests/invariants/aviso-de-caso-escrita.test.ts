@@ -326,6 +326,50 @@ describe("0292 — fn_definir_aviso_de_caso é a única porta, e ela confere o p
     sql(`update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';`);
   });
 
+  it("9231: com a exceção da plataforma, o destino pode ser OUTRA conexão ativa da org, nunca a remetente", () => {
+    // Conexão B da MESMA org (a do roteador/SDR), com o número de destino.
+    const OUTRA = "02920000-2222-4000-8000-000000009231";
+    sql(`do $s$ begin
+      insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, phone_number)
+        values ('${OUTRA}', '${ORG_A}', 'aviso-9231-b', '\\x00'::bytea, '+5521977357727');
+      exception when unique_violation then null; end $s$;`);
+    sql(`update public.channel_sessions set phone_number = '+5522981356551' where id = '${SESSAO_A}';`);
+    const definir = (canal: string, tel: string) =>
+      `${comoMembro(ADMIN_A)}\nselect public.fn_definir_aviso_de_caso('${ORG_A}', '${canal}', '${tel}', null, true, false);`;
+    const erroDe = (consulta: string) => {
+      try {
+        sql(consulta);
+        return "";
+      } catch (e) {
+        return motivoDoErro(e);
+      }
+    };
+    try {
+      // CONTROLE NEGATIVO: sem a flag, continua recusado (as outras orgs não mudam).
+      expect(erroDe(definir(SESSAO_A, "+5521977357727"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
+
+      // O admin da ORG não liga a exceção: `organizations` só é escrita pela plataforma.
+      sql(`${comoMembro(ADMIN_A)}\nupdate public.organizations set aviso_para_conexao_propria = true where id = '${ORG_A}';`);
+      expect(valor(`select aviso_para_conexao_propria::text from public.organizations where id = '${ORG_A}'`)).toBe("false");
+
+      sql(`update public.organizations set aviso_para_conexao_propria = true where id = '${ORG_A}';`);
+      // Com a flag: a outra conexão é aceita, nas duas grafias do nono dígito.
+      expect(sql(definir(SESSAO_A, "+5521977357727"))).toContain("trocou_numero");
+      expect(sql(definir(SESSAO_A, "+552177357727"))).toContain("trocou_numero");
+      // Remetente e destino na MESMA conexão: recusado mesmo com a flag.
+      expect(erroDe(definir(SESSAO_A, "+5522981356551"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
+      expect(erroDe(definir(OUTRA, "+5521977357727"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
+      // Remetente sem número conhecido: a exceção não vale.
+      sql(`update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';`);
+      expect(erroDe(definir(SESSAO_A, "+5521977357727"))).toMatch(/aviso_de_caso_numero_da_propria_org/i);
+    } finally {
+      sql(`update public.organizations set aviso_para_conexao_propria = false where id = '${ORG_A}';
+        update public.config_aviso_de_caso set channel_session_id = '${SESSAO_A}', telefone_destino = '+5531998966398' where organization_id = '${ORG_A}';
+        update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';
+        delete from public.channel_sessions where id = '${OUTRA}';`);
+    }
+  });
+
   it("conexão ARQUIVADA não conta — o número dela volta a ser um destino válido", () => {
     // A conexão ATIVA com aquele número continua recusada: é o laço
     // robô-com-robô que a checagem evita, e é o controle positivo deste caso.
