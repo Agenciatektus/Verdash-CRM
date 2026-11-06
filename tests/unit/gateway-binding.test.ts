@@ -78,8 +78,9 @@ describe("sem binding e sem credencial da organização, vale a chave da instala
       expect(r).not.toBeNull();
       const recusas = warn.mock.calls.filter(([m]) => String(m).includes("recusado"));
       expect(recusas, "resolveu, mas o log disse que recusou").toHaveLength(0);
-      const validado = info.mock.calls.find(([m]) => String(m).includes("validado"));
-      expect(validado?.[1]).toMatchObject({ queda: expect.stringContaining("instalação") });
+      // A queda segue VISÍVEL em warn (pode ser outro processador), com nome próprio.
+      const queda = warn.mock.calls.find(([m]) => String(m).includes("degrau de queda"));
+      expect(queda?.[1]).toMatchObject({ queda: expect.stringContaining("instalação") });
     } finally {
       warn.mockRestore();
       info.mockRestore();

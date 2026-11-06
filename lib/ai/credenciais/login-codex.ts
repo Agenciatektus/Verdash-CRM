@@ -441,7 +441,10 @@ export async function lerLoginCodexRenovandoSeProxima(p: {
   // do Salão em 05/11, com a resposta e o classificador do mesmo turno lendo
   // juntos. Espera o vencedor gravar e usa o par NOVO.
   if (motivo === "em_curso") {
-    const doVencedor = await esperarParNovo(p, tokens.access_token);
+    const doVencedor = await esperarParNovo(p, linha.id, tokens.access_token);
+    // A conta foi desconectada (ou o módulo desligado) durante a espera: o
+    // token velho NÃO sai, a reserva assume — desconectar é revogar.
+    if (doVencedor === "sumiu") return null;
     if (doVencedor) return doVencedor;
   }
   // Renovação recusada ou módulo desligado no meio do caminho: o token que já
@@ -459,17 +462,31 @@ export async function lerLoginCodexRenovandoSeProxima(p: {
 const ESPERA_PELO_VENCEDOR_MS = 10_000;
 const PASSO_DA_ESPERA_MS = 300;
 
-/** Relê a linha até o access_token mudar; `null` se o vencedor não gravou a tempo. */
+/**
+ * Relê a linha até o access_token mudar. `"sumiu"` = a linha deixou de ser
+ * legível (desconectada, módulo desligado); `null` = o vencedor soltou a trava
+ * sem gravar par novo (falhou e devolveu o `updated_at` antigo) ou não gravou a
+ * tempo. Sair cedo no primeiro caso evita 10 s de espera em todo turno quando
+ * o refresh_token já foi revogado.
+ */
 async function esperarParNovo(
   p: { admin: Admin; orgId: string },
+  credentialId: string,
   tokenAntigo: string,
-): Promise<TokensDoCodex | null> {
+): Promise<TokensDoCodex | "sumiu" | null> {
   const limite = Date.now() + ESPERA_PELO_VENCEDOR_MS;
   while (Date.now() < limite) {
     await new Promise((r) => setTimeout(r, PASSO_DA_ESPERA_MS));
     const lido = await lerLoginCodex(p);
-    if (lido === null) return null;
+    if (lido === null) return "sumiu";
     if (lido.access_token !== tokenAntigo) return lido;
+    const { data } = await p.admin
+      .from("ai_provider_credentials")
+      .select("updated_at")
+      .eq("id", credentialId)
+      .maybeSingle();
+    const atualizadoEm = (data as { updated_at?: string } | null)?.updated_at;
+    if (atualizadoEm && Date.parse(atualizadoEm) < Date.now() - JANELA_DA_TRAVA_MS) return null;
   }
   return null;
 }

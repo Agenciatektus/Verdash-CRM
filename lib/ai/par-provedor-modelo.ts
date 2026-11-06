@@ -399,6 +399,9 @@ export function logarResolucaoDeModelo(log: Logador, registro: RegistroDaResoluc
     ...(registro.queda ? { queda: registro.queda } : {}),
   };
   if (registro.motivo) log.warn("ia: par provedor+modelo recusado antes da chamada", campos);
+  // Resolveu por degrau de queda (pode ser OUTRO provedor/processador que o da
+  // empresa): continua visível em warn, mas não se diz "recusado".
+  else if (registro.queda) log.warn("ia: par resolvido por degrau de queda", campos);
   else log.info("ia: par provedor+modelo validado", campos);
 }
 

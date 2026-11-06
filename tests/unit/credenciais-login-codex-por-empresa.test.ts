@@ -392,6 +392,45 @@ describe("token VENCIDO lido por dois ao mesmo tempo (o 401 do Salão, 05/11)", 
     expect(b?.access_token, "o perdedor da trava voltou com o token vencido").toBe(novo);
   });
 
+  it("vencedor FALHA e solta a trava: quem espera sai logo, sem os 10 s inteiros", async () => {
+    const fake = admin();
+    fake.linha = linhaVencida();
+    estado.fake = fake;
+    vi.mocked(renovarPorRefreshToken).mockReset().mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 400));
+      throw new Error("refresh_token_revoked");
+    });
+
+    const inicio = Date.now();
+    const [a, b] = await Promise.all([
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+    ]);
+
+    expect(Date.now() - inicio, "o perdedor esperou o tempo todo por um par que não viria").toBeLessThan(3_000);
+    expect(vi.mocked(renovarPorRefreshToken)).toHaveBeenCalledTimes(1);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+  });
+
+  it("conta desconectada DURANTE a espera: o token velho não sai, volta null (reserva)", async () => {
+    const fake = admin();
+    fake.linha = linhaVencida();
+    estado.fake = fake;
+    vi.mocked(renovarPorRefreshToken).mockReset().mockImplementation(async () => {
+      estado.modulo = false; // a leitura passa a não devolver o par
+      await new Promise((r) => setTimeout(r, 400));
+      throw new Error("desligado no meio");
+    });
+
+    const rs = await Promise.all([
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+      lerLoginCodexRenovandoSeProxima({ admin: fake as never, orgId: org }),
+    ]);
+
+    expect(rs, "o perdedor da trava mandou o token velho de uma conta desligada").toContain(null);
+  });
+
   it("um token ainda longe de vencer NÃO gira o refresh_token", async () => {
     const fake = admin();
     const valido = { ...tokens, access_token: jwt(Date.now() + 50 * 60 * 1000, "vivo"), expires_at: Date.now() + 50 * 60 * 1000 };
