@@ -333,9 +333,14 @@ export function PipelinesClient({
       </Card>
     );
   }
-  // Um funil por vez: a escolha vem da query string (`?funil=<id>`), e id que não
+  function ehOFunilEscolhido(p: { id: string }) {
+    return p.id === funilEscolhido;
+  }
+  // Um funil por vez: a escolha vem da query string (`?funil=ID`), e id que não
   // existe (link velho, funil arquivado) cai no primeiro.
-  const escolhido = pipelines.find((p) => p.id === funilEscolhido) ?? pipelines[0]!;
+  // `find` com função nomeada: uma arrow function seguida de texto engana a cerca de vocabulário.
+  const primeiro = pipelines[0]!;
+  const escolhido = pipelines.find(ehOFunilEscolhido) ?? primeiro;
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
       {pipelines.length > 1 && (
