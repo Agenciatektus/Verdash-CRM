@@ -77310,6 +77310,9 @@ create policy channel_session_group_directory_select on public.channel_session_g
   for select using (organization_id in (select public.fn_user_org_ids()));
 -- O default ACL de tabelas em `public` concede tudo a anon/authenticated (CLAUDE.md, 0258).
 revoke insert, update, delete, truncate on public.channel_session_group_directory from anon, authenticated;
+-- Grant explícito (9037): desde 30/10/2026 tabela sem grant próprio nasce fora da Data API.
+grant select on public.channel_session_group_directory to authenticated;
+grant select, insert, update, delete on public.channel_session_group_directory to service_role;
 
 notify pgrst, 'reload schema';
 
