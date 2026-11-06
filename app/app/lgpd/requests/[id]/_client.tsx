@@ -1,17 +1,17 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
-import Link from "next/link";
 import { format } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
-import { CaretLeft } from "@/lib/ui/icons";
+import { CabecalhoDaPagina, LinkDeVolta } from "@/components/pagina";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLgpdRequest } from "@/hooks/useLgpdRequest";
 import { prazoEmBr } from "@/lib/lgpd/sla";
+import { PrazoDoPedido } from "../PrazoDoPedido";
 import { SlaTimeline } from "./SlaTimeline";
 import { PreviewPanel } from "./PreviewPanel";
 import { ApproveButton } from "./ApproveButton";
@@ -22,6 +22,8 @@ interface Props {
   id: string;
   /** Volta para a lista. O hub de `/account-suspended` passa o próprio endereço (ver `RequestsTable`). */
   hrefDaLista?: string;
+  /** Nível do título quando embutido sob outro (o hub de `/account-suspended` já tem h1 e h2). */
+  titulo?: "h1" | "h2" | "h3";
 }
 
 const TYPE_LABELS: Record<LgpdRequestType, string> = {
@@ -40,35 +42,33 @@ const STATUS_LABELS: Record<LgpdRequestStatus, string> = {
 
 const STATUS_VARIANT: Record<
   LgpdRequestStatus,
-  "default" | "secondary" | "destructive" | "outline"
+  "neutral" | "info" | "success" | "warning" | "error"
 > = {
-  received: "secondary",
-  processing: "default",
-  completed: "outline",
-  failed: "destructive",
-  pending_review: "secondary",
+  received: "neutral",
+  processing: "info",
+  completed: "success",
+  failed: "error",
+  pending_review: "warning",
 };
 
-export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Props) {
+export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests", titulo }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const { data, isLoading, error } = useLgpdRequest(id);
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5 mb:px-4">
         <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Skeleton className="h-48 rounded-lg" />
-          <Skeleton className="h-48 rounded-lg" />
-        </div>
+        <Skeleton className="h-24 rounded-lg" />
+        <Skeleton className="h-48 rounded-lg" />
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+      <div className="rounded-md border border-error-fg/30 bg-error-bg px-4 py-3 text-sm text-error-fg mb:mx-4">
         {t("Falha ao carregar solicitação.")}
       </div>
     );
@@ -79,49 +79,40 @@ export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Pr
   const shortId = request.id.slice(0, 8);
   const typeLabel = t(TYPE_LABELS[request.request_type] ?? request.request_type);
   const statusLabel = t(STATUS_LABELS[request.status] ?? request.status);
+  const terminal = request.status === "completed" || request.status === "failed";
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        {/* No celular o voltar é o da barra da casca. */}
-        <div className="flex items-center gap-2 mb:hidden">
-          <Button variant="ghost" size="sm" asChild className="-ml-2 gap-1 text-muted-foreground">
-            <Link href={hrefDaLista}>
-              <CaretLeft size={14} aria-hidden />
-              {t("Solicitações")}
-            </Link>
-          </Button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight font-mono">
-            #{shortId}
-          </h1>
-          <Badge variant={STATUS_VARIANT[request.status] ?? "secondary"}>
-            {statusLabel}
-          </Badge>
-          <Badge variant="outline">{typeLabel}</Badge>
-          {request.emergency && (
-            <Badge variant="destructive">{t("Urgente")}</Badge>
-          )}
-        </div>
-
-        <p className="text-sm text-muted-foreground">
-          {t("Recebido em")}{" "}
-          {format(new Date(request.received_at), `dd/MM/yyyy '${t("às")}' HH:mm`, { locale: localeDaData })}
-          {request.due_at && (
-            <>
-              {" · "}
-              {t("Vence em")} {prazoEmBr(request.due_at)}
-            </>
-          )}
-        </p>
-      </div>
+    <>
+      <CabecalhoDaPagina
+        como={titulo}
+        tituloNoCelular
+        antes={<LinkDeVolta href={hrefDaLista}>{t("Solicitações")}</LinkDeVolta>}
+        titulo={
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="break-words">
+              {typeLabel} · {!terminal && titular.nome ? titular.nome : `#${shortId}`}
+            </span>
+            <Badge variant={STATUS_VARIANT[request.status] ?? "neutral"}>{statusLabel}</Badge>
+            {request.emergency && <Badge variant="error">{t("Urgente")}</Badge>}
+          </span>
+        }
+        descricao={
+          <>
+            {t("Recebido em")}{" "}
+            {format(new Date(request.received_at), `dd/MM/yyyy '${t("às")}' HH:mm`, { locale: localeDaData })}
+            {request.due_at && (
+              <>
+                {" · "}
+                {t("Vence em")} {prazoEmBr(request.due_at)}
+              </>
+            )}
+          </>
+        }
+      />
 
       {/* PDF download: delivered (completed) or for the operator to deliver by hand (pending_review) */}
       {signed_pdf_url && (
-        <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-md border bg-muted/30 px-4 py-3 text-sm mb:mx-4">
           <span>{t("Relatório de exportação disponível (expira em 72h).")}</span>
           <Button size="sm" variant="outline" asChild className="shrink-0">
             <a href={signed_pdf_url} download>
@@ -131,83 +122,90 @@ export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Pr
         </div>
       )}
 
-      {/* Action row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <PreviewPanel requestId={request.id} />
-        <ApproveButton
-          requestId={request.id}
-          requestType={request.request_type}
-          status={request.status}
-          titular={titular}
-        />
+      <Bloco titulo={t("Prazo")}>
+        {request.due_at ? (
+          <div className="flex flex-col gap-4">
+            {!terminal && (
+              <PrazoDoPedido receivedAt={request.received_at} dueAt={request.due_at} className="min-w-0" />
+            )}
+            <SlaTimeline
+              received_at={request.received_at}
+              due_at={request.due_at}
+              request_type={request.request_type}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("SLA não definido.")}</p>
+        )}
+      </Bloco>
+
+      <Bloco titulo={t("Titular")}>
+        {/* Minimização: depois de concluído ou falho, nome e e-mail do titular não voltam à tela. */}
+        {terminal ? (
+          <p className="text-muted-foreground">{t("Titular anonimizado")}</p>
+        ) : (
+          <>
+            <Row label={t("Nome")} value={titular.nome ?? t("Sem nome no cadastro")} />
+            <Row label={t("Envio para")} value={titular.email_destino ?? "—"} />
+          </>
+        )}
+        {request.contact_id && <Row label="Contact ID" value={request.contact_id} mono />}
+        {request.external_customer_id && (
+          <Row label="External customer ID" value={request.external_customer_id} />
+        )}
+      </Bloco>
+
+      <Bloco titulo={t("Dados que serão afetados")} acao={<PreviewPanel requestId={request.id} />} />
+
+      <Bloco titulo={t("Detalhes")}>
+        <Row label={t("ID completo")} value={request.id} mono />
+        <Row label={t("Tipo")} value={typeLabel} />
+        <Row label={t("Status")} value={statusLabel} />
+        <Row label={t("Origem")} value={request.source ?? "—"} />
+        <Row label={t("Escopo")} value={request.scope} />
+        <Row label={t("Tentativas")} value={String(request.attempts)} />
+        {request.completed_at && (
+          <Row
+            label={t("Concluído em")}
+            value={format(new Date(request.completed_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}
+          />
+        )}
+        {request.error_message && (
+          <div className="rounded-md border border-error-fg/30 bg-error-bg px-2 py-1">
+            <p className="text-xs text-muted-foreground">{t("Erro")}</p>
+            <p className="text-xs text-error-fg">{request.error_message}</p>
+          </div>
+        )}
+      </Bloco>
+
+      <Bloco titulo={`${t("Trilha de auditoria")} (${audit_trail.length})`}>
+        <AuditTrail entries={audit_trail} />
+      </Bloco>
+
+      {/* Aprovar fica à mão: o botão só existe com o pedido em "Recebido". */}
+      {request.status === "received" && (
+        <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-border bg-chrome px-4 py-3 mb:px-4">
+          <ApproveButton
+            requestId={request.id}
+            requestType={request.request_type}
+            status={request.status}
+            titular={titular}
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function Bloco({ titulo, acao, children }: { titulo: string; acao?: ReactNode; children?: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 mb:mx-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">{titulo}</h2>
+        {acao}
       </div>
-
-      {/* 2-col grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* SLA Timeline */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{t("Linha do tempo SLA")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {request.due_at ? (
-              <SlaTimeline
-                received_at={request.received_at}
-                due_at={request.due_at}
-                request_type={request.request_type}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">{t("SLA não definido.")}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Request info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">{t("Detalhes")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <Row label={t("ID completo")} value={request.id} mono />
-            <Row label={t("Tipo")} value={typeLabel} />
-            <Row label={t("Status")} value={statusLabel} />
-            <Row label={t("Origem")} value={request.source ?? "—"} />
-            <Row label={t("Escopo")} value={request.scope} />
-            <Row label={t("Tentativas")} value={String(request.attempts)} />
-            {request.contact_id && (
-              <Row label="Contact ID" value={request.contact_id} mono />
-            )}
-            {request.external_customer_id && (
-              <Row label="External customer ID" value={request.external_customer_id} />
-            )}
-            {request.completed_at && (
-              <Row
-                label={t("Concluído em")}
-                value={format(new Date(request.completed_at), "dd/MM/yyyy HH:mm", { locale: localeDaData })}
-              />
-            )}
-            {request.error_message && (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1">
-                <p className="text-xs text-muted-foreground">{t("Erro")}</p>
-                <p className="text-destructive text-xs">{request.error_message}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Audit trail (spans both cols) */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              {t("Trilha de auditoria")} ({audit_trail.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AuditTrail entries={audit_trail} />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      {children ? <div className="flex flex-col gap-2 text-sm">{children}</div> : null}
+    </section>
   );
 }
 

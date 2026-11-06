@@ -4,10 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { useT } from "@/hooks/i18n/useT";
-import { distanciaDoPrazo } from "@/lib/lgpd/contagem-do-prazo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
 import {
   Select,
   SelectContent,
@@ -24,13 +24,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Warning } from "@/lib/ui/icons";
+import { ShieldCheck, Warning } from "@/lib/ui/icons";
 import {
   useLgpdRequests,
   type LgpdRequestStatus,
   type LgpdRequestType,
   type SlaBucket,
 } from "@/hooks/useLgpdRequests";
+import { PrazoDoPedido, type TomDoPrazo } from "./PrazoDoPedido";
 import { SlaBanner } from "./SlaBanner";
 
 // ── Label helpers ─────────────────────────────────────────────────────────────
@@ -51,31 +52,37 @@ const STATUS_LABELS: Record<LgpdRequestStatus, string> = {
 
 const STATUS_VARIANT: Record<
   LgpdRequestStatus,
-  "default" | "secondary" | "destructive" | "outline"
+  "neutral" | "info" | "success" | "warning" | "error"
 > = {
-  received: "secondary",
-  processing: "secondary",
-  completed: "default",
-  failed: "destructive",
-  pending_review: "outline",
+  received: "neutral",
+  processing: "info",
+  completed: "success",
+  failed: "error",
+  pending_review: "warning",
 };
 
-const SLA_VARIANT: Record<
-  SlaBucket,
-  "default" | "secondary" | "destructive" | "outline"
-> = {
-  overdue: "destructive",
-  critical: "destructive",
-  warning: "outline",
-  ok: "default",
+// O balde que a API calcula pinta a barra do prazo.
+const TOM_DO_BUCKET: Record<SlaBucket, TomDoPrazo> = {
+  overdue: "crit",
+  critical: "crit",
+  warning: "warn",
+  ok: "ok",
 };
 
-const SLA_LABELS: Record<SlaBucket, string> = {
-  overdue: "Vencido",
-  critical: "Crítico",
-  warning: "Alerta",
-  ok: "OK",
-};
+// Chips de SLA. "urgent" junta vencido e crítico, em aberto; a API filtra no banco.
+type FiltroDeSla = SlaBucket | "urgent";
+const CHIPS_DE_SLA: { valor: FiltroDeSla; rotulo: string }[] = [
+  { valor: "urgent", rotulo: "Urgentes" },
+  { valor: "warning", rotulo: "Em alerta" },
+  { valor: "ok", rotulo: "No prazo" },
+];
+const STATUS_DOS_CHIPS: LgpdRequestStatus[] = [
+  "received",
+  "processing",
+  "pending_review",
+  "completed",
+  "failed",
+];
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -96,18 +103,33 @@ function fmtRelative(iso: string, t: (texto: string) => string): string {
   }
 }
 
-// O rótulo da coluna "Vence em" e o sinal de urgência que pinta a linha vêm de
-// `distanciaDoPrazo`, em `lib/lgpd/contagem-do-prazo.ts`.
-//
-// Aqui ficava `fmtDistance`, e ela media a distância até o INÍCIO do dia do
-// prazo: medido, 23 horas dizendo "atrasado hoje" com o prazo ainda por vencer.
-// A conta mora em `lib/` para que o teste meça a conta que a TELA faz — um teste
-// que reescreve a fórmula no próprio arquivo de teste mede a si mesmo, e foi
-// assim que uma regressão de um dia passou verde no #2170.
-
-// ── Select options ────────────────────────────────────────────────────────────
+// O texto e a barra da coluna "Prazo" vêm de `PrazoDoPedido`, que lê a conta de
+// `lib/lgpd/sla.ts` (a mesma do detalhe e do e-mail ao DPO). Aqui ficava
+// `fmtDistance`, que media até o INÍCIO do dia do prazo e dizia "atrasado hoje"
+// com o prazo ainda por vencer.
 
 const ALL = "__ALL__";
+
+/** A contagem vem do `meta.total` (consulta só de count, sem linhas): total da organização. */
+function ChipComContagem({
+  status,
+  ligado,
+  rotulo,
+  onClick,
+}: {
+  status?: LgpdRequestStatus;
+  ligado: boolean;
+  rotulo: string;
+  onClick: () => void;
+}) {
+  const total = useLgpdRequests({ status, onlyCount: true }).data?.meta.total;
+  return (
+    <Chip ligado={ligado} onClick={onClick}>
+      {rotulo}
+      {total !== undefined && <span className="tabular-nums opacity-80">{total}</span>}
+    </Chip>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -125,40 +147,72 @@ export function RequestsTable({
   const t = useT();
   const [status, setStatus] = useState<LgpdRequestStatus | undefined>();
   const [type, setType] = useState<LgpdRequestType | undefined>();
-  const [slaBucket, setSlaBucket] = useState<SlaBucket | undefined>();
+  const [slaFiltro, setSlaFiltro] = useState<FiltroDeSla | undefined>();
   const [page, setPage] = useState(1);
 
-  const q = useLgpdRequests({ status, type, sla_bucket: slaBucket, page, limit: 25 });
+  const q = useLgpdRequests({
+    status,
+    type,
+    sla_bucket: slaFiltro,
+    page,
+    limit: 25,
+  });
   const rows = q.data?.data ?? [];
+  const filtrado = Boolean(status || type || slaFiltro);
   const meta = q.data?.meta;
 
   return (
     <div className="flex flex-col gap-4">
       {/* SLA Banner — shown based on full current page data */}
-      {!q.isLoading && rows.length > 0 && <SlaBanner requests={rows} />}
+      {!q.isLoading && rows.length > 0 && (
+        <SlaBanner
+          requests={rows}
+          onVerUrgentes={
+            slaFiltro === "urgent"
+              ? undefined
+              : () => {
+                  setSlaFiltro("urgent");
+                  setPage(1);
+                }
+          }
+        />
+      )}
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">
-        <Select
-          value={status ?? ALL}
-          onValueChange={(v) => {
-            setStatus(v === ALL ? undefined : (v as LgpdRequestStatus));
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-2">
+        <ChipComContagem
+          ligado={!status && !slaFiltro}
+          rotulo={t("Todas")}
+          onClick={() => {
+            setStatus(undefined);
+            setSlaFiltro(undefined);
             setPage(1);
           }}
-        >
-          <SelectTrigger className="h-9 w-[170px]">
-            <SelectValue placeholder={t("Status: todos")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t("Status: todos")}</SelectItem>
-            <SelectItem value="received">{t(STATUS_LABELS.received)}</SelectItem>
-            <SelectItem value="processing">{t(STATUS_LABELS.processing)}</SelectItem>
-            <SelectItem value="completed">{t(STATUS_LABELS.completed)}</SelectItem>
-            <SelectItem value="failed">{t(STATUS_LABELS.failed)}</SelectItem>
-            <SelectItem value="pending_review">{t(STATUS_LABELS.pending_review)}</SelectItem>
-          </SelectContent>
-        </Select>
-
+        />
+        {CHIPS_DE_SLA.map((c) => (
+          <Chip
+            key={c.valor}
+            ligado={slaFiltro === c.valor}
+            onClick={() => {
+              setSlaFiltro(slaFiltro === c.valor ? undefined : c.valor);
+              setPage(1);
+            }}
+          >
+            {t(c.rotulo)}
+          </Chip>
+        ))}
+        {STATUS_DOS_CHIPS.map((st) => (
+          <ChipComContagem
+            key={st}
+            status={st}
+            ligado={status === st}
+            rotulo={t(STATUS_LABELS[st])}
+            onClick={() => {
+              setStatus(status === st ? undefined : st);
+              setPage(1);
+            }}
+          />
+        ))}
         <Select
           value={type ?? ALL}
           onValueChange={(v) => {
@@ -166,7 +220,7 @@ export function RequestsTable({
             setPage(1);
           }}
         >
-          <SelectTrigger className="h-9 w-[200px]">
+          <SelectTrigger className="h-9 w-48" aria-label={t("Tipo")}>
             <SelectValue placeholder={t("Tipo: todos")} />
           </SelectTrigger>
           <SelectContent>
@@ -177,33 +231,14 @@ export function RequestsTable({
           </SelectContent>
         </Select>
 
-        <Select
-          value={slaBucket ?? ALL}
-          onValueChange={(v) => {
-            setSlaBucket(v === ALL ? undefined : (v as SlaBucket));
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="h-9 w-[160px]">
-            <SelectValue placeholder={t("SLA: todos")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t("SLA: todos")}</SelectItem>
-            <SelectItem value="overdue">{t(SLA_LABELS.overdue)}</SelectItem>
-            <SelectItem value="critical">{t(SLA_LABELS.critical)}</SelectItem>
-            <SelectItem value="warning">{t(SLA_LABELS.warning)}</SelectItem>
-            <SelectItem value="ok">{SLA_LABELS.ok}</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {(status || type || slaBucket) && (
+        {(status || type || slaFiltro) && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setStatus(undefined);
               setType(undefined);
-              setSlaBucket(undefined);
+              setSlaFiltro(undefined);
               setPage(1);
             }}
           >
@@ -212,7 +247,7 @@ export function RequestsTable({
         )}
 
         {meta && (
-          <span className="ml-auto text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground largo:ml-auto">
             {meta.total} {t(meta.total === 1 ? "solicitação" : "solicitações")}
           </span>
         )}
@@ -223,21 +258,20 @@ export function RequestsTable({
         <Table className={TABELA_EMPILHADA}>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[90px]">ID</TableHead>
+              <TableHead className="w-24">ID</TableHead>
               <TableHead>{t("Tipo")}</TableHead>
               <TableHead>{t("Sujeito")}</TableHead>
               <TableHead>{t("Recebido")}</TableHead>
-              <TableHead>{t("Vence")}</TableHead>
-              <TableHead>SLA</TableHead>
+              <TableHead>{t("Prazo")}</TableHead>
               <TableHead>{t("Status")}</TableHead>
-              <TableHead className="w-[60px]" />
+              <TableHead className="w-16" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 8 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -246,9 +280,9 @@ export function RequestsTable({
               ))
             ) : q.isError ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center">
+                <TableCell colSpan={7} className="text-center">
                   <div className="flex flex-col items-center gap-2 py-8 text-sm text-muted-foreground">
-                    <Warning size={24} weight="fill" className="text-red-500" aria-hidden />
+                    <Warning size={24} weight="fill" className="text-error-fg" aria-hidden />
                     <p>{t("Erro ao carregar solicitações.")}</p>
                     <Button size="sm" variant="outline" onClick={() => q.refetch()}>
                       {t("Tentar novamente")}
@@ -258,19 +292,26 @@ export function RequestsTable({
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center">
-                  <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
-                    <Warning size={32} weight="thin" aria-hidden />
-                    <p className="font-medium">{t("Nenhuma solicitação LGPD")}</p>
-                    <p className="text-xs">
-                      {t("Solicitações de dados e anonimizações aparecerão aqui.")}
-                    </p>
-                  </div>
+                <TableCell colSpan={7} className="text-center">
+                  {filtrado ? (
+                    <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
+                      <p className="font-medium">{t("Nenhuma solicitação neste filtro")}</p>
+                      {meta?.has_more && <p className="text-xs">{t("Há mais resultados na próxima página.")}</p>}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-12 text-sm text-muted-foreground">
+                      <ShieldCheck size={32} weight="thin" aria-hidden />
+                      <p className="font-medium">{t("Nenhuma solicitação LGPD")}</p>
+                      <p className="text-xs">
+                        {t("Solicitações de dados e anonimizações aparecerão aqui.")}
+                      </p>
+                    </div>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => {
-                const due = distanciaDoPrazo(r.due_at, t);
+                const terminal = r.status === "completed" || r.status === "failed";
                 const subject = r.external_customer_id
                   ? r.external_customer_id.slice(0, 16)
                   : r.contact_id
@@ -283,31 +324,29 @@ export function RequestsTable({
                       {r.id.slice(0, 8)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="whitespace-nowrap text-xs">
+                      <Badge variant="tag" className="text-xs">
                         {t(TYPE_LABELS[r.request_type] ?? r.request_type)}
                       </Badge>
                     </TableCell>
-                    <TableCell data-rotulo={t("Sujeito")} className="max-w-[140px] truncate font-mono text-xs">
+                    <TableCell data-rotulo={t("Sujeito")} className="max-w-36 truncate font-mono text-xs">
                       {subject}
                     </TableCell>
                     <TableCell data-rotulo={t("Recebido")} className="whitespace-nowrap text-xs text-muted-foreground">
                       {fmtRelative(r.received_at, t)}
                     </TableCell>
-                    <TableCell data-rotulo={t("Vence")}
-                      className={`whitespace-nowrap text-xs font-medium ${due.urgent ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}
-                    >
-                      {due.label}
+                    <TableCell data-rotulo={t("Prazo")} className="mb:basis-full">
+                      {terminal ? (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      ) : (
+                        <PrazoDoPedido
+                          receivedAt={r.received_at}
+                          dueAt={r.due_at}
+                          tom={TOM_DO_BUCKET[r.sla_bucket]}
+                        />
+                      )}
                     </TableCell>
-                    <TableCell data-rotulo="SLA">
-                      <Badge variant={SLA_VARIANT[r.sla_bucket]} className="text-xs">
-                        {t(SLA_LABELS[r.sla_bucket])}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={STATUS_VARIANT[r.status]}
-                        className="whitespace-nowrap text-xs"
-                      >
+                    <TableCell data-rotulo={t("Status")}>
+                      <Badge variant={STATUS_VARIANT[r.status]}>
                         {t(STATUS_LABELS[r.status] ?? r.status)}
                       </Badge>
                     </TableCell>

@@ -2,9 +2,9 @@
 
 import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 
-import { differenceInDays, format, isBefore } from "date-fns";
+import { format, isBefore } from "date-fns";
 import { useT } from "@/hooks/i18n/useT";
-import { diasAtePrazo, diasDeAtraso, progressoDoPrazo } from "@/lib/lgpd/sla";
+import { diasDeAtraso } from "@/lib/lgpd/sla";
 
 interface SlaTimelineProps {
   received_at: string;
@@ -67,7 +67,6 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
   const receivedAt = new Date(received_at);
   const now = new Date();
 
-  const diasRestantes = diasAtePrazo(due_at, now);
   const prazoPassou = diasDeAtraso(due_at, now) > 0;
 
   const milestoneConfigs = getMilestones(receivedAt, request_type);
@@ -85,61 +84,23 @@ export function SlaTimeline({ received_at, due_at, request_type }: SlaTimelinePr
       };
     });
 
-  // Medida até o FIM do dia guardado. Antes, até a meia-noite UTC do dia do
-  // prazo: a barra chegava a 100% às 21h da VÉSPERA (São Paulo).
-  const progress = progressoDoPrazo(received_at, due_at, now);
-  const progressPct = Math.round(progress * 100);
-
-  const daysElapsed = differenceInDays(now, receivedAt);
-
-  const progressColor =
-    progress >= 1
-      ? "bg-red-500"
-      : progress >= 0.75
-        ? "bg-yellow-500"
-        : "bg-emerald-500";
-
   return (
     <div className="space-y-4">
-      {/* Progress bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>D+{daysElapsed} ({t("hoje")})</span>
-          <span>
-            {diasRestantes > 0
-              ? `${diasRestantes}${t("d restantes")}`
-              : diasRestantes === 0
-                ? t("vence hoje")
-                : `${Math.abs(diasRestantes)}${t("d em atraso")}`}
-          </span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full rounded-full transition-all ${progressColor}`}
-            style={{ width: `${progressPct}%` }}
-            role="progressbar"
-            aria-valuenow={progressPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          />
-        </div>
-      </div>
-
       {/* Milestones */}
       <ol className="relative space-y-0">
         {milestones.map((m, idx) => {
           const dotColor =
             m.status === "completed"
-              ? "bg-emerald-500 border-emerald-500"
+              ? "bg-success border-success"
               : m.status === "current"
-                ? "bg-yellow-500 border-yellow-500 ring-2 ring-yellow-200 dark:ring-yellow-900"
+                ? "bg-warning border-warning ring-2 ring-warning-bg"
                 : "bg-muted border-border";
 
           const labelColor =
             m.status === "completed"
-              ? "text-emerald-700 dark:text-emerald-400"
+              ? "text-success-fg"
               : m.status === "current"
-                ? "text-yellow-700 dark:text-yellow-400 font-medium"
+                ? "text-warning-fg font-medium"
                 : "text-muted-foreground";
 
           const isLast = idx === milestones.length - 1;

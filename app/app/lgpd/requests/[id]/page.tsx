@@ -24,7 +24,7 @@ export default async function LgpdRequestDetailPage({
   if (!isAllowed) redirect("/app");
 
   return (
-    <Pagina className="mb:px-4 mb:pt-3">
+    <Pagina largura="leitura">
       <LgpdRequestDetail id={id} />
     </Pagina>
   );

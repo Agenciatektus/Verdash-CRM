@@ -5919,5 +5919,16 @@
   "Horários livres": "空闲时段",
   "Próximos hoje": "今日待办",
   "Ver todos": "查看全部",
-  "Nada mais marcado para hoje.": "今天没有其他安排。"
+  "Nada mais marcado para hoje.": "今天没有其他安排。",
+  "Vence hoje": "今天到期",
+  "dia em atraso": "天逾期",
+  "dias em atraso": "天逾期",
+  "Urgentes": "紧急",
+  "Em alerta": "预警",
+  "No prazo": "未逾期",
+  "Ver só as urgentes": "仅看紧急",
+  "Dados que serão afetados": "将受影响的数据",
+  "Nenhuma solicitação neste filtro": "此筛选下没有请求",
+  "Há mais resultados na próxima página.": "下一页还有更多结果。",
+  "Titular anonimizado": "数据主体已匿名化"
 }

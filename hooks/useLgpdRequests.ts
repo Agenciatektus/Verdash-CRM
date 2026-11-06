@@ -37,7 +37,9 @@ export interface LgpdRequest {
 export interface LgpdRequestsFilters {
   status?: LgpdRequestStatus;
   type?: LgpdRequestType;
-  sla_bucket?: SlaBucket;
+  sla_bucket?: SlaBucket | "urgent";
+  /** Só o total (`meta.total`), sem linhas: para a contagem dos chips. */
+  onlyCount?: boolean;
   page?: number;
   limit?: number;
 }
@@ -60,6 +62,7 @@ export function useLgpdRequests(filters: LgpdRequestsFilters = {}) {
       if (filters.status) qs.set("status", filters.status);
       if (filters.type) qs.set("type", filters.type);
       if (filters.sla_bucket) qs.set("sla_bucket", filters.sla_bucket);
+      if (filters.onlyCount) qs.set("only_count", "true");
       if (filters.page) qs.set("page", String(filters.page));
       if (filters.limit) qs.set("limit", String(filters.limit));
 

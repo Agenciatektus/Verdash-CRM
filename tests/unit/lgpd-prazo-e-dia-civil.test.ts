@@ -584,7 +584,7 @@ describe("a barra do prazo das telas de detalhe lê o fim do dia, não a meia-no
     // passa, que é o defeito que a casa chama de pior. O que pode regredir é cada
     // cópia voltar a fazer a conta por conta própria.
     for (const arquivo of [
-      "app/app/lgpd/requests/[id]/SlaTimeline.tsx",
+      "app/app/lgpd/requests/PrazoDoPedido.tsx",
       "app/admin/(protected)/lgpd/requests/[id]/_client.tsx",
     ]) {
       const fonte = codigoSemComentario(arquivo);
@@ -835,7 +835,6 @@ const LEEM_PELO_HELPER: readonly string[] = [
   "app/api/v1/admin/lgpd/requests/route.ts",
   "components/admin/lgpd/LgpdRequestsTable.tsx",
   "app/app/lgpd/requests/[id]/_client.tsx",
-  "app/app/lgpd/requests/RequestsTable.tsx",
   "app/app/lgpd/requests/[id]/SlaTimeline.tsx",
   "app/admin/(protected)/lgpd/requests/[id]/_client.tsx",
   "app/api/v1/admin/dashboard/kpis/route.ts",
@@ -846,6 +845,8 @@ const LEEM_PELO_HELPER: readonly string[] = [
  * aqui — sair como foi guardado é o comportamento certo, e mexer seria pior.
  */
 const REPASSA_O_VALOR: readonly string[] = [
+  // Só entrega `due_at` ao PrazoDoPedido, que faz a conta pelo helper.
+  "app/app/lgpd/requests/RequestsTable.tsx",
   "lib/lgpd/types.ts",
   "lib/database.types.ts",
   "lib/mcp/tools/privacidade.ts",
