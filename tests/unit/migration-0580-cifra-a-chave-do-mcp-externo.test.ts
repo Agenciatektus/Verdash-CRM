@@ -41,7 +41,11 @@ describe("a chave do servidor MCP externo sai do jsonb (#2147, item 3)", () => {
     const numeros = readdirSync(MIGRACOES)
       .map((nome) => PREFIXO_NUMERO.exec(nome)?.[1])
       .filter((numero): numero is string => Boolean(numero));
-    const repetidos = numeros.filter((numero, i) => numeros.indexOf(numero) !== i);
+    // Fork Tektus: a série 9xxx é usada pelos dois lados (upstream e fork) e se repete
+    // por construção; lá a identidade é o carimbo (docs/upstream/subida-1.95.md).
+    // A unicidade vale para a série do upstream, que é o que esta cerca protege.
+    const serie = numeros.filter((numero) => Number(numero) < 9000);
+    const repetidos = serie.filter((numero, i) => serie.indexOf(numero) !== i);
     expect(repetidos, "número de migration repetido").toEqual([]);
     expect(numeros).toContain("0580");
   });

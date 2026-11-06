@@ -16,6 +16,10 @@ export interface LeadRow {
   status: string;
   value_cents: number | null;
   currency: string | null;
+  /** Mensalidade ao lado do valor único (9028, #3602); ausente no negócio de valor único. */
+  recurring_value_cents?: number | null;
+  recurring_period?: string | null;
+  recurring_months?: number | null;
   updated_at: string;
   pipeline_id: string;
   stage_id: string;

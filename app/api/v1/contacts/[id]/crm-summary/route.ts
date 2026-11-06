@@ -35,6 +35,8 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
+import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
 import { motivoDaPerdaObrigatorio } from "@/lib/leads/motivo-da-perda";
 import { motivosDoFunil } from "@/lib/leads/motivos-de-perda-do-funil";
@@ -55,7 +57,7 @@ export const dynamic = "force-dynamic";
 // no painel (visual v2, 3.4): trocar o responsável precisa saber quem é o atual,
 // para o "Desfazer" devolver a ele; o negócio perdido mostra o motivo.
 const LEAD_COLS =
-  "id, title, status, value_cents, currency, updated_at, pipeline_id, stage_id, position_in_stage, custom_fields, owner_user_id, owner_agent_id, lost_reason, crm_pipelines!inner(name, settings, is_archived, etapas:crm_stages!crm_stages_pipeline_id_fkey(id, name, position, is_won, is_lost, is_archived)), crm_stages!crm_leads_stage_id_fkey(name)";
+  "id, title, status, value_cents, recurring_value_cents, recurring_period, recurring_months, currency, updated_at, pipeline_id, stage_id, position_in_stage, custom_fields, owner_user_id, owner_agent_id, lost_reason, crm_pipelines!inner(name, settings, is_archived, etapas:crm_stages!crm_stages_pipeline_id_fkey(id, name, position, is_won, is_lost, is_archived)), crm_stages!crm_leads_stage_id_fkey(name)";
 const ORDER_COLS = "id, external_id, status, total_cents, currency, created_at";
 /** Acompanha o que a timeline mostra — `reason` e `actor_kind` inclusive. */
 /**
@@ -150,15 +152,60 @@ export async function GET(
     }
   })();
   const anuncios = await anunciosDoContato(supabase, contactId, contactScope);
-  const [leads, orders, activities, demandas, fatos, historico] = await Promise.all([
-    supabase
+  // ─── Fatia 2a da #3669: número adicional também mostra o negócio ──────────
+  // O contato desta conversa pode ser um número ADICIONAL do cliente (um
+  // `crm_lead_links` com `target_kind='contact'`, `link_kind='related'`). Nesse
+  // caso o negócio tem `contact_id` do contato PRINCIPAL, e a leitura por
+  // `contact_id` devolveria vazio. Consultamos os vínculos antes e, se o
+  // contato não tiver negócio próprio ABERTO (a precedência da 1a: próprio
+  // aberto vence), trazemos os negócios em que ele aparece como relacionado.
+  const { data: vinculosRelacionados, error: vinculosErr } = await supabase
+    .from("crm_lead_links")
+    .select("lead_id")
+    .eq("organization_id", contactScope.organization_id)
+    .eq("target_kind", ALVO_DE_CONTATO)
+    .eq("link_kind", VINCULO_DE_CONTATO)
+    .eq("target_id", contactId);
+  const idsRelacionados = (vinculosRelacionados ?? [])
+    .map((v: { lead_id?: string }) => v.lead_id)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+
+  // Próprio ABERTO primeiro: se o contato tem negócio próprio aberto, ele vence
+  // o relacionado (mesma regra de `lib/leads/active-lead.ts`).
+  const { data: leadsProprios, error: leadsPropriosErr } = await supabase
+    .from("crm_leads")
+    .select(LEAD_COLS)
+    .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
+    .eq("crm_pipelines.is_archived", false)
+    .order("updated_at", { ascending: false })
+    .limit(3);
+  // Sem `if` vazio: a falha desta leitura entra na varredura de `falha` abaixo,
+  // junto das outras, para o painel ver um veredito só.
+
+  // Próprio só FECHADO não vence: o cartão "(2º número)" duplicado que alguém
+  // fechou depois de juntar esconderia o negócio vivo do cliente.
+  const proprios = leadsProprios ?? [];
+  let leadsResolvidos = proprios;
+  let leadsRelErr: { message: string } | null = null;
+  if (idsRelacionados.length > 0 && !proprios.some((l) => l.status === "open")) {
+    const { data: leadsRel, error } = await supabase
       .from("crm_leads")
       .select(LEAD_COLS)
-      .eq("contact_id", contactId).eq("organization_id", contactScope.organization_id)
-      // Arquivar o funil não fecha os leads; sem isto eles seguiam aqui como abertos.
+      .eq("organization_id", contactScope.organization_id)
       .eq("crm_pipelines.is_archived", false)
+      .in("id", idsRelacionados)
       .order("updated_at", { ascending: false })
-      .limit(3),
+      .limit(3);
+    leadsRelErr = error;
+    const rel = leadsRel ?? [];
+    leadsResolvidos = [
+      ...rel.filter((l) => l.status === "open"),
+      ...proprios,
+      ...rel.filter((l) => l.status !== "open"),
+    ].slice(0, 3);
+  }
+
+  const [orders, activities, demandas, fatos, historico] = await Promise.all([
     supabase
       .from("orders")
       .select(ORDER_COLS)
@@ -193,7 +240,21 @@ export async function GET(
 
   // A falha SOBE. Engolir aqui devolveria lista vazia ao cliente e recriaria,
   // do lado do servidor, exatamente a mentira que esta rota veio desfazer.
-  const falha = leads.error ?? orders.error ?? activities.error ?? demandas.error ?? fatos.error ?? historico.error;
+  // Varredura e não encadeamento de `??`: o `error` que o supabase-js tipa para
+  // estas leituras vem como `null` (o TS sabe disso e reprovaria `a ?? b` com
+  // “sempre nullish”), mas em runtime ele PODE vir preenchido — o encadeamento
+  // some no typecheck e o runtime continua vendo o erro. `.find` mantém a mesma
+  // semântica (o primeiro erro vence) sem depender do tipo declarado.
+  const falha = [
+    vinculosErr,
+    leadsPropriosErr,
+    leadsRelErr,
+    orders.error,
+    activities.error,
+    demandas.error,
+    fatos.error,
+    historico.error,
+  ].find((e) => e != null);
   if (falha) {
     return fail("internal_error", falha.message, 500, { requestId });
   }
@@ -202,7 +263,7 @@ export async function GET(
   // quadro. A leitura de etapas que existe (`agent-mapping`) é de manager; esta
   // vai pelo MESMO cliente com RLS do resto da rota, então quem vê o lead vê as
   // etapas do funil dele e nada além. Uma consulta só para os até 3 funis.
-  const funis = [...new Set((leads.data ?? []).map((l) => (l as { pipeline_id: string }).pipeline_id))];
+  const funis = [...new Set(leadsResolvidos.map((l) => (l as { pipeline_id: string }).pipeline_id))];
   const etapas = funis.length
     ? await supabase
         .from("crm_stages")
@@ -233,7 +294,7 @@ export async function GET(
   return ok(
     {
       ...enrichment,
-      leads: (leads.data ?? []).map((row) =>
+      leads: leadsResolvidos.map((row) =>
         comCamposDoFunil(row as Record<string, unknown>, etapasPorFunil),
       ),
       orders: orders.data ?? [],
@@ -310,6 +371,13 @@ function comCamposDoFunil(row: Record<string, unknown>, etapasPorFunil: Map<stri
     funil_nome: nomeDoEmbed(crm_pipelines),
     etapa_nome: nomeDoEmbed(crm_stages),
     etapas_do_funil: etapasDoEmbed(crm_pipelines),
+    // OS ATALHOS DO CARD (#3487). Vai o MODELO de link como está no `settings`,
+    // não o link montado: quem monta é o navegador de quem clica, com os dados
+    // que essa pessoa já vê (`encodeURIComponent` por valor, allowlist de
+    // esquema na renderização). Montar aqui exigiria trazer telefone e campos
+    // para o servidor só para devolver string — e o link pronto no JSON é dado
+    // do cliente viajando a mais, sem uso.
+    atalhos: atalhosDoFunil(settings),
   };
 }
 

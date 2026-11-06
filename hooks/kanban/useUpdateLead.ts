@@ -90,6 +90,11 @@ interface MoveToPipelineArgs {
   targetPipelineId: string;
   /** "Rodar as automações de entrada da etapa" — padrão desligado. */
   rodarAutomacoesDeEntrada?: boolean;
+  /**
+   * A etapa de ENTRADA no funil destino (issue #3643). Ausente ou `null` é o
+   * comportamento de sempre: o servidor escolhe a primeira etapa aberta.
+   */
+  targetStageId?: string | null;
 }
 
 /**
@@ -103,11 +108,16 @@ export function useMoveLeadToPipeline(pipelineId: string) {
   const qc = useQueryClient();
   const queryKey = ["board", pipelineId] as const;
   return useMutation({
-    mutationFn: async ({ leadId, targetPipelineId, rodarAutomacoesDeEntrada }: MoveToPipelineArgs) => {
+    mutationFn: async ({ leadId, targetPipelineId, rodarAutomacoesDeEntrada, targetStageId }: MoveToPipelineArgs) => {
       marcarEcoLocal(leadId);
       return apiClient.post<{ data: { lead: Lead } }>(
         `/api/v1/leads/${leadId}/clone`,
-        { pipeline_id: targetPipelineId, rodar_automacoes_de_entrada: rodarAutomacoesDeEntrada === true },
+        {
+          pipeline_id: targetPipelineId,
+          rodar_automacoes_de_entrada: rodarAutomacoesDeEntrada === true,
+          // Sem escolha, quem decide a etapa continua sendo o servidor.
+          ...(targetStageId ? { stage_id: targetStageId } : {}),
+        },
       );
     },
     onSuccess: (_res, { leadId }) => {

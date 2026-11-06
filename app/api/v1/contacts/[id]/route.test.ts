@@ -44,6 +44,11 @@ function clienteFalso() {
         const q = { select: () => q, eq: () => q, in: () => q, order: async () => ({ data: [], error: null }) };
         return q;
       }
+      if (tabela === "contact_phones") {
+        // Telefones extras da ficha (9041 do upstream): nenhum, aqui.
+        const q = { select: () => q, eq: () => q, order: async () => ({ data: [], error: null }) };
+        return q;
+      }
       if (tabela === "organizations") {
         const q = { select: () => q, eq: () => q, maybeSingle: async () => ({ data: { country: "BR" }, error: null }) };
         return q;

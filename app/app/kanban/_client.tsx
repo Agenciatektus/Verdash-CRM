@@ -201,7 +201,12 @@ export function FunisClient({
    * Mostrar o controle com a regra desligada seria oferecer o que o motor
    * ignora.
    */
-  const clientesLigado = useActiveOrg()?.cliente_pela_agenda === true;
+  // As DUAS regras de "é cliente" mantêm o funil de clientes em uso: a da agenda
+  // (migration 0262) e a da venda (#3644). Com qualquer uma ligada, marcar um
+  // funil como de clientes deixa de ser um controle decorativo.
+  const orgAtiva = useActiveOrg();
+  const clientesLigado =
+    orgAtiva?.cliente_pela_agenda === true || orgAtiva?.cliente_pela_venda === true;
   /**
    * As caixas de fonte do Instagram so aparecem com uma conta conectada.
    *

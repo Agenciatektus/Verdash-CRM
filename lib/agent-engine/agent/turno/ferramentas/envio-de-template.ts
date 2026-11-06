@@ -18,6 +18,7 @@ import type { SaidaDosDesvios } from '../desvios-deterministicos';
 import type { EstadoDoTurno } from '../estado-do-turno';
 // Valor lido só dentro das funções (nunca na carga do módulo): o ciclo de import é seguro.
 import { AGENT_TOOL_DEFS, eTurnoDeResposta } from '../../inbound-turn';
+import { VETOS_IRREVOGAVEIS } from '../../../guardrails/before-send';
 
 export function criarSendTemplate(
   c: ContextoDoTurno,
@@ -144,6 +145,7 @@ export function criarSendTemplate(
         return passarComercialParaEquipe(chain.code);
       }
       if (chain.status === 'vetoed') {
+        if (VETOS_IRREVOGAVEIS.has(chain.code)) estado.vetoIrrevogavel = true;
         return { ok: false, error: { code: chain.code, message: chain.message } };
       }
       const outcome = chain.outcome;
