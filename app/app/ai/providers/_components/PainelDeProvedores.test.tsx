@@ -5,7 +5,7 @@
  * ligado na frente dele.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PainelDeProvedores } from "./PainelDeProvedores";
@@ -179,5 +179,17 @@ describe("PainelDeProvedores — grupos em lista", () => {
     fireEvent.click(screen.getByTestId("avancado-entender"));
     expect(await screen.findByTestId("ponto-sentiment_classify")).toBeInTheDocument();
     expect(screen.getByRole("dialog")).toHaveTextContent("Entender a conversa");
+  });
+
+  it("fechar a folha com Esc devolve o foco ao botão do grupo", async () => {
+    montar();
+    await screen.findByTestId("cartao-do-jev");
+    const botao = screen.getByTestId("avancado-entender");
+    botao.focus();
+    fireEvent.click(botao);
+    const folha = await screen.findByRole("dialog");
+    fireEvent.keyDown(folha, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(botao).toHaveFocus());
   });
 });

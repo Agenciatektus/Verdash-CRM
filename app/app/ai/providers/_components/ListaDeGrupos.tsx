@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 
 import { FolhaInferior } from "@/components/mobile/FolhaInferior";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +51,20 @@ export function ListaDeGrupos({
   const [aberto, setAberto] = useState<string | null>(null);
   const grupo = grupos.find((g) => g.papel === aberto) ?? null;
 
+  // Fechada a folha (Esc, X ou arraste), o foco volta ao botão do grupo: a folha é
+  // controlada, sem gatilho do Radix, então o foco iria para o <body>.
+  const ultimo = useRef<string | null>(null);
+  useEffect(() => {
+    if (aberto !== null) {
+      ultimo.current = aberto;
+      return;
+    }
+    const papel = ultimo.current;
+    if (!papel) return;
+    const espera = setTimeout(() => document.querySelector<HTMLElement>(`[data-testid="avancado-${papel}"]`)?.focus());
+    return () => clearTimeout(espera);
+  }, [aberto]);
+
   const pontos = grupo ? (
     <div className="space-y-3">
       <ResumoDoGrupo pontos={grupo.pontos} />
@@ -79,7 +93,6 @@ export function ListaDeGrupos({
                 <button
                   type="button"
                   data-testid={`avancado-${papel}`}
-                  aria-label={`${t("Configuração avançada")}: ${t(info.rotulo)}`}
                   onClick={() => setAberto(papel)}
                   className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-elevated focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
                 >
@@ -87,7 +100,10 @@ export function ListaDeGrupos({
                     <Icone size={18} aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium">{t(info.rotulo)}</span>
+                    <span className="block text-sm font-medium">
+                      {t(info.rotulo)}
+                      <span className="sr-only"> · {t("Configuração avançada")}</span>
+                    </span>
                     <span className="block truncate text-xs text-muted-foreground">{t(info.explicacao)}</span>
                     {comAviso > 0 && (
                       <span className="block text-xs text-warning-fg" data-testid="grupo-com-aviso">

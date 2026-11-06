@@ -18,11 +18,11 @@
  * deixar decidir a tarefa seguinte.
  */
 import { useState } from "react";
+import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useT } from "@/hooks/i18n/useT";
-import { CaretDown } from "@/lib/ui/icons";
 import { descreverErroDeValidacao } from "@/lib/ai/credenciais/erro-de-validacao";
 import { PROVEDOR_DO_JEV } from "@/lib/ai/decisao/credencial";
 
@@ -78,17 +78,13 @@ export function CartaoDoJev({
           contrato da TypeSafe precisa cobrir isso. O produto não guarda o nicho
           como categoria, então o aviso aparece para todos em forma condicional.
           A ida para os EUA já está no consentimento, mais abaixo. */}
-      <details className="group mt-3 rounded-md bg-warning-bg text-sm text-warning-fg">
-        <summary className="flex cursor-pointer list-none items-center gap-2 p-3 font-medium [&::-webkit-details-marker]:hidden">
-          <span className="flex-1">{t("Área da saúde? Leia antes de ligar")}</span>
-          <CaretDown size={16} aria-hidden className="shrink-0 transition-transform group-open:rotate-180" />
-        </summary>
-        <p className="px-3 pb-3" data-testid="jev-aviso-area-saude">
+      <Aviso tom="warn" className="mt-3">
+        <span data-testid="jev-aviso-area-saude">
           {t(
           "Se a sua empresa é da área da saúde: as mensagens que o Jev lê podem conter dado de saúde, que a LGPD trata como sensível. Antes de ligar, confira com quem cuida da LGPD da empresa se o contrato da TypeSafe cobre esse tipo de dado.",
         )}
-        </p>
-      </details>
+        </span>
+      </Aviso>
 
       {/* Depois de colar a chave nada confirmava que ela FUNCIONA: esta linha é
           o resultado do teste, dito em palavras (o ✓ é enfeite). O nome do

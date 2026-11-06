@@ -20006,6 +20006,7 @@ export const DICIONARIO: Traducoes = {
   "observando": { es: "observando" },
   "decidindo": { es: "decidiendo" },
   "Ver tarefas": { es: "Ver tareas" },
+  "avisando a equipe": { es: "avisando al equipo" },
 };
 
 /**

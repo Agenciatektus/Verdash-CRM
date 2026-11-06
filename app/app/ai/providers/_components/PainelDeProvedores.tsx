@@ -43,7 +43,6 @@ export function PainelDeProvedores({ antesDosPontos }: { antesDosPontos?: ReactN
   const t = useT();
   const [dados, setDados] = useState<Dados | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [avancado, setAvancado] = useState<Record<string, boolean>>({});
   const jev = useDadosDoJev();
 
   const carregar = useCallback(async () => {

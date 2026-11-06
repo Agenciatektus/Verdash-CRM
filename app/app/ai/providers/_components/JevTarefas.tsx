@@ -51,8 +51,13 @@ export function Ligado({
   // como sempre, e sem a linha delas a única saída de uma tarefa nova era
   // desligar o Jev inteiro.
   const rodando = estado === "observando" || estado === "decidindo" || estado === "em_pausa" || estado === "sozinho";
-  const observando = tarefasDoCartao(dados).filter((x) => x.estado === "observando").length;
-  const decidindo = tarefasDoCartao(dados).filter((x) => x.estado === "decidindo").length;
+  // A MESMA régua do selo do cartão (`estadoDoJev`): só conta o que roda, e avisar a
+  // equipe não é decidir. Parado ou decidindo sozinho, contar decisões afirmaria o que não há.
+  const rodam = tarefasDoCartao(dados).filter(roda);
+  const observando = rodam.filter((x) => x.estado === "observando").length;
+  const decidindo = rodam.filter(decide).length;
+  const avisando = rodam.filter((x) => x.estado === "decidindo" && avisaAEquipe(x.id)).length;
+  const semContagem = estado === "parado" || estado === "sozinho";
   const todasPausadas = tarefasDoCartao(dados).every((t) => t.estado === "desligada");
   const falha = dados.ultima_falha;
   const frasesDeFalha: Readonly<Record<string, string>> = O_QUE_FAZER_DO_JEV;
@@ -87,9 +92,20 @@ export function Ligado({
           data-testid="jev-tarefas-resumo"
         >
           <span className="min-w-0 flex-1 font-medium">
-            {observando} {t("observando")}, {decidindo} {t("decidindo")}
+            {semContagem ? (
+              t("Ver tarefas")
+            ) : (
+              <>
+                {observando} {t("observando")}, {decidindo} {t("decidindo")}
+                {avisando > 0 && (
+                  <>
+                    , {avisando} {t("avisando a equipe")}
+                  </>
+                )}
+              </>
+            )}
           </span>
-          <span className="text-muted-foreground">{t("Ver tarefas")}</span>
+          {!semContagem && <span className="text-muted-foreground">{t("Ver tarefas")}</span>}
           <CaretRight size={16} aria-hidden className="shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
         </summary>
       <ul className="divide-y divide-border border-t border-border" data-testid="jev-tarefas-lista">
