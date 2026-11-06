@@ -38,6 +38,7 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   DEFAULT_BOT_MODEL: "anthropic/claude-sonnet-4-6",
   gatewayConfig: () => ({ apiKey: "dublê" }),
+  provedorDaChaveDaInstalacao: () => "",
   gatewayHeaders: () => ({}),
   isEmbeddingProviderConfigured: () => false,
   // Resolvido via `resolverModeloDoPonto`; qualquer valor não-nulo serve, porque

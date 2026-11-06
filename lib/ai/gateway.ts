@@ -25,6 +25,7 @@ export type ModelId =
   | "anthropic/claude-sonnet-5"
   | "anthropic/claude-opus-5"
   | "anthropic/claude-haiku-4-5"
+  | "google/gemini-2.5-flash-lite"
   | "openai/text-embedding-3-small"
   // Allow arbitrary tenant-configured strings without losing autocomplete on the canonical ones.
   | (string & {});
@@ -37,7 +38,13 @@ export type ModelId =
 // como default é o de CLASSIFICAÇÃO, que continua em pé porque passa pela
 // conferência de par provedor+modelo antes de executar
 // (`lib/ai/par-provedor-modelo.ts`) e não executa sob outro provedor direto.
-export const DEFAULT_CLASSIFIER_MODEL: ModelId = "anthropic/claude-haiku-4-5";
+//
+// O DEFAULT DE CLASSIFICAÇÃO NÃO É ANTHROPIC (06/11/2026). Era
+// `anthropic/claude-haiku-4-5` (10x o preço) e rodava para as orgs na
+// assinatura ChatGPT pela OPENROUTER_API_KEY da instalação. O Flash-Lite é o
+// modelo barato que a visão já usa pelo mesmo caminho (OpenRouter, chave da
+// instalação). Trava: `tests/unit/padroes-de-ia-sem-anthropic.test.ts`.
+export const DEFAULT_CLASSIFIER_MODEL: ModelId = "google/gemini-2.5-flash-lite";
 export const DEFAULT_EMBEDDING_MODEL: ModelId = "openai/text-embedding-3-small";
 
 /**
@@ -88,6 +95,16 @@ export function resolveLanguageModel(model: ModelId): LanguageModel | null {
   }
 
   return null;
+}
+
+/**
+ * Quem `resolveLanguageModel` usa para executar quando dá para saber sem o id:
+ * a OpenRouter (sem gateway e com a chave dela). Vazio = depende do id.
+ * Existe para o log de custo não carimbar `anthropic` numa chamada que saiu
+ * pela OpenRouter só porque o id começa com `anthropic/`.
+ */
+export function provedorDaChaveDaInstalacao(): string {
+  return !gatewayConfig() && env.OPENROUTER_API_KEY ? "openrouter" : "";
 }
 
 export function isEmbeddingProviderConfigured(): boolean {
