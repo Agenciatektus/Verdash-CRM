@@ -70,12 +70,12 @@ begin
   --    `metadata.media_status='expired'`. O piso de 30 dias é o mesmo do
   --    formulário, mesmo com valor menor gravado no banco.
   --    GRUPO (`conversations.is_group`) vence em `group_media_retention_days`
-  --    (padrão 30, piso 7): grupo recebe muita mídia e o prazo da conversa
+  --    (padrão 30, piso 7, nunca acima do prazo normal): grupo recebe muita mídia e o prazo da conversa
   --    normal (piso 30) é longo demais para ele. Conversa normal não muda.
   with alvo as (
     select m.id, m.organization_id, m.media_storage_path as caminho,
            case when c.is_group
-                then greatest(o.group_media_retention_days, 7)
+                then least(greatest(o.group_media_retention_days, 7), greatest(coalesce(o.media_retention_days, 365), 30))
                 else greatest(coalesce(o.media_retention_days, 365), 30)
            end as retencao_dias
       from public.messages m
@@ -83,8 +83,10 @@ begin
       join public.conversations c on c.id = m.conversation_id
      where m.media_storage_path is not null
        and o.media_retention_enforced
+       -- Corte barato antes do join: nada vence com menos de 7 dias (piso do grupo).
+       and m.created_at < now() - interval '7 days'
        and m.created_at < now() - make_interval(days => case when c.is_group
-                                                         then greatest(o.group_media_retention_days, 7)
+                                                         then least(greatest(o.group_media_retention_days, 7), greatest(coalesce(o.media_retention_days, 365), 30))
                                                          else greatest(coalesce(o.media_retention_days, 365), 30) end)
        and not exists (
          select 1 from public.lgpd_requests r

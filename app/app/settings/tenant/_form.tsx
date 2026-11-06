@@ -240,10 +240,9 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               </Label>
               <p className="text-xs text-muted-foreground">
                 {form.media_retention_enforced
-                  ? t("Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.").replace(
-                      "{n}",
-                      String(form.media_retention_days),
-                    )
+                  ? t("Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias, e a mídia de grupo com mais de {g} dias.")
+                      .replace("{n}", String(form.media_retention_days))
+                      .replace("{g}", String(Math.min(form.group_media_retention_days, form.media_retention_days)))
                   : t("Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.")}
               </p>
             </div>

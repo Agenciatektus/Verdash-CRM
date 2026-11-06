@@ -16,7 +16,7 @@ const ramoGrupo = "case when c.is_group";
 describe("fn_enfileirar_midia_vencida: prazo por tipo de conversa", () => {
   it("o alvo junta a conversa e usa o prazo de grupo só para is_group", () => {
     expect(alvo).toContain("join public.conversations c on c.id = m.conversation_id");
-    expect(alvo).toContain("then greatest(o.group_media_retention_days, 7)");
+    expect(alvo).toContain("then least(greatest(o.group_media_retention_days, 7), greatest(coalesce(o.media_retention_days, 365), 30))");
     expect(alvo).toContain("else greatest(coalesce(o.media_retention_days, 365), 30)");
   });
 
