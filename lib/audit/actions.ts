@@ -1338,6 +1338,17 @@ export const AUDIT_ACTIONS = [
   // ser respondida sem vasculhar metadados.
   "channel.group_ai_enabled",
   "channel.group_ai_disabled",
+  // Gestão do grupo pelo painel da inbox (`lib/grupos/gestao.ts`): `channel.group_<ação>`, sem telefones no metadata.
+  "channel.group_link",
+  "channel.group_sair",
+  "channel.group_nome",
+  "channel.group_descricao",
+  "channel.group_so_admins_enviam",
+  "channel.group_so_admins_editam",
+  "channel.group_mensagens_temporarias",
+  "channel.group_foto",
+  "channel.group_remover_foto",
+  "channel.group_participantes",
 
   // #2593, item 1 do CR: um administrador ligou ou desligou a escrita
   // automática do telefone de ficha vazia (`organizations.settings.crm
