@@ -138,8 +138,8 @@ describe("ninguém novo grava em webhook_events_log sem passar pelo arquivador",
     // Upstream 1.81 (cobrança do revendedor §2.4): grava só `{id,type}` do aviso
     // da Stripe/Asaas (ou `{}` na recusa), sem cabeçalho, sem token e sem mídia.
     "app/api/v1/webhooks/cobranca/[provedor]/route.ts",
-    // MercadoPhone (PDV): grava o corpo SEM o objeto `cliente`, `headers: {}` (sem o
-    // `mp-auth-code`, que é o token); venda não traz mídia.
+    // MercadoPhone (PDV): grava só tipo, id e NOMES das chaves (`arquivoSemPii`, lista do que
+    // se guarda), `headers: {}` (sem o `mp-auth-code`, que é o token); venda não traz mídia.
     "app/api/v1/webhooks/mercadophone/route.ts",
   ]);
   const RAIZ = path.resolve(__dirname, "../..");

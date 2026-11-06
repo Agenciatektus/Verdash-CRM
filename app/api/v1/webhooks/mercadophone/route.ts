@@ -3,13 +3,14 @@
  *
  * Venda do PDV -> `orders` + card. Auth: header `mp-auth-code` == token guardado na integração.
  * Sem org/integração/token certo = o mesmo 401 (não revela qual). Processa síncrono (volume baixo).
- * LGPD: o arquivo em webhook_events_log não leva `cliente` nem o header de auth.
+ * LGPD: o arquivo em webhook_events_log guarda só tipo, id e nomes de chaves (`arquivoSemPii`), nunca valor de cliente nem o header de auth.
  */
 import { createHash } from "node:crypto";
 import type { NextRequest, NextResponse } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { arquivoSemPii } from "@/lib/mercadophone/arquivo-webhook";
 import { tokenConfere } from "@/lib/mercadophone/token-webhook";
 import { gravarVenda } from "@/lib/mercadophone/venda";
 import { PedidoInvalidoError } from "@/lib/nuvemshop/pedido-mapper";
@@ -58,25 +59,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Venda pode vir aninhada em `dados`/`venda` ou solta no corpo; o nome real do envelope é desconhecido.
-  const tipo = String(body["tipoEvento"] ?? body["evento"] ?? "desconhecido");
+  const tipo = String(body["tipoEvento"] ?? body["evento"] ?? "desconhecido").slice(0, 64);
   const venda = ([body["dados"], body["venda"], body["data"]].find(
     (v) => v && typeof v === "object" && !Array.isArray(v),
   ) ?? body) as Cru;
-  // LGPD: tira `cliente` do corpo e do envelope (dados/venda/data) antes de arquivar.
-  const semCliente = (o: Cru): Cru => {
-    const { cliente: _cliente, ...resto } = o;
-    return resto;
-  };
-  const arquivado = Object.fromEntries(
-    Object.entries(semCliente(body)).map(([k, v]) =>
-      ["dados", "venda", "data"].includes(k) && v && typeof v === "object" && !Array.isArray(v)
-        ? [k, semCliente(v as Cru)]
-        : [k, v],
-    ),
-  );
+  const vendaId = String(venda["id"] ?? "noid").slice(0, 64);
+  const arquivado = arquivoSemPii(body, venda, tipo, vendaId);
 
   const hash = createHash("sha256").update(rawBody).digest("hex").slice(0, 16);
-  const externalId = `mercadophone:${tipo}:${String(venda["id"] ?? "noid")}:${hash}`;
+  const externalId = `mercadophone:${tipo}:${vendaId}:${hash}`;
 
   const { data: existing } = await admin
     .from("webhook_events_log")

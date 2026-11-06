@@ -82460,4 +82460,3 @@ begin
   execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
 end $grants_importacoes$;
 
--- ---- margens do MercadoPhone (migration 9240) ----
