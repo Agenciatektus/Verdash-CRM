@@ -336,6 +336,13 @@ describe("verificarWebhook", () => {
     expect(verificarWebhookStripe(nulo, cab(`t=${T},v1=${hmac(SEGREDO, T, nulo)}`), SEGREDO, AGORA)?.clienteRef).toBeNull();
   });
 
+  it("evento de cobrança (charge.refunded, charge.dispute.created): o clienteRef vem de data.object.customer", () => {
+    for (const tipo of ["charge.refunded", "charge.dispute.created"]) {
+      const corpo = JSON.stringify({ id: "evt_ch", type: tipo, data: { object: { id: "ch_1", object: "charge", customer: "cus_C", amount_refunded: 100 } } });
+      expect(verificarWebhookStripe(corpo, cab(`t=${T},v1=${hmac(SEGREDO, T, corpo)}`), SEGREDO, AGORA)).toEqual({ eventoId: "evt_ch", tipo, clienteRef: "cus_C" });
+    }
+  });
+
   it("a comparação é em tempo constante (timingSafeEqual), nunca === entre strings", () => {
     const fonte = readFileSync(join(__dirname, "stripe.ts"), "utf8");
     expect(fonte).toContain("timingSafeEqual(");
@@ -740,6 +747,42 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
     expect(chamadas[0]?.headers.get("idempotency-key")).toBe("estorno:k");
   });
 
+  it("listarPagamentos: fatura paga + cobrança dela (estorno, disputa, data do estorno); fatura sem valor fica de fora", async () => {
+    const PLANO = "11111111-0000-4000-8000-000000000001";
+    const fatura = (id: string, extra: Record<string, unknown>) => ({
+      id, amount_paid: 9_900, currency: "BRL", hosted_invoice_url: `https://invoice.stripe.com/${id}`,
+      status_transitions: { paid_at: 1_700_000_000 }, parent: { subscription_details: { metadata: { plano_id: PLANO } } }, ...extra,
+    });
+    const { adaptador, chamadas } = montar({
+      "GET /invoices": { corpo: { data: [
+        fatura("in_pi", { payments: { data: [{ payment: { type: "payment_intent", payment_intent: "pi_1" } }] } }),
+        fatura("in_ch", { payments: { data: [{ payment: { type: "charge", charge: "ch_2" } }] } }),
+        fatura("in_zero", { amount_paid: 0 }),
+        fatura("in_sem_cobranca", { hosted_invoice_url: "javascript:alert(1)", parent: null }),
+      ] } },
+      "GET /charges": { corpo: { data: [
+        { id: "ch_1", payment_intent: "pi_1", amount_refunded: 9_900, disputed: false, refunds: { data: [{ created: 1_700_000_500, status: "succeeded" }, { created: 1_700_000_900, status: "failed" }] } },
+        { id: "ch_2", payment_intent: null, amount_refunded: 0, disputed: true, refunds: { data: [] } },
+      ] } },
+    });
+    const lidos = await adaptador.listarPagamentos?.({ clienteRef: "cus_x" });
+    expect(lidos?.map((p) => p.pagamentoRef)).toEqual(["in_pi", "in_ch", "in_sem_cobranca"]);
+    expect(lidos?.[0]).toMatchObject({ cobrancaRef: "ch_1", valorCents: 9_900, moeda: "brl", estornadoCents: 9_900, contestado: false, planoId: PLANO });
+    expect(lidos?.[0]?.estornadoEm).toEqual(new Date(1_700_000_500_000));
+    expect(lidos?.[1]).toMatchObject({ cobrancaRef: "ch_2", estornadoCents: 0, contestado: true, estornadoEm: null });
+    expect(lidos?.[2]).toMatchObject({ cobrancaRef: null, urlDoRecibo: null, planoId: null });
+    const faturas = chamadas.find((c) => c.rota === "GET /invoices");
+    expect(faturas?.url.searchParams.get("customer")).toBe("cus_x");
+    expect(faturas?.url.searchParams.get("status")).toBe("paid");
+    expect(faturas?.url.searchParams.getAll("expand[]")).toEqual(["data.payments"]);
+    expect(chamadas.find((c) => c.rota === "GET /charges")?.url.searchParams.getAll("expand[]")).toEqual(["data.refunds"]);
+  });
+
+  it("listarPagamentos: forma inesperada vira ErroDoProvedor, nunca ZodError", async () => {
+    const { adaptador } = montar({ "GET /invoices": { corpo: { data: [{ id: "in_1" }] } }, "GET /charges": { corpo: { data: [] } } });
+    await expect(adaptador.listarPagamentos?.({ clienteRef: "cus_x" })).rejects.toBeInstanceOf(ErroDoProvedor);
+  });
+
   /** Uma conta com estado: endpoints e configurações de portal vivem entre as chamadas. */
   function contaComEstado(inicial: Array<{ id: string; url: string; metadata: Record<string, string> }>) {
     const endpoints = [...inicial];
@@ -867,6 +910,8 @@ describe("trocarPlano, cancelarNoFim, prepararWebhook e portal", () => {
       "customer.subscription.resumed",
       "invoice.paid",
       "invoice.payment_failed",
+      "charge.refunded",
+      "charge.dispute.created",
     ]);
     expect(criar?.corpo.get("api_version")).toBe(STRIPE_VERSION);
     expect(criar?.corpo.get("url")).toBe(URL_DO_WEBHOOK);
