@@ -3,7 +3,7 @@ import { useState, type RefObject } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { Button } from "@/components/ui/button";
 import { JanelaSelo } from "@/components/inbox/JanelaSelo";
-import { CheckCircle } from "@/lib/ui/icons";
+import { CheckCircle, UsersThree } from "@/lib/ui/icons";
 import { useAuth, usePermission } from "@/hooks/auth/AuthProvider";
 import { useClaimConversation } from "@/hooks/inbox/useClaimConversation";
 import { useReleaseConversation } from "@/hooks/inbox/useReleaseConversation";
@@ -26,6 +26,7 @@ import { rotuloParaAEquipe } from "@/lib/contacts/rotulo-do-contato";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 import { entrouPor } from "@/lib/contacts/entrou-por";
 import { rotuloDoCanalDaConversa } from "@/lib/channels/estado";
+import { PainelDoGrupo } from "@/components/inbox/grupo/PainelDoGrupo";
 import { VideoCallButton } from "@/components/inbox/VideoCallButton";
 import { motivoDoContato } from "@/lib/inbox/motivo-do-envio-bloqueado";
 import { useMarkPersonalContact, useUnmarkPersonalContact } from "@/hooks/contacts/usePersonalContact";
@@ -187,6 +188,8 @@ export function ConversationHeader({
   const devolver = () => retomar.mutate({ conversation_id: conversation.id });
 
   const [confirmPessoalOpen, setConfirmPessoalOpen] = useState(false);
+  const [grupoAberto, setGrupoAberto] = useState(false);
+  const temPainelDoGrupo = !!conversation.is_group && !!conversation.channel_session_id && !!conversation.group_chat_id;
 
   return (
     <div>
@@ -336,6 +339,12 @@ export function ConversationHeader({
               )}
             </>
           )}
+          {temPainelDoGrupo && (
+            <Button size="sm" variant="ghost" onClick={() => setGrupoAberto(true)} title={t("Detalhes e gestão do grupo")}>
+              <UsersThree size={16} aria-hidden />
+              {t("Grupo")}
+            </Button>
+          )}
           <MaisAcoes
             onBuscar={onBuscar}
             buscaAberta={buscaAberta}
@@ -379,6 +388,17 @@ export function ConversationHeader({
         entradaDoContato={entrouPor(conversation.contacts)}
         leitura={leitura}
       />
+      {temPainelDoGrupo && grupoAberto && (
+        <PainelDoGrupo
+          aberto
+          onFechar={() => setGrupoAberto(false)}
+          channelSessionId={conversation.channel_session_id}
+          groupChatId={conversation.group_chat_id!}
+          meuTelefone={conversation.channel_sessions?.phone_number ?? null}
+          // Mesma régua do "marcar como pessoal": gerente+ (a rota de ações exige gerente).
+          podeGerir={podeMarcarPessoal}
+        />
+      )}
       {/* A confirmação diz o que ACONTECE ao marcar; desmarcar é direto porque
           só relista o que já está lá. */}
       <AlertDialog open={confirmPessoalOpen} onOpenChange={setConfirmPessoalOpen}>

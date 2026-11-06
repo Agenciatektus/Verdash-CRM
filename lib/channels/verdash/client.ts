@@ -25,6 +25,7 @@
 import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
 import { samePhone } from "@/lib/channels/phone-variants";
 import type { ChannelGroup } from "@/lib/channels/types";
+import { erroDoFzap, GrupoAcaoError, infoDoGrupo, type PedidoAoFzap } from "@/lib/grupos/acoes";
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 
 import { verdashFunctionsUrl } from "./credentials";
@@ -684,4 +685,49 @@ export async function verdashListarGrupos(creds: VerdashCredentials): Promise<Ch
     throw new Error(`verdash_request_failed: ${res.status} ${json?.error ?? ""}`.trim());
   }
   return gruposDaLista(json.data?.groups);
+}
+
+/**
+ * Uma ação de gestão sobre UM grupo (`lib/grupos/acoes.ts`). `chamada` já vem validada.
+ * Pareado pergunta à edge `crm-grupo-acao` (a resposta do `info` já vem pronta); direto fala com o FZAP.
+ * LANÇA `GrupoAcaoError`.
+ */
+export async function verdashGrupoAcao(
+  creds: VerdashCredentials,
+  entrada: Record<string, unknown>,
+  chamada: PedidoAoFzap,
+): Promise<unknown> {
+  try {
+    if (creds.vinculoId) return await grupoAcaoPareada(creds, entrada);
+    const dados = await fzapRequest<Record<string, unknown>>(creds, chamada.rota, {
+      method: chamada.method,
+      body: chamada.corpo,
+    });
+    if (entrada.acao === "info") {
+      const status = await fzapRequest<{ jid?: string }>(creds, "/session/status", { method: "GET", timeoutMs: 10_000 }).catch(() => null);
+      return infoDoGrupo(dados ?? {}, String(status?.jid ?? "").split(/[:@]/)[0]!.replace(/\D/g, ""));
+    }
+    if (entrada.acao === "link") {
+      return { link: String(dados?.inviteLink ?? dados?.InviteLink ?? dados?.link ?? "") || null };
+    }
+    return { ok: true };
+  } catch (err) {
+    throw erroDoFzap(err);
+  }
+}
+
+async function grupoAcaoPareada(creds: VerdashCredentials, entrada: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${verdashFunctionsUrl().replace(/\/+$/, "")}/crm-grupo-acao`, {
+    method: "POST",
+    headers: { "x-crm-token": creds.token, "Content-Type": "application/json" },
+    body: JSON.stringify(entrada),
+    signal: AbortSignal.timeout(35_000),
+  });
+  const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string; motivo?: string; data?: unknown } | null;
+  if (res.ok && json?.success === true) return json.data;
+  if (json?.error === "whatsapp_recusou") throw new GrupoAcaoError("whatsapp_recusou", String(json.motivo ?? "").slice(0, 200));
+  if (json?.error === "instancia_desconectada" || json?.error === "fzap_timeout" || json?.error === "fzap_indisponivel") {
+    throw new GrupoAcaoError(json.error);
+  }
+  throw new GrupoAcaoError("erro_interno");
 }

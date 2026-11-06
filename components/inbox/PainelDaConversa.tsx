@@ -10,6 +10,7 @@ import { estadoDaJanela } from "@/lib/channels/janela";
 import type { Message as ConversationMensagem } from "@/lib/types/messaging";
 import { ChatThread } from "./ChatThread";
 import { Composer, type ComposerHandle } from "./Composer";
+import { ComposerDeGrupo } from "./grupo/ComposerDeGrupo";
 import { JanelaFechadaAviso } from "./JanelaFechadaAviso";
 import { NumeroForaDoAr } from "./NumeroForaDoAr";
 import { RetentionNotice } from "./RetentionNotice";
@@ -100,6 +101,8 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
     const motivoDaJanela = motivoDaJanelaFechada(janela, provider, t);
 
     const blockedReason = motivoDoContato(conversation.contacts, t);
+    // Grupo: o composer também lê o diretório (só admins enviam).
+    const CaixaDeResposta: typeof Composer = conversation.is_group ? ComposerDeGrupo : Composer;
 
     return (
       <>
@@ -142,7 +145,7 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
                 motivo={motivoDaJanela}
               />
             )}
-            <Composer
+            <CaixaDeResposta
               // Trocar a chave quando o rascunho sai REMONTA o composer: o texto
               // nasce de `useState(initialDraft)`, e só a prop mudar não o limparia.
               key={rascunho ? `rascunho:${rascunho.conversationId}` : "composer"}
