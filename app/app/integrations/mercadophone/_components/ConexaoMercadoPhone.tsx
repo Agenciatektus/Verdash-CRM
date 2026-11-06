@@ -22,12 +22,12 @@ const ERROS: Record<string, string> = {
   not_connected: "Integração não está conectada.",
 };
 
-export function ConexaoMercadoPhone({ conectado, isAdmin }: { conectado: boolean; isAdmin: boolean }) {
+export function ConexaoMercadoPhone({ conectado, isAdmin, orgId }: { conectado: boolean; isAdmin: boolean; orgId: string | null }) {
   const t = useT();
   const [pending, start] = useTransition();
   const [apiToken, setApiToken] = useState("");
   const [webhookToken, setWebhookToken] = useState("");
-  const urlDoWebhook = `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/mercadophone`;
+  const urlDoWebhook = `${typeof window !== "undefined" ? window.location.origin : ""}/api/v1/webhooks/mercadophone?org=${orgId ?? ""}`;
 
   const falhou = (erro: string) => {
     if (erro === "mfa_required") return irAoDesafioDeMfa();
