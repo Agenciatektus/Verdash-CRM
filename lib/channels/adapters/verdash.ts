@@ -552,12 +552,6 @@ export const verdashAdapter: ChannelAdapter = {
     return { reachable: true, status: "WORKING", detail: null };
   },
 
-  /**
-   * Baixa o anexo que o cliente mandou, para persistir os bytes.
-   *
-   * Sem isto, a mídia recebida vira linha SEM bytes e o atendente vê "imagem"
-   * sem imagem — o defeito que o canal intermediado carregou por meses.
-   */
   /** Grupos do número, para Conexões › Grupos. Sem credencial = canal não conectado. */
   async listGroups(input: ChannelTenantScope & { sessionRef: string }) {
     const creds = await resolveVerdashCreds(createAdminClient(), {
@@ -577,6 +571,12 @@ export const verdashAdapter: ChannelAdapter = {
     return true;
   },
 
+  /**
+   * Baixa o anexo que o cliente mandou, para persistir os bytes.
+   *
+   * Sem isto, a mídia recebida vira linha SEM bytes e o atendente vê "imagem"
+   * sem imagem — o defeito que o canal intermediado carregou por meses.
+   */
   async fetchInboundMedia(
     input: ChannelTenantScope & { sessionRef: string; url: string; hintMime?: string | null },
   ): Promise<FetchedMedia> {

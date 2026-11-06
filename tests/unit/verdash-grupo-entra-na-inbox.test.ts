@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const gravar = vi.fn();
 vi.mock("@/lib/grupos/ingest", () => ({
-  criarIngestDeGrupoDb: () => ({}),
+  criarIngestDeGrupoDb: () => ({ inserirMensagem: async () => ({ status: "ok", messageId: "msg-1" }) }),
   gravarMensagemDeGrupo: (...a: unknown[]) => gravar(...a),
 }));
 
@@ -47,12 +47,20 @@ function admin() {
 const entrada = (p: unknown, a = admin()) =>
   ingestVerdashInbound(a as never, { organizationId: "org-1", channelSessionId: "sess-1", payload: p });
 
-beforeEach(() => gravar.mockReset());
+beforeEach(() => {
+  gravar.mockReset();
+});
 
 describe("canal Verdash: mensagem de grupo", () => {
   it("texto de grupo chega ao ingest de grupos com o remetente do Sender", async () => {
-    gravar.mockResolvedValue("gravada");
-    const r = await entrada(payload({ conversation: "bom dia, grupo" }));
+    // O dublê grava como o real: pelo `inserirMensagem` do db que recebeu.
+    gravar.mockImplementation(async (db: { inserirMensagem(r: unknown): Promise<unknown> }) => {
+      await db.inserirMensagem({ conversation_id: "conv-1" });
+      return "gravada";
+    });
+    const a = admin();
+    const r = await entrada(payload({ conversation: "bom dia, grupo" }), a);
+    expect(a.from).not.toHaveBeenCalled();
     expect(r).toMatchObject({ status: "ingested", conversationId: "conv-1", messageId: "msg-1" });
     const [, e] = gravar.mock.calls[0]!;
     expect(e).toMatchObject({

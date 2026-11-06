@@ -304,7 +304,17 @@ async function ingerirGrupo(
 ): Promise<VerdashIngestResult> {
   if (msg.ignorar || msg.alteracao) return { status: "ignored", reason: msg.ignorar ?? "alteracao_em_grupo" };
   const anexo = msg.attachments[0];
-  const resultado = await gravarMensagemDeGrupo(criarIngestDeGrupoDb(admin), {
+  // O insert já devolve o id; guardá-lo aqui evita reler a mensagem para pedir a mídia.
+  const db = criarIngestDeGrupoDb(admin);
+  let gravada: { id: string; conversationId: string } | null = null;
+  const resultado = await gravarMensagemDeGrupo({
+    ...db,
+    async inserirMensagem(row) {
+      const r = await db.inserirMensagem(row);
+      if (r.messageId) gravada = { id: r.messageId, conversationId: String(row.conversation_id) };
+      return r;
+    },
+  }, {
     organizationId: input.organizationId,
     channelSessionId: input.channelSessionId,
     groupChatId: msg.chat,
@@ -330,13 +340,7 @@ async function ingerirGrupo(
   if (resultado === "duplicada") return { status: "duplicate" };
   if (resultado !== "gravada") return { status: "ignored", reason: resultado };
 
-  const { data } = await admin
-    .from("messages")
-    .select("id, conversation_id")
-    .eq("organization_id", input.organizationId)
-    .eq("external_id", msg.externalId)
-    .maybeSingle();
-  const linha = data as { id: string; conversation_id: string } | null;
-  if (linha && anexo?.url) await pedirPersistenciaDaMidia(admin, input.organizationId, linha.conversation_id, linha.id);
-  return { status: "ingested", conversationId: linha?.conversation_id, messageId: linha?.id };
+  const g = gravada as { id: string; conversationId: string } | null;
+  if (g && anexo?.url) await pedirPersistenciaDaMidia(admin, input.organizationId, g.conversationId, g.id);
+  return { status: "ingested", conversationId: g?.conversationId, messageId: g?.id };
 }
