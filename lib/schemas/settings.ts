@@ -113,6 +113,7 @@ export const tenantSchema = z.object({
   locale: z.enum(LOCALES),
   currency: z.enum(MOEDAS),
   media_retention_days: z.coerce.number().int().min(30).max(3650),
+  group_media_retention_days: z.coerce.number().int().min(7).max(365),
   /**
    * Interruptor da limpeza automática de mídia antiga (issue #1534, migration
    * 0557). `true` é o padrão do banco, para a organização que já existia e para

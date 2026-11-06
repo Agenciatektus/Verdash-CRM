@@ -1092,6 +1092,8 @@
   "NIPC": "NIPC",
   "DPO email": "DPO email",
   "Retenção de mídia (dias)": "Media retention (days)",
+  "Retenção de mídia de grupos (dias)": "Group media retention (days)",
+  "Grupos recebem muita mídia. Fotos, vídeos e áudios de grupo são apagados depois deste prazo; o texto fica.": "Groups receive a lot of media. Group photos, videos and audio are deleted after this period; the text stays.",
   "URL política de privacidade": "Privacy policy URL",
   "Informações pessoais. Email só pode ser trocado em breve.": "Personal information. You'll be able to change your email soon.",
   "Dados da empresa, retenção de mídia, DPO. Admin only.": "Company data, media retention, DPO. Admin only.",

@@ -8305,6 +8305,7 @@ isOneToOne: false
           lembrete_caso_teto: number
           locale: string
           media_retention_days: number
+          group_media_retention_days: number
           media_retention_enforced: boolean
           onboarded_at: string | null
           onboarding_state: Json
@@ -8334,6 +8335,7 @@ isOneToOne: false
           lembrete_caso_teto?: number
           locale?: string
           media_retention_days?: number
+          group_media_retention_days?: number
           media_retention_enforced?: boolean
           onboarded_at?: string | null
           onboarding_state?: Json
@@ -8363,6 +8365,7 @@ isOneToOne: false
           lembrete_caso_teto?: number
           locale?: string
           media_retention_days?: number
+          group_media_retention_days?: number
           media_retention_enforced?: boolean
           onboarded_at?: string | null
           onboarding_state?: Json

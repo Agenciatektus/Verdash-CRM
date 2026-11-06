@@ -34,6 +34,7 @@ const BASE: TenantInput = {
   locale: "pt-BR",
   currency: "EUR",
   media_retention_days: 90,
+  group_media_retention_days: 30,
   media_retention_enforced: false,
   dpo_email: null,
   privacy_policy_url: null,
