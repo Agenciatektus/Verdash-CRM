@@ -388,6 +388,21 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     expect(aclMedido("postgres")).toEqual(aclEsperado());
   });
 
+  it("segredo NOVO não nasce legível: coluna com cara de segredo fica fora do SELECT por coluna", () => {
+    // A seção 5 da 9100 libera por EXCLUSÃO de três nomes; uma coluna secreta que o upstream
+    // criar nessas tabelas entraria legível calada (P2 do Cassio na #518). password_last4 é
+    // de propósito (a tela mostra os 4 últimos).
+    const cara = `c.relname in (${SELECT_POR_COLUNA_SQL}) and a.attnum > 0 and not a.attisdropped
+        and a.attname ~* '(password|secret|token|api_key|private)' and a.attname <> 'password_last4'`;
+    const total = sql(`select count(*) from pg_attribute a join pg_class c on c.oid = a.attrelid
+        and c.relnamespace = 'public'::regnamespace where ${cara};`);
+    expect(Number(total), "controle: o filtro não acha nem o envelope da senha").toBeGreaterThan(0);
+    const legiveis = sql(`select coalesce(string_agg(c.relname || '.' || a.attname, ','), '')
+        from pg_attribute a join pg_class c on c.oid = a.attrelid and c.relnamespace = 'public'::regnamespace
+       where ${cara} and has_column_privilege('authenticated', c.oid, a.attnum, 'SELECT');`);
+    expect(legiveis, "coluna de segredo legível por authenticated: ponha no filtro da seção 5 da 9100").toBe("");
+  });
+
   it("ordem de PRODUÇÃO: a 9037 depois da 9099 derruba coluna, a seção 5 da 9100 devolve", () => {
     // Em produção a 9037 (carimbo 20261029) roda depois da 9099 (--include-all); o `revoke all` dela
     // apaga o grant por coluna que a 9099 devolveu. A 9100 roda por último e devolve tudo menos a senha.
