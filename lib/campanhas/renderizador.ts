@@ -92,6 +92,8 @@ export interface ValoresDoDestinatario {
  * Enquanto o pipe não era lido, `{{nome|lojista}}` não casava este TOKEN — logo
  * não entrava em `faltando` NEM em `desconhecidas` — e saía LITERAL no WhatsApp.
  * O fallback vale para `{{lead.x}}`/`{{contato.x}}` também.
+ * A reserva também aceita aspas, como a dica da tela ensina: `{{primeiro_nome|"aluno"}}`
+ * (sintaxe do upstream, `lib/texto/reserva-da-variavel.ts`); as aspas não vão para a mensagem.
  */
 const TOKEN = /\{\{\s*([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)\s*(?:\|([^}]*))?\}\}/g;
 
@@ -130,7 +132,7 @@ export function renderizar(
     // O fallback cobre a falta ANTES de ela virar exclusão: quem escreveu
     // `{{primeiro_nome|tudo bem}}` já disse o que quer no lugar do nome.
     const semValor = (variavel: string) =>
-      fallback !== undefined ? fallback.trim() : marcarFalta(faltando, variavel, literal);
+      fallback !== undefined ? fallback.trim().replace(/^"(.*)"$/, "$1") : marcarFalta(faltando, variavel, literal);
     switch (chave) {
       case "nome": {
         if (nome === "") return semValor("nome");
@@ -144,7 +146,8 @@ export function renderizar(
       case "saudacao": {
         // Sem instante, a saudação fica literal: quem renderiza a PRÉVIA não
         // sabe a hora do envio, e cravar uma ali ensinaria o operador a esperar
-        // aquela. A prévia mostra `{{saudacao}}`; o envio resolve.
+        // aquela. A prévia mostra `{{saudacao}}`; o envio resolve. A reserva
+        // nunca é usada: saudação não falta.
         if (!quando) return literal;
         return saudacaoDaHora(quando.agora, quando.fuso);
       }

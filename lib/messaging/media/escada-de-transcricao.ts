@@ -18,6 +18,10 @@
  * produção a chave do serviço da instalação estava morta (401) e, por vir
  * antes, derrubava 195 áudios de clientes que tinham Gemini válido.
  *
+ *  A0. **OpenRouter da conversa, com credencial PRÓPRIA** (upstream #3382): o chat
+ *     do `@ai-sdk/openai` recusa a parte `audio/ogg` antes de a chamada sair, então
+ *     quem conversa pela OpenRouter transcreve na própria OpenRouter
+ *     (`/audio/transcriptions`, `openai/whisper-large-v3`), com a mesma chave.
  *  A. **Modelo de conversa da organização que declara `audio`, com credencial
  *     PRÓPRIA** (`origemDaChave = credencial_da_organizacao`): custo zero para
  *     a Tektus. `transcreveAudio` é o registro de capacidades.
@@ -54,8 +58,13 @@
 import { generateText } from "ai";
 
 import { transcreveAudio } from "@/lib/agent-engine/edge/llm/capabilities";
-import { createDefaultRegistry } from "@/lib/agent-engine/edge/llm/providers";
 import { MENSAGEM_IA_PROPRIA_SEM_CREDENCIAL } from "@/lib/cobranca/ia-propria";
+import {
+  OPENROUTER_ENDPOINT,
+  cabecalhosDeAtribuicaoOpenRouter,
+  createDefaultRegistry,
+  fetchDoProvedor,
+} from "@/lib/agent-engine/edge/llm/providers";
 import { env } from "@/lib/env";
 
 import type { TranscriptionProvider } from "@/lib/messaging/media/transcription";
@@ -99,6 +108,8 @@ export const MOTIVOS_DA_TRANSCRICAO = {
   chaveOpenai: "a chave OpenAI desta organização usa o padrão de transcrição de sempre",
   modeloDaOrganizacao:
     "o modelo de conversa da organização declara a capacidade audio e transcreve com a própria chave",
+  openrouterDaConversa:
+    "o provedor de conversa desta organização é a OpenRouter, que transcreve na própria API com a mesma chave",
   semModeloDeConversa:
     "não consegui resolver o modelo de conversa desta organização e não há chave OpenAI para transcrever",
   modeloSemAudio:
@@ -107,6 +118,21 @@ export const MOTIVOS_DA_TRANSCRICAO = {
   // Plano com IA própria: a chave da instalação não serve esta empresa.
   iaPropria: MENSAGEM_IA_PROPRIA_SEM_CREDENCIAL,
 } as const;
+
+/**
+ * O modelo que a OpenRouter transcreve no degrau 3 (#3382), no formato
+ * `familia/modelo` que o catálogo dela exige — `whisper-1`, o default dos
+ * degraus OpenAI-compatíveis, não existe lá. `openai/whisper-large-v3` é o id
+ * que o mantenedor mediu funcionando em `/audio/transcriptions` da própria
+ * OpenRouter.
+ *
+ * Fixo de propósito: `TRANSCRIPTION_MODEL` é o knob do SERVIÇO da instalação
+ * (degrau 1), escrito para outro serviço — mandá-lo para a OpenRouter
+ * trocaria um modelo que funciona por um id que o catálogo dela não tem.
+ */
+export const MODELO_DE_TRANSCRICACAO_OPENROUTER = "openai/whisper-large-v3";
+/** Multipart oficial: 25 MB. O teto global do Storage continua 50 MiB. */
+export const LIMITE_MULTIPART_OPENROUTER_BYTES = 25_000_000;
 
 /** O modelo de CONVERSA da organização, já resolvido pelo worker. */
 export interface ConversaDaOrganizacao {
@@ -301,6 +327,28 @@ export async function decidirTranscricao(
     (servePromessa ??= entrada.instalacaoServe ? entrada.instalacaoServe() : Promise.resolve(true));
 
   const degraus: Array<() => Promise<DecisaoDeTranscricao | null>> = [
+    // A0 · OpenRouter da conversa com chave PRÓPRIA (#3382): o chat recusa `audio/ogg`,
+    //      então a própria OpenRouter transcreve. Endereço público fixo: a chave da
+    //      organização não vai a `base_url` cadastrada sem a recusa de destino interno.
+    async () =>
+      conversa?.apiKey && conversa.credencialPropria && (conversa.provider ?? "").toLowerCase() === "openrouter"
+        ? {
+            origem: "padrao_openrouter",
+            transcriber: apiTranscriptionProvider(
+              {
+                apiKey: conversa.apiKey,
+                baseUrl: OPENROUTER_ENDPOINT,
+                model: MODELO_DE_TRANSCRICACAO_OPENROUTER,
+                languages: idiomas,
+                headers: cabecalhosDeAtribuicaoOpenRouter(),
+                maxAudioBytes: LIMITE_MULTIPART_OPENROUTER_BYTES,
+              },
+              fetchDoProvedor(OPENROUTER_ENDPOINT),
+            ),
+            motivo: MOTIVOS_DA_TRANSCRICAO.openrouterDaConversa,
+            anuncio: { provider: "openrouter", modelId: MODELO_DE_TRANSCRICACAO_OPENROUTER },
+          }
+        : null,
     // A · assinatura/chave PRÓPRIA da organização, no modelo de conversa.
     async () =>
       conversaOuve && conversa!.credencialPropria

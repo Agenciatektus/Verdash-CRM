@@ -1,4 +1,5 @@
 "use client";
+import { useParticipantesDaConversa } from "@/hooks/inbox/useParticipantesDaConversa";
 import { forwardRef, useEffect, useState } from "react";
 
 import { useT } from "@/hooks/i18n/useT";
@@ -73,6 +74,9 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
     // (`resolveActiveOrg` o rebaixa), então este gate também o cobre.
     const podeResponder = usePermission("inbox.reply");
     const { activeOrg, user } = useAuth();
+  // Atendimento conjunto (#2848): quem participa da conversa não fica travado até assumir.
+  const participantes = useParticipantesDaConversa(conversation.id);
+  const participaDoAtendimento = participantes.data?.some((p) => p.user_id === user?.id) === true;
 
     /**
      * A mensagem escolhida para responder "em cima". Quem ESCOLHE é a lista de
@@ -158,6 +162,8 @@ export const PainelDaConversa = forwardRef<ComposerHandle, PainelDaConversaProps
                 ligada: activeOrg?.interface_settings?.bloquearAteAssumir === true,
                 donoDaConversa: conversation.assigned_to_user_id,
                 atendenteId: user.id,
+                // Convidado no atendimento conjunto (#2848) escreve sem assumir.
+                participanteAtivo: participaDoAtendimento,
               })}
               // A barra de recursos lembra o recolhimento POR usuário (#3282).
               usuarioId={user.id}

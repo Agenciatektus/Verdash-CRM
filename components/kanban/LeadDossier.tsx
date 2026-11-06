@@ -13,7 +13,9 @@ import { ContatoDoNegocio } from "./ContatoDoNegocio";
 import { OrigemDoNegocio } from "./OrigemDoNegocio";
 import { AbrirConversaDoLead, temAlvoParaAbrir } from "./AbrirConversaDoLead";
 import { ConversaDoNegocio } from "./ConversaDoNegocio";
-import { LeadFieldsForm } from "./LeadFieldsForm";
+import { AtalhosDoNegocio } from "./AtalhosDoCard";
+import { LeadFieldsForm, type ControleDosCamposDoNegocio } from "./LeadFieldsForm";
+import { RevisaoDoDocumento } from "./RevisaoDoDocumento";
 import { ScoreSlot } from "./ScoreSlot";
 import { LeadTimeline } from "./LeadTimeline";
 import { PropostasDoNegocio } from "./PropostasDoNegocio";
@@ -22,6 +24,7 @@ import { OwnerBadge } from "./OwnerBadge";
 import { SeletorDeEtapa, type EtapaDoSeletor } from "./SeletorDeEtapa";
 import { SecaoDoDossie, useSecoesRecolhidas } from "./SecaoDoDossie";
 import { resolveLeadOwner } from "@/lib/kanban/owner";
+import type { AtalhoDoCard } from "@/lib/leads/atalhos-do-card";
 import { formatValorDoNegocio, MOEDA_PADRAO } from "@/lib/money";
 import type { CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { cn } from "@/lib/utils";
@@ -36,6 +39,13 @@ interface Props {
   /** Etapas ativas do funil: com elas o cabeçalho troca a etapa sem arrastar. */
   etapas?: EtapaDoSeletor[];
   ownerNames?: Map<string, string | null>;
+  /**
+   * OS ATALHOS DO CARD (#3487): o que está em `crm_pipelines.settings.atalhos`,
+   * já lido por `atalhosDoFunil`. Quem monta o dossiê tem o funil em mão, então
+   * a lista vem por prop em vez de o dossiê sair buscando por conta própria.
+   * Ausente = nenhum botão, que é o comportamento de antes da entrega.
+   */
+  atalhos?: AtalhoDoCard[];
 }
 
 function formatValor(cents: number | null, currency: string | null): string {
@@ -135,10 +145,18 @@ export function LeadDossier({
   stageName,
   etapas,
   ownerNames,
+  atalhos,
 }: Props) {
   const tagDoIdioma = useTagDeIdioma();
   const t = useT();
+  // Sem prop, nenhum botão: quem abre o dossiê TEM o funil em mão (o quadro, a
+  // lista e o calendário passam `atalhos`) e é de lá que sai o `settings`. Ler
+  // o cache do react-query aqui dentro custaria um `QueryClientProvider`
+  // obrigatório em todo teste que monta o dossiê — inclusive os que existiam
+  // antes desta entrega — para economizar uma prop que o chamador já tem.
+  const atalhosDoCard = atalhos ?? [];
   const campos = useRef<HTMLDivElement | null>(null);
+  const formulario = useRef<ControleDosCamposDoNegocio | null>(null);
   const timeline = useLeadTimeline(open ? lead.id : null, lead.contact_id);
   const { fechadas, alternar, abrir } = useSecoesRecolhidas();
   const timelineRecolhida = fechadas.has("linha-do-tempo");
@@ -189,6 +207,10 @@ export function LeadDossier({
   const podeEditarTarefas =
     (user.is_platform_admin && !user.support) ||
     (activeOrg ? ROLE_RANK[activeOrg.role] >= ROLE_RANK.agent : false);
+  // Confirmar o que o documento disse é EDITAR O CARD: `agent`+, a MESMA régua
+  // que a rota de decisão exige (`requireRole("agent")`). Abaixo disso a fila
+  // ainda aparece — ler o que a IA leu é informação —, mas sem os botões.
+  const podeConfirmarDoDocumento = podeEditarTarefas;
 
   /**
    * As props da linha do tempo, montadas UMA vez e usadas nos dois estados da
@@ -325,6 +347,14 @@ export function LeadDossier({
           </p>
         )}
 
+        {/* OS ATALHOS DO CARD (#3487) — logo abaixo do cabeçalho, ANTES de
+            tudo que rola. Sem atalho configurado, nada é desenhado. */}
+        <AtalhosDoNegocio
+          atalhos={atalhosDoCard}
+          lead={lead}
+          contactId={lead.contact_id}
+        />
+
         {/* Sem conversa, mas com contato (upstream #1993): a AÇÃO no lugar da
             conversa ao lado. `undefined` é "ainda não carregou" e fica mudo. */}
         {lead.conversa === null && temAlvoParaAbrir(lead.contact_id, lead.contact_phone) && (
@@ -362,7 +392,17 @@ export function LeadDossier({
           aoAlternar={alternar}
         >
           <div ref={campos}>
-            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} />
+            {/* ⚠️ A REVISÃO FICA AQUI, dentro do card, e é esta linha que o
+                mantenedor cobrou no #3415: a fila existia como API e não tinha
+                consumidor na tela — o mesmo que não existir. Acima do
+                formulário porque é o histórico do que o documento disse, e o
+                formulário é o destino do que for confirmado. */}
+            <RevisaoDoDocumento
+              leadId={lead.id}
+              podeDecidir={podeConfirmarDoDocumento}
+              aoDecidir={(confirmado) => formulario.current?.confirmarCampo(confirmado)}
+            />
+            <LeadFieldsForm lead={lead} pipelineId={pipelineId} fieldDefs={fieldDefs} controle={formulario} />
           </div>
         </SecaoDoDossie>
 

@@ -367,6 +367,7 @@ export async function renovarComTravaDeBanco(p: {
     // Se a empresa desconectou DURANTE a ida à OpenAI, o par renovado não volta
     // para a linha apagada: o update casa 0 linhas e a renovação falha.
     somenteAtiva: true,
+    manterModelos: true,
   });
   if (!gravado.ok) return { ok: false, motivo: "falha" };
 

@@ -226,6 +226,13 @@ export interface PedidoDeRotacionar {
   reativar?: boolean;
   /** `true` = só grava se a linha AINDA estiver ativa (renovação que corre com um desconectar). */
   somenteAtiva?: boolean;
+  /**
+   * Só para a assinatura: a renovação automática do token é a MESMA conta, então a lista
+   * de modelos continua valendo. Sem isto, cada renovação apagava `models_available` e todo
+   * "Publicar" seguinte respondia `model_not_found`. Reconectar (conta que pode ser outra)
+   * não passa este campo e continua zerando a lista.
+   */
+  manterModelos?: boolean;
   requestId?: string;
 }
 
@@ -255,7 +262,7 @@ export async function rotacionarCredencial(
       // renovação acabou de confirmar (item 4).
       patch.validated_at = new Date().toISOString();
       patch.validation_error = null;
-      patch.models_available = null;
+      if (!p.manterModelos) patch.models_available = null;
     } else {
       // Chave nova = veredito antigo deixa de valer. Sem zerar, a tela mostraria
       // "Validada" (e os modelos da chave anterior) sobre uma chave que ninguém

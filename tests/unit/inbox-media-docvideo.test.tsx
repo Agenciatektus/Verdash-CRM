@@ -65,11 +65,12 @@ describe("DocumentCard", () => {
         isOutbound={false}
       />,
     );
-    // Sem nome do arquivo, o título é a sigla; embaixo, "tipo, tamanho".
-    expect(screen.getByTitle("PDF")).toBeInTheDocument();
+    // Sem nome do arquivo, o título é "Documento PDF" (#2613); embaixo, "tipo, tamanho".
+    expect(screen.getByTitle("Documento PDF")).toBeInTheDocument();
     expect(screen.getByText("PDF, 3,0 MB")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: /baixar pdf \(3,0 MB\)/i });
-    expect(link).toHaveAttribute("href", "/api/v1/messages/m5/media");
+    // O botão de baixar pede o nome original (`?baixar=1`).
+    const link = screen.getByRole("link", { name: /baixar documento pdf \(3,0 MB\)/i });
+    expect(link).toHaveAttribute("href", "/api/v1/messages/m5/media?baixar=1");
     expect(link).toHaveAttribute("target", "_blank");
   });
 });

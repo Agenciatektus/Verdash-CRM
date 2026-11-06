@@ -15,6 +15,7 @@ import {
   type ConversationWithContact,
 } from "@/hooks/inbox/useConversationsRealtime";
 import { useConversation, isNotFound } from "@/hooks/inbox/useConversation";
+import { useParticipacoesRealtime } from "@/hooks/inbox/useParticipacoesRealtime";
 import { ConversationList } from "./ConversationList";
 import { BarraDeAcoesEmLote } from "./BarraDeAcoesEmLote";
 import { InboxFilters, type InboxFiltersValue, type InboxTab } from "./InboxFilters";
@@ -153,6 +154,7 @@ export function InboxLayout({
 }: InboxLayoutProps = {}) {
   const t = useT();
   const { activeOrg, user } = useAuth();
+  useParticipacoesRealtime(user.id, activeOrg?.orgId ?? null);
   const supportReadonly = user.support?.access_mode === "support_readonly";
   const [listaCompacta] = useListaCompacta(user?.id);
   const orgId = activeOrg?.orgId ?? null;

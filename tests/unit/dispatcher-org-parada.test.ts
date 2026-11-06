@@ -33,6 +33,8 @@ import { cobrancaSinalHandler } from "@/lib/cobranca/sinal.handler";
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
 import { conversaoDeQualificacaoHandler } from "@/lib/conversoes/qualificacao.handler";
 import { conversaoDeEtapaMetaHandler } from "@/lib/conversoes/etapa-meta.handler";
+import { conversaoDeNascimentoMetaHandler } from "@/lib/conversoes/nascimento-meta.handler";
+import { conversaoDeCliqueMetaHandler } from "@/lib/conversoes/clique-meta.handler";
 import { avisoDeAgendamentoNoWhatsAppHandler } from "@/lib/agenda/aviso-de-agendamento.handler";
 import { avisoDeCasoAoSuporteHandler } from "@/lib/escalacao/aviso-ao-suporte.handler";
 import { casoNaCentralHandler } from "@/lib/escalacao/caso-na-central.handler";
@@ -93,6 +95,8 @@ const PULA: EventHandler[] = [
   conversaoDeVendaHandler,
   conversaoDeQualificacaoHandler,
   conversaoDeEtapaMetaHandler,
+  conversaoDeNascimentoMetaHandler,
+  conversaoDeCliqueMetaHandler,
   pinoReintentoHandler,
   // Régua e campanha do fork: põem gente em sequência e mandam mensagem em
   // nome da empresa — org parada não age por ela.

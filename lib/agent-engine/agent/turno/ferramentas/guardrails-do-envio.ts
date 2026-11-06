@@ -20,6 +20,7 @@ import { montarArgumentosDoEnvio } from './argumentos-do-envio';
 import { responderAoDesfecho } from './resposta-do-envio';
 // Valor lido só dentro das funções (nunca na carga do módulo): o ciclo de import é seguro.
 import { MAX_VETOS_DE_AFIRMACAO_CLINICA, MAX_VETOS_DE_VOCABULARIO_INTERNO } from '../../inbound-turn';
+import { VETOS_IRREVOGAVEIS } from '../../../guardrails/before-send';
 
 /** O que o envio lê do escopo do turno. Setas = valor lido na hora da chamada. */
 export interface DependenciasDoEnvio {
@@ -203,6 +204,7 @@ export async function executarCadeiaDoEnvio(
       });
     }
     if (chain.status === 'vetoed') {
+      if (VETOS_IRREVOGAVEIS.has(chain.code)) estado.vetoIrrevogavel = true;
       // Cap de warm-up/diário: reescrever o texto não resolve (é rate limit, não
       // conteúdo) — ensinar o modelo a "tentar de novo" só gasta passo. Guardamos
       // pra reagendar o JOB inteiro depois que o turno terminar (mesmo padrão de

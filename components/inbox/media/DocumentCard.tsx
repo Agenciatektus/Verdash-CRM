@@ -2,7 +2,7 @@
 import { useT } from "@/hooks/i18n/useT";
 import { DownloadSimple } from "@/lib/ui/icons";
 
-import { formatBytes, mediaFileLabel, mediaSrc } from "./media-utils";
+import { extensaoDoDocumento, formatBytes, mediaDownloadSrc } from "./media-utils";
 
 interface Props {
   messageId: string;
@@ -11,6 +11,8 @@ interface Props {
   storagePath: string | null;
   /** Mantido por compatibilidade: o cartão usa as mesmas cores nos dois lados (visual v2). */
   isOutbound?: boolean;
+  /** Nome ORIGINAL do documento quando o payload o trouxer (#2613). Ausente/vazio → `Documento XLSX`. */
+  fileName?: string | null;
   /** Fonte alternativa para mídia de NOTA interna (#1863, F3) — ver ImageMedia. */
   src?: string;
   /** Nome ORIGINAL do documento (`media_filename`, #2613 do upstream). */
@@ -25,9 +27,12 @@ interface Props {
  */
 export function DocumentCard({ messageId, mime, sizeBytes, storagePath, src, nome, fileName }: Props & { nome?: string | null }) {
   const t = useT();
-  const label = mediaFileLabel(mime, storagePath);
-  const titulo = nome?.trim() || fileName?.trim() || label;
-  const href = src ?? mediaSrc(messageId);
+  const extensao = extensaoDoDocumento(mime, storagePath);
+  const label = extensao ?? t("Documento");
+  // Sem nome, `Documento XLSX` e não `XLSX`: a extensão sozinha se lê como título (#2613).
+  const titulo =
+    nome?.trim() || fileName?.trim() || (extensao ? t("Documento {ext}").replace("{ext}", extensao) : t("Documento"));
+  const href = src ?? mediaDownloadSrc(messageId);
   return (
     <div className="-ml-1.5 -mr-1.25 -mt-0.5 mb-1 flex w-67.5 max-w-full items-center gap-3 rounded-xl bg-tint p-2">
       <span

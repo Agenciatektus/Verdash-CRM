@@ -40,18 +40,22 @@ type FlowRow = {
  * `idx_followup_enrollments_one_live` (`baseline.sql`) — a mesma de
  * `STATUS_VIVOS` em `lib/followup/silence-sweep.ts`, copiada aqui porque aquele
  * módulo é de servidor. Com um deles de pé, iniciar outro volta 409; por isso é
- * esta lista que decide entre oferecer Iniciar ou Parar.
+ * esta lista que decide entre oferecer Iniciar. O Parar cobre o que a seção
+ * mostra — quem ocupa a vaga e o `dormente` (ver `STATUS_DORMENTE`) —, que é
+ * exatamente o que o cancel aceita.
  *
  * NÃO é o `LIVE_STATUSES` de `lib/followup/reactivity.ts` (quem reage a
  * mensagem, sem `paused_manual`) nem o do cancel (que aceita também
- * `coletando`, do roteiro de atendimento).
+ * `coletando`, do roteiro de atendimento, e o `dormente`).
  */
 const STATUS_QUE_OCUPAM_A_VAGA = ["active", "waiting_reply", "paused_handoff", "paused_manual"];
 
 /**
  * A espera longa (migration 0308): a fila a mostra como viva, mas ela NÃO ocupa
- * a vaga e o cancel não a aceita. Aqui ela aparece com o status, sem Parar, e
- * Iniciar segue oferecido.
+ * a vaga — Iniciar segue oferecido ao lado do Parar. O cancel A ACEITA desde o
+ * #3292 (`LIVE_STATUSES` em `.../enrollments/[id]/cancel/route.ts`), então ela
+ * aparece com as duas portas: quem opera desiste de uma espera de dias sem
+ * sair da conversa.
  */
 const STATUS_DORMENTE = "dormente";
 
@@ -153,10 +157,10 @@ export function FollowupDoContato({ contactId, podeEscrever }: Props) {
   }, [escolhido, contactId, t, recarregar]);
 
   const parar = useCallback(async () => {
-    if (!vivo) return;
+    if (!exibido) return;
     setSalvando(true);
     try {
-      await apiClient.post(`/api/v1/ai/followups/enrollments/${vivo.id}/cancel`, {});
+      await apiClient.post(`/api/v1/ai/followups/enrollments/${exibido.id}/cancel`, {});
       toast.success(t("Follow-up encerrado."));
       recarregar();
     } catch {
@@ -164,7 +168,7 @@ export function FollowupDoContato({ contactId, podeEscrever }: Props) {
     } finally {
       setSalvando(false);
     }
-  }, [vivo, t, recarregar]);
+  }, [exibido, t, recarregar]);
 
   if (!contactId) return null;
   const carregando = !erro && (doContato === null || fluxos === null);
@@ -185,8 +189,8 @@ export function FollowupDoContato({ contactId, podeEscrever }: Props) {
             </span>
             <Badge variant={tomDoStatus(exibido.status)}>{rotuloDoStatus(exibido.status, t)}</Badge>
           </div>
-          {/* Parar só para quem ocupa a vaga: o cancel recusa o dormente. */}
-          {vivo && podeEscrever && (
+          {/* Parar para tudo que a seção mostra: o cancel aceita os vivos e o dormente (#3292). */}
+          {exibido && podeEscrever && (
             <Button
               variant="outline"
               size="sm"

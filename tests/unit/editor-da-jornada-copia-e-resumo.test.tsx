@@ -26,7 +26,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
-import { ScheduleDialog } from "@/app/app/team/_components/AttendantsClient";
+import { ScheduleDialog, fusoNoResumo } from "@/app/app/team/_components/AttendantsClient";
 import type { AttendantAvailability } from "@/hooks/team/useAttendants";
 import type { ScheduleWindow } from "@/lib/schemas/routing";
 import { entradaDoCampoDeData } from "@/tests/unit/helpers/controles-do-ds";
@@ -48,6 +48,7 @@ function disponibilidade(windows: ScheduleWindow[]): AttendantAvailability {
     overlap_tolerance_minutes: 0,
     last_heartbeat_at: null,
     present: false,
+    sector_id: null,
   };
 }
 
@@ -56,7 +57,7 @@ type Salvador = (windows: ScheduleWindow[], timezone: string) => Promise<Schedul
 function abrir(windows: ScheduleWindow[], onSave: Salvador) {
   return render(
     <ScheduleDialog
-      attendant={{ userId: "11111111-1111-4111-8111-111111111111", name: "Ana", email: null, availability: disponibilidade(windows) }}
+      attendant={{ userId: "11111111-1111-4111-8111-111111111111", name: "Ana", email: null, sectorId: null, availability: disponibilidade(windows) }}
       open
       onOpenChange={vi.fn()}
       onSave={onSave}
@@ -119,7 +120,7 @@ describe("resumo do que foi publicado", () => {
 
     render(
       <ScheduleDialog
-        attendant={{ userId: "11111111-1111-4111-8111-111111111111", name: "Ana", email: null, availability: disponibilidade([{ dow: 1, start: "08:00", end: "11:30" }, { dow: 1, start: "20:00", end: "22:00" }]) }}
+        attendant={{ userId: "11111111-1111-4111-8111-111111111111", name: "Ana", email: null, sectorId: null, availability: disponibilidade([{ dow: 1, start: "08:00", end: "11:30" }, { dow: 1, start: "20:00", end: "22:00" }]) }}
         open
         onOpenChange={onOpenChange}
         onSave={onSave}
