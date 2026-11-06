@@ -16,6 +16,7 @@ export const BASE_DO_IZZY = "https://api.izzycrm.com.br/functions/v1/api-gateway
 /** Tentativas a mais quando /messages devolve vazio numa conversa que tem prévia (servidor sob carga). */
 const REPETICOES_NO_VAZIO = 2;
 const ESPERA_NO_VAZIO_MS = 1500;
+const PRAZO_DO_PEDIDO_MS = 15_000;
 
 type Obj = Record<string, unknown>;
 export interface OpcoesDaFonteIzzy {
@@ -34,7 +35,7 @@ async function pedir(
   const url = `${BASE_DO_IZZY}${caminho}?${new URLSearchParams(params)}`;
   let res: Response;
   try {
-    res = await f(url, { headers: { Authorization: `Bearer ${token}` } });
+    res = await f(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(PRAZO_DO_PEDIDO_MS), redirect: "error" });
   } catch {
     throw new Error("izzy_rede"); // a mensagem original pode ecoar o pedido
   }
@@ -60,6 +61,7 @@ const segundos = (iso: unknown): number | null => {
 };
 const soDigitos = (v: unknown): string | null => {
   const d = (texto(v) ?? "").replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) return `55${d}`; // DDD sem o país (dado real da Dans: 2 em 2.711)
   return d.length >= 8 ? d : null;
 };
 
@@ -91,16 +93,20 @@ export function criarFonteIzzy(token: string, opts: OpcoesDaFonteIzzy = {}): Fon
       const r = await pedir(token, "/v1/conversations", { limit: String(limit), offset: String(offset) }, f);
       if (!Array.isArray(r.data)) throw new Error("izzy_invalido");
       const saida: Array<{ chatId: string; ultimaEm: number | null; posicao: number }> = [];
+      const semTelefone: number[] = [];
       for (const [i, item] of (r.data as Obj[]).entries()) {
         const id = texto(item?.id);
         if (!id) continue;
         const { phone, nome } = await contatoDe(item);
-        if (!phone) continue; // sem telefone não há como ligar ao contato do CRM
+        if (!phone) {
+          semTelefone.push(offset + i); // Instagram: sem telefone não há como ligar ao contato do CRM; a rodada conta
+          continue;
+        }
         const chatId = `${phone}@s.whatsapp.net`;
         conversas.set(chatId, { id, preview: !!texto(item.last_message_preview), nome });
         saida.push({ chatId, ultimaEm: segundos(item.last_message_at ?? item.updated_at), posicao: offset + i });
       }
-      return { conversas: saida, lidas: r.data.length };
+      return { conversas: saida, lidas: r.data.length, semTelefone };
     },
 
     async paginaDeMensagens(_sessao, chatId, { limit, offset, desde }) {
@@ -109,12 +115,15 @@ export function criarFonteIzzy(token: string, opts: OpcoesDaFonteIzzy = {}): Fon
       const params = { conversation_id: conversa.id, limit: String(limit), offset: String(offset) };
       let r = await pedir(token, "/v1/messages", params, f);
       // Sob carga o Izzy devolve 200 com lista vazia: só é fim se a conversa não tem mensagem alguma.
-      for (let t = 0; t < REPETICOES_NO_VAZIO && offset === 0 && conversa.preview && Array.isArray(r.data) && r.data.length === 0; t++) {
+      // Com offset > 0 só dá para saber pelo total (se vier): vazio antes do total é suspeito.
+      const suspeito = () =>
+        Array.isArray(r.data) && r.data.length === 0 && (offset === 0 ? conversa.preview : r.total !== null && offset < r.total);
+      for (let t = 0; t < REPETICOES_NO_VAZIO && suspeito(); t++) {
         await dormir(ESPERA_NO_VAZIO_MS);
         r = await pedir(token, "/v1/messages", params, f);
       }
       if (!Array.isArray(r.data)) throw new Error("izzy_invalido");
-      if (offset === 0 && conversa.preview && r.data.length === 0) throw new FonteAdiada("izzy_vazio_sob_carga");
+      if (suspeito()) throw new FonteAdiada("izzy_vazio_sob_carga");
 
       const mensagens: WahaPayload[] = [];
       for (const m of r.data as Obj[]) {
