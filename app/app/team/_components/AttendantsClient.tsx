@@ -833,7 +833,7 @@ export function AttendantsClient({ canManage, organizationTimezone, setoresLigad
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-11 w-11 shrink-0 md:h-7 md:w-7"
                             aria-label={`Editar horário de ${a.name}`}
                             onClick={() => setScheduleFor(a)}
                           >

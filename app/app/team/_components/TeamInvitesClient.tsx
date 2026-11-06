@@ -139,7 +139,7 @@ export function TeamInvitesClient({ canManage }: Props) {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 w-fit gap-1 text-xs"
+                              className="h-11 w-fit gap-1 text-xs md:h-7"
                               onClick={() => copyLink(inv.accept_url!)}
                             >
                               <Copy size={13} />
