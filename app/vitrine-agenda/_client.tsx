@@ -134,8 +134,10 @@ export function VitrineDaAgenda() {
               visão somam 433px numa tela de 390 — medido. Sem a quebra, o
               alternador saía pela direita, e o `overflow-x: hidden` do
               `globals.css` cortava em silêncio: sem barra de rolagem, sem aviso,
-              sem como trocar de visão. */}
-          <div className="flex flex-wrap items-center gap-3">
+              sem como trocar de visão. `min-w-0 max-w-full`: a fila de chips do
+              filtro rola por dentro; sem o teto, ela alargava este bloco (407px
+              numa coluna de 342, medido). */}
+          <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
             <FiltroDePessoas pessoas={PESSOAS} isolada={isolada} onIsolar={setIsolada} />
             <div
               data-testid="alternador-de-visao"
