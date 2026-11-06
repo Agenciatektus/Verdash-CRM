@@ -1,4 +1,4 @@
--- manifest: 9224 — exceção por organização (organizations.aviso_para_conexao_propria, desligada) para o aviso de caso/agendamento ir a uma conexão ativa da própria org, nunca a remetente; a ingestão ignora o que chega de conexão da própria org quando ligada. Idempotente, nada destrutivo.
+-- manifest: 9231 — exceção por organização (organizations.aviso_para_conexao_propria, desligada) para o aviso de caso/agendamento ir a uma conexão ativa da própria org, nunca a remetente; a ingestão ignora o que chega de conexão da própria org quando ligada. Idempotente, nada destrutivo.
 
 alter table public.organizations
   add column if not exists aviso_para_conexao_propria boolean not null default false;
@@ -82,7 +82,7 @@ begin
           and s.archived_at is null
           and s.phone_number is not null
           and regexp_replace(s.phone_number, '\D', '', 'g') = any (v_variantes)
-          -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
+          -- 9231: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
           -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
           and (p_channel is null or s.id = p_channel
                -- remetente sem número conhecido: não dá para provar que não é o destino.
@@ -218,7 +218,7 @@ begin
             and s.archived_at is null
             and s.phone_number is not null
             and regexp_replace(s.phone_number, '\D', '', 'g') = any (v_variantes)
-            -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
+            -- 9231: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
             -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
             and (v_channel is null or s.id = v_channel
                  -- remetente sem número conhecido: não dá para provar que não é o destino.

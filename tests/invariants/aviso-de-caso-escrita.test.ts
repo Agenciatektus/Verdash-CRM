@@ -326,12 +326,12 @@ describe("0292 — fn_definir_aviso_de_caso é a única porta, e ela confere o p
     sql(`update public.channel_sessions set phone_number = null where id = '${SESSAO_A}';`);
   });
 
-  it("9224: com a exceção da plataforma, o destino pode ser OUTRA conexão ativa da org, nunca a remetente", () => {
+  it("9231: com a exceção da plataforma, o destino pode ser OUTRA conexão ativa da org, nunca a remetente", () => {
     // Conexão B da MESMA org (a do roteador/SDR), com o número de destino.
-    const OUTRA = "02920000-2222-4000-8000-000000009224";
+    const OUTRA = "02920000-2222-4000-8000-000000009231";
     sql(`do $s$ begin
       insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, phone_number)
-        values ('${OUTRA}', '${ORG_A}', 'aviso-9224-b', '\\x00'::bytea, '+5521977357727');
+        values ('${OUTRA}', '${ORG_A}', 'aviso-9231-b', '\\x00'::bytea, '+5521977357727');
       exception when unique_violation then null; end $s$;`);
     sql(`update public.channel_sessions set phone_number = '+5522981356551' where id = '${SESSAO_A}';`);
     const definir = (canal: string, tel: string) =>

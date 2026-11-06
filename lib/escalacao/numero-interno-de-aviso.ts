@@ -78,7 +78,7 @@ export interface NumeroInternoDeAviso {
   /**
    * Telefones das conexões ATIVAS da própria organização — preenchido SÓ com a
    * exceção da plataforma ligada (`organizations.aviso_para_conexao_propria`,
-   * 9224). Aí o aviso pode cair numa conexão com agente, e o que chega de outra
+   * 9231). Aí o aviso pode cair numa conexão com agente, e o que chega de outra
    * conexão da mesma organização é cortado aqui, antes do contato, da conversa,
    * do roteador e do despacho: é a trava do laço robô↔robô. Vazio = sem corte.
    */
@@ -86,7 +86,7 @@ export interface NumeroInternoDeAviso {
 }
 
 /**
- * A exceção da plataforma (9224) está ligada nesta organização? Lança se a
+ * A exceção da plataforma (9231) está ligada nesta organização? Lança se a
  * leitura falhar: o motor de envio prefere errar fechado (não envia).
  */
 export async function avisoParaConexaoPropriaPermitido(
@@ -193,7 +193,7 @@ export function ehOChatDoAvisoDeAgendamento(parsed: ChatIdentidade, destino: str
  * cru deixaria o corte passar batido justamente no cadastro mais comum.
  */
 export function ehOChatDoAviso(parsed: ChatIdentidade, cfg: NumeroInternoDeAviso): boolean {
-  // 9224: com a exceção ligada, quem fala é uma conexão da própria organização.
+  // 9231: com a exceção ligada, quem fala é uma conexão da própria organização.
   const telefone = parsed.phone;
   if ((parsed.kind === "phone" || parsed.kind === "lid") && telefone &&
       (cfg.conexoesDaPropriaOrg ?? []).some((n) => phoneLookupVariants(n).includes(telefone))) {
@@ -330,7 +330,7 @@ export async function ehContatoDoNumeroInterno(
 }
 
 /**
- * Só a metade 9224 do corte: quem fala é uma conexão ativa da própria org, com a
+ * Só a metade 9231 do corte: quem fala é uma conexão ativa da própria org, com a
  * exceção da plataforma ligada. Para o ingestor nativo (Verdash/FZAP), que não
  * passa pelo corte inteiro; sem a flag a lista é vazia e nada muda.
  */

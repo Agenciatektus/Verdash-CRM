@@ -5,7 +5,7 @@ import { limparCacheDoNumeroInterno } from "@/lib/escalacao/numero-interno-de-av
 
 /**
  * Canal nativo (Verdash/FZAP): o aviso que OUTRA conexão da própria org manda
- * para esta não vira contato (9224). Sem contato não há conversa, roteador,
+ * para esta não vira contato (9231). Sem contato não há conversa, roteador,
  * agente, boas-vindas, follow-up, automação nem lead. É o mesmo corte do
  * `lib/waha/ingest-conexao-da-propria-org.test.ts`, no ingestor que não passa
  * pelo corte do número interno de avisos.
@@ -57,7 +57,7 @@ const AVISO = {
   token: "[redacted]",
   event: {
     Info: {
-      ID: "3A0000000000AVISO9224",
+      ID: "3A0000000000AVISO9231",
       Chat: "5522981356551@s.whatsapp.net",
       Sender: "5522981356551@s.whatsapp.net",
       SenderAlt: "",
@@ -91,7 +91,7 @@ async function recebe(flag: boolean, payload: unknown = AVISO) {
   return { r, rpcs };
 }
 
-describe("canal nativo: aviso vindo de conexão da própria org (9224)", () => {
+describe("canal nativo: aviso vindo de conexão da própria org (9231)", () => {
   it("com a exceção ligada: ignorado antes do contato, com rastro no contador", async () => {
     const { r, rpcs } = await recebe(true);
     expect(r).toEqual({ status: "ignored", reason: "conexao_da_propria_org" });

@@ -848,7 +848,7 @@ export function createSupabaseAvisoDb(admin: SupabaseClient): AvisoDb {
           variantes.includes(linha.phone_number.replace(/\D/g, "")),
       );
       if (casam.length === 0) return false;
-      // 9224: com a exceção da plataforma ligada, só a PRÓPRIA conexão remetente
+      // 9231: com a exceção da plataforma ligada, só a PRÓPRIA conexão remetente
       // conta (mandar para si mesma) — a mesma regra de `fn_definir_aviso_*`.
       if (casam.some((linha) => linha.id === remetenteId)) return true;
       // Remetente sem número conhecido: não dá para provar que não é o destino.

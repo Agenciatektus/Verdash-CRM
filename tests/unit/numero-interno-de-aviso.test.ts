@@ -52,7 +52,7 @@ function fakeDb(linha: Record<string, unknown> | null) {
     },
   };
   return {
-    // `organizations` (flag 9224, desligada aqui) não conta como leitura do aviso.
+    // `organizations` (flag 9231, desligada aqui) não conta como leitura do aviso.
     db: {
       from: (t: string) =>
         t === "organizations"

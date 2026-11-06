@@ -151,7 +151,7 @@ export async function ingestVerdashInbound(
     return { status: "ignored", reason: "sem_identidade_utilizavel" };
   }
 
-  // 9224: aviso vindo de outra conexão da própria org não vira contato nem IA.
+  // 9231: aviso vindo de outra conexão da própria org não vira contato nem IA.
   if (await ignoraConexaoDaPropriaOrg(admin, input, msg)) return { status: "ignored", reason: "conexao_da_propria_org" };
 
   const contactId = await upsertContact(admin, input.organizationId, msg, identity);

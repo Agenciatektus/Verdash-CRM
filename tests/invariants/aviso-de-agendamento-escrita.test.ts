@@ -226,11 +226,11 @@ describe("0707 — fn_definir_aviso_de_agendamento é a única porta", () => {
     expect(erro).toMatch(/aviso_de_agendamento_numero_da_propria_org/i);
   });
 
-  it("9224: com a exceção da plataforma, OUTRA conexão ativa da org é aceita; a remetente nunca", () => {
-    const OUTRA = "07070000-2222-4000-8000-000000009224";
+  it("9231: com a exceção da plataforma, OUTRA conexão ativa da org é aceita; a remetente nunca", () => {
+    const OUTRA = "07070000-2222-4000-8000-000000009231";
     sql(`do $s$ begin
       insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted, phone_number)
-        values ('${OUTRA}', '${ORG_A}', 'agenda-9224-b', '\\x00'::bytea, '+5521977357727');
+        values ('${OUTRA}', '${ORG_A}', 'agenda-9231-b', '\\x00'::bytea, '+5521977357727');
       exception when unique_violation then null; end $s$;`);
     sql(`update public.channel_sessions set phone_number = '+5522981356551' where id = '${SESSAO_A}';`);
     try {

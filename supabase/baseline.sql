@@ -77674,7 +77674,7 @@ grant select, insert, update, delete on public.channel_session_group_directory t
 
 notify pgrst, 'reload schema';
 
--- ---- aviso no WhatsApp para conexão da própria org, opt-in da plataforma (migration 9224) ----
+-- ---- aviso no WhatsApp para conexão da própria org, opt-in da plataforma (migration 9231) ----
 alter table public.organizations
   add column if not exists aviso_para_conexao_propria boolean not null default false;
 comment on column public.organizations.aviso_para_conexao_propria is
@@ -77757,7 +77757,7 @@ begin
           and s.archived_at is null
           and s.phone_number is not null
           and regexp_replace(s.phone_number, '\D', '', 'g') = any (v_variantes)
-          -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
+          -- 9231: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
           -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
           and (p_channel is null or s.id = p_channel
                -- remetente sem número conhecido: não dá para provar que não é o destino.
@@ -77893,7 +77893,7 @@ begin
             and s.archived_at is null
             and s.phone_number is not null
             and regexp_replace(s.phone_number, '\D', '', 'g') = any (v_variantes)
-            -- 9224: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
+            -- 9231: com a exceção da organização ligada, só a PRÓPRIA conexão remetente
             -- bloqueia (mandar para si mesma). Sem remetente, a regra antiga vale.
             and (v_channel is null or s.id = v_channel
                  -- remetente sem número conhecido: não dá para provar que não é o destino.

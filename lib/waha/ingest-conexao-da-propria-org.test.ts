@@ -6,7 +6,7 @@ import { dispatchWahaEvent, type WahaEnvelope, type WahaPayload } from "@/lib/wa
 import { limparCacheDoNumeroInterno } from "@/lib/escalacao/numero-interno-de-aviso";
 
 /**
- * O AVISO QUE CHEGA NUMA CONEXÃO DA PRÓPRIA ORGANIZAÇÃO NÃO VIRA ATENDIMENTO (9224).
+ * O AVISO QUE CHEGA NUMA CONEXÃO DA PRÓPRIA ORGANIZAÇÃO NÃO VIRA ATENDIMENTO (9231).
  *
  * Com `organizations.aviso_para_conexao_propria` ligada, o aviso de caso sai pela
  * conexão A e cai na conexão B, que tem roteador e agente. Se a mensagem
@@ -112,7 +112,7 @@ async function recebe(flag: boolean, payload: WahaPayload = AVISO_RECEBIDO) {
   };
 }
 
-describe("aviso recebido de uma conexão da própria organização (9224)", () => {
+describe("aviso recebido de uma conexão da própria organização (9231)", () => {
   it("com a exceção ligada: não cria contato, conversa, mensagem nem job do agente", async () => {
     const r = await recebe(true);
     expect(r.contatos, "virou CONTATO: o roteador e o agente da conexão de destino atenderiam").toHaveLength(0);
