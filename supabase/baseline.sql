@@ -74575,6 +74575,24 @@ create trigger trg_seed_org_teto_de_ia
   after insert on public.organizations
   for each row execute function public.fn_seed_org_teto_de_ia();
 
+-- ---- organizacao nova sem Anthropic por padrao (migration 9250) ----
+-- Mesmo corpo da migration 9250, sem o backfill (o baseline reaplica a cada update e desfaria uma escolha da org).
+-- Fica DEPOIS do bloco da 9096 (que ainda define o corpo antigo) e ANTES da VARREDURA anon (cria funcao): a ultima
+-- definicao vence, e a cerca apendice-do-baseline-nao-diverge-da-cadeia compara exatamente esta com a da cadeia.
+
+create or replace function public.fn_seed_org_llm_defaults() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  if coalesce(new.settings->'llm'->>'default_model', '') = '' then
+    new.settings := jsonb_set(
+      coalesce(new.settings, '{}'::jsonb), '{llm}',
+      coalesce(new.settings->'llm', '{}'::jsonb)
+        || jsonb_build_object('provider', 'openrouter', 'default_model', 'google/gemini-2.5-flash-lite'),
+      true);
+  end if;
+  return new;
+end; $$;
+
 
 
 -- ---- claim do alerta de IA da plataforma (migration 9097) ----
