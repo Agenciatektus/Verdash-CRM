@@ -5,6 +5,8 @@ import {
   type AssinaturaDoCard,
   type PlanoDoCard,
 } from "@/components/admin/tenants/CardDeCobranca";
+import { HistoricoDePagamentos } from "@/components/admin/tenants/HistoricoDePagamentos";
+import type { PagamentoDoHistorico } from "@/lib/cobranca/historico";
 import { provedorDaInstalacao } from "@/lib/cobranca/configuracao";
 import { exigeDocumento, sugestaoDoCadastro } from "@/lib/cobranca/documento";
 import type { ProvedorDeCobranca } from "@/lib/cobranca/vocabulario";
@@ -24,6 +26,7 @@ export default async function TenantDetailPage({ params }: TenantDetailPageProps
     <div className="space-y-6">
       <TenantOverviewClient id={id} cobrancaLigada={cobranca !== null} />
       {cobranca && <CardDeCobranca orgId={id} {...cobranca} />}
+      {cobranca && <HistoricoDePagamentos pagamentos={cobranca.pagamentos} />}
     </div>
   );
 }
@@ -40,7 +43,7 @@ async function lerCobrancaDoTenant(orgId: string) {
   if (!z.string().uuid().safeParse(orgId).success) return null;
   const admin = createAdminClient();
   if (!(await moduloLigado(admin, "cobranca"))) return null;
-  const [planos, assinatura, org, daInstalacao] = await Promise.all([
+  const [planos, assinatura, org, daInstalacao, pagamentos] = await Promise.all([
     admin.from("cobranca_planos").select("id, nome, arquivado_em").order("nome"),
     admin
       .from("cobranca_assinaturas")
@@ -49,9 +52,17 @@ async function lerCobrancaDoTenant(orgId: string) {
       .maybeSingle(),
     admin.from("organizations").select("status, suspended_kind, settings, cnpj").eq("id", orgId).maybeSingle(),
     provedorDaInstalacao(),
+    admin
+      .from("cobranca_pagamentos")
+      .select("id, cobranca_ref, valor_cents, moeda, status, valor_estornado_cents, pago_em, estornado_em, url_do_recibo")
+      .eq("organization_id", orgId)
+      .order("pago_em", { ascending: false })
+      .limit(20),
   ]);
-  if (planos.error || assinatura.error || org.error) {
-    throw new Error(`cobrança do tenant: leitura falhou (${planos.error?.code ?? assinatura.error?.code ?? org.error?.code})`);
+  if (planos.error || assinatura.error || org.error || pagamentos.error) {
+    throw new Error(
+      `cobrança do tenant: leitura falhou (${planos.error?.code ?? assinatura.error?.code ?? org.error?.code ?? pagamentos.error?.code})`,
+    );
   }
   const rotulo = (org.data?.settings as { plan?: unknown } | null)?.plan;
   // O id do cliente no provedor decide só se o documento é pedido; não vai ao componente de cliente.
@@ -65,6 +76,7 @@ async function lerCobrancaDoTenant(orgId: string) {
     ),
     documentoDoCadastro: sugestaoDoCadastro(org.data?.cnpj ?? null),
     suspensaPorCobranca: org.data?.status === "suspended" && org.data?.suspended_kind === "cobranca",
+    pagamentos: (pagamentos.data ?? []) as PagamentoDoHistorico[],
     rotuloAntigo: typeof rotulo === "string" && rotulo !== "" ? rotulo : null,
   };
 }

@@ -7,6 +7,7 @@ import { audit } from "@/lib/audit";
 import { fail } from "@/lib/api/wrappers";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { calcularPrevia, lerSessaoDoHistorico } from "@/lib/channels/historico/previa";
+import { totalDeConversasDoIzzy } from "@/lib/channels/historico/fonte-izzy";
 import { GET, POST } from "./route";
 
 vi.mock("@/lib/auth/server", () => ({ loadAuthUser: vi.fn() }));
@@ -14,6 +15,8 @@ vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("@/lib/impersonate/support", () => ({ requireSupportWrite: vi.fn() }));
+vi.mock("@/lib/channels/historico/fonte-izzy", () => ({ totalDeConversasDoIzzy: vi.fn() }));
+vi.mock("@/lib/webhooks/secrets", () => ({ encryptWebhookSecret: vi.fn(async () => "\\xcifrado") }));
 vi.mock("@/lib/channels/historico/previa", () => ({ lerSessaoDoHistorico: vi.fn(), calcularPrevia: vi.fn() }));
 
 /**
@@ -102,6 +105,35 @@ beforeEach(() => {
 });
 
 describe("importação do histórico: rotas (#999)", () => {
+  it("Izzy com token recusado: 422, nada gravado", async () => {
+    vi.mocked(totalDeConversasDoIzzy).mockRejectedValue(new Error("izzy_nao_autorizado"));
+    const r = await POST(req({ acao: "previa", dias: 90, fonte: "izzy", token: "izzy_ruim_123" }), context());
+    expect(r.status).toBe(422);
+    expect(escritas.filter((e) => e.op === "insert")).toHaveLength(0);
+    expect(JSON.stringify(await r.json())).not.toContain("izzy_ruim_123");
+  });
+
+  it("Izzy com token válido: grava cifrado e a resposta não devolve a credencial", async () => {
+    vi.mocked(totalDeConversasDoIzzy).mockResolvedValue(42);
+    const r = await POST(req({ acao: "previa", dias: 90, fonte: "izzy", token: "izzy_bom_12345" }), context());
+    expect(r.status).toBe(200);
+    const ins = escritas.find((e) => e.op === "insert")!.payload;
+    expect(ins).toMatchObject({ fonte: "izzy", credencial_cifrada: "\\xcifrado" });
+    expect(JSON.stringify(ins)).not.toContain("izzy_bom_12345");
+    const corpo = await r.json();
+    expect(corpo.data.importacao.credencial_cifrada).toBeUndefined();
+    expect(corpo.data.importacao.previa).toMatchObject({ conversas: 42 });
+    expect(calcularPrevia).not.toHaveBeenCalled();
+  });
+
+  it("cancelar zera a credencial; retomar Izzy em erro pede importação nova", async () => {
+    const l = linha({ status: "rodando", fonte: "izzy", credencial_cifrada: "x" });
+    await POST(req({ acao: "cancelar", importacaoId: l.id }), context());
+    expect(l.credencial_cifrada).toBeNull();
+    const e = linha({ status: "erro", fonte: "izzy" });
+    expect((await POST(req({ acao: "retomar", importacaoId: e.id }), context())).status).toBe(409);
+  });
+
   it("prévia nova com importação rodando no mesmo número: 409, sem contar nem gravar", async () => {
     linha({ status: "rodando" });
     const r = await POST(req({ acao: "previa", dias: 90 }), context());

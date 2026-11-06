@@ -371,3 +371,17 @@ $function$;
 
 revoke execute on function public.fn_enfileirar_midia_vencida(integer) from public, anon, authenticated;
 grant execute on function public.fn_enfileirar_midia_vencida(integer) to service_role;
+
+-- importacoes_de_historico: a 9102 (dev) troca o grant da tabela por grant por coluna,
+-- montado com as colunas que existem quando ela roda. Onde a 9102 rodou antes da 9033
+-- do upstream, as colunas novas (escopo, origem, desde, ate...) ficariam sem leitura.
+-- Mesmo bloco da 9102, de novo, depois das duas.
+do $grants_importacoes$
+declare cols text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'importacoes_de_historico' and column_name <> 'credencial_cifrada';
+  revoke select on public.importacoes_de_historico from authenticated;
+  execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
+end $grants_importacoes$;

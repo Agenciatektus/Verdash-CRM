@@ -33,6 +33,7 @@ select count(*) from crm_leads l
 | objeto | upstream | fork | versão integrada |
 |---|---|---|---|
 | `fn_enfileirar_midia_vencida` | 9050 (#3756: a nota que perdeu o anexo grava `media_expired_at`/`media_retention_days` no passo 2c) | 9222 (prazo de mídia de grupo) | a 9222 letra a letra + o passo 2c da 9050; repete as duas colunas (`add column if not exists`) |
+| grant por coluna de `importacoes_de_historico` | 9033 (colunas da queda: escopo, origem, desde, ate) | 9102 da dev (grant por coluna, sem `credencial_cifrada`) | o bloco da 9102 de novo, depois das duas: onde a 9102 rodou antes da 9033, as colunas novas ficariam sem leitura para `authenticated` |
 | `agent_inbox_items_kind_check` | 9027/9033 | 9099 | sem integração: a lista da 9033 já contém todos os kinds da 9099 (+ `assinatura_desconectada`, `recuperacao_da_queda`, `cliente_sem_resposta_na_queda`) |
 
 ### baseline.sql
@@ -62,6 +63,7 @@ Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndic
 | Event log | laço com sinal de trabalho e varredura espaçada de presos (upstream) + o nosso batimento; deps de teste entram por `opts.deps` |
 | Assinatura do ChatGPT | renovação do upstream (#3371: marco da rotação, motivo da recusa) + a nossa espera pelo vencedor da trava e o `exp` do JWT |
 | Inbox | cabeçalho, filtros, balão, painel lateral e tarefas nossos. Fora: escolha "devolver ao automático" ao fechar (#3313), canal no cabeçalho (#2383), badge sem hidratação (#3736), selo do pulo da agenda no balão (#3848), lateral sob medida (#3008) |
+| Histórico do WhatsApp | estrutura modular e fonte Izzy da dev (#535) com a recuperação da queda do upstream dentro (escopo `so_crm`, `tocadas`, efeitos e avisos da queda). Sem escopo explícito: número = `so_crm`, Izzy = `todos` (migrar de outro CRM cria as fichas) |
 | Sidebar | a nossa, com o link Ajuda (#3567) no rodapé |
 | Dependências | versões do upstream, nosso `sharp` e os scripts de typecheck; lock regerado |
 

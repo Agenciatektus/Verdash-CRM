@@ -1045,6 +1045,11 @@ const HOSTS_DECLARADOS: Record<string, EntradaDeHost> = {
     categoria: "FORNECEDOR",
     motivo: "endpoint da API da Nuvemshop/Tiendanube (ordens e catálogo do e-commerce do cliente).",
   },
+  "api.izzycrm.com.br": {
+    categoria: "FORNECEDOR",
+    motivo:
+      "API do Izzy CRM (`lib/channels/historico/fonte-izzy.ts`): de lá o CRM importa o histórico de conversas do cliente, com o token que ele cola. Trocar pelo domínio do revendedor faria a importação não chegar a lugar nenhum.",
+  },
   "app.mercadophone.tech": {
     categoria: "FORNECEDOR",
     motivo:
