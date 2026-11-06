@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CaretDown } from "@/lib/ui/icons";
 import { Switch } from "@/components/ui/switch";
 import { Escolha } from "@/components/ui/escolha";
 import {
@@ -115,6 +116,14 @@ export function RegrasDeConversaoGoogle({
   }, [etapas, regras]);
 
   const [rascunhos, setRascunhos] = useState(inicial);
+  // Agrupa por funil na ordem em que as etapas chegam (já vêm ordenadas por funil).
+  const funis = useMemo(() => {
+    const grupos = new Map<string, EtapaAberta[]>();
+    for (const e of etapas) grupos.set(e.funil, [...(grupos.get(e.funil) ?? []), e]);
+    return [...grupos.entries()];
+  }, [etapas]);
+  // Grupos que a pessoa abriu/fechou; sem escolha, abre quem já tinha etapa ligada.
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const ligadas = etapas.filter((e) => rascunhos[e.id]?.enabled).length;
 
   function mudar(id: string, parcial: Partial<Rascunho>) {
@@ -137,6 +146,8 @@ export function RegrasDeConversaoGoogle({
       }
       return novo;
     });
+    // O recomendado liga etapas em grupos que podiam estar fechados: abre todos para a pessoa ver o que mudou.
+    setAbertos(Object.fromEntries(funis.map(([funil]) => [funil, true])));
     toast.message(
       t("Etapas recomendadas ligadas. Informe ou crie a ação de conversão de cada uma e salve."),
     );
@@ -178,7 +189,7 @@ export function RegrasDeConversaoGoogle({
   return (
     <Card className="flex flex-col gap-4 p-6" data-testid="regras-google-por-etapa">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-2xl">
+        <div>
           <h3 className="font-medium">{t("O que cada etapa do funil informa ao Google Ads")}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {t(
@@ -196,117 +207,139 @@ export function RegrasDeConversaoGoogle({
         </div>
       </div>
 
-      <ul className="flex flex-col gap-3">
-        {etapas.map((e) => {
-          const r = rascunhos[e.id]!;
-          return (
-            <li key={e.id} className="rounded-md border p-4" data-testid={`regra-${e.id}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{e.nome}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {e.funil}
-                    {" · "}
-                    {r.enabled
-                      ? `${r.label || t("sem nome")} · ${
-                          CATEGORIAS_DE_CONVERSAO.find((c) => c.valor === r.category)?.rotulo ??
-                          r.category
-                        }`
-                      : t("não envia conversão")}
-                  </p>
-                </div>
-                <Switch
-                  aria-label={t("Enviar conversão nesta etapa")}
-                  checked={r.enabled}
-                  onCheckedChange={(v) => mudar(e.id, { enabled: v })}
-                />
-              </div>
-
-              {r.enabled && (
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`nome-${e.id}`}>{t("Nome da conversão")}</Label>
-                    <Input
-                      id={`nome-${e.id}`}
-                      value={r.label}
-                      maxLength={100}
-                      onChange={(ev) => mudar(e.id, { label: ev.target.value })}
-                      placeholder={t("ex.: Lead qualificado")}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`acao-${e.id}`}>{t("Ação de conversão (ID)")}</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id={`acao-${e.id}`}
-                        inputMode="numeric"
-                        value={r.googleActionId}
-                        onChange={(ev) =>
-                          mudar(e.id, { googleActionId: ev.target.value.replace(/\D/g, "") })
-                        }
-                        placeholder="123456789"
-                      />
-                      <CriarAcaoNoGoogle
-                        idioma={idioma}
-                        habilitado={podeCriarAcao}
-                        nome={r.label}
-                        categoria={r.category}
-                        incluirEmConversoes={r.includedInConversions}
-                        onCriada={(id, nomeFinal) =>
-                          mudar(e.id, { googleActionId: id, label: r.label || nomeFinal })
-                        }
+      <div className="flex flex-col gap-3">
+        {funis.map(([funil, doFunil]) => (
+          <details
+            key={funil}
+            open={abertos[funil] ?? doFunil.some((e) => inicial[e.id]?.enabled)}
+            className="group rounded-md border"
+            data-testid="grupo-do-funil"
+            onToggle={(ev) => {
+              const aberto = ev.currentTarget.open;
+              setAbertos((a) => (a[funil] === aberto ? a : { ...a, [funil]: aberto }));
+            }}
+          >
+            <summary className="flex cursor-pointer items-center justify-between gap-3 p-4 font-medium">
+              <span className="min-w-0 flex-1 truncate">{funil}</span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {doFunil.filter((e) => rascunhos[e.id]?.enabled).length} {t("de")} {doFunil.length}
+              </span>
+              <CaretDown size={16} aria-hidden className="shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <ul className="flex flex-col gap-3 p-4 pt-0">
+              {doFunil.map((e) => {
+                const r = rascunhos[e.id]!;
+                return (
+                  <li key={e.id} className="rounded-md border p-4" data-testid={`regra-${e.id}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{e.nome}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {e.funil}
+                          {" · "}
+                          {r.enabled
+                            ? `${r.label || t("sem nome")} · ${
+                                CATEGORIAS_DE_CONVERSAO.find((c) => c.valor === r.category)?.rotulo ??
+                                r.category
+                              }`
+                            : t("não envia conversão")}
+                        </p>
+                      </div>
+                      <Switch
+                        aria-label={t("Enviar conversão nesta etapa")}
+                        checked={r.enabled}
+                        onCheckedChange={(v) => mudar(e.id, { enabled: v })}
                       />
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`categoria-${e.id}`}>{t("Categoria da conversão")}</Label>
-                    <Escolha
-                      id={`categoria-${e.id}`}
-                      value={r.category}
-                      onValueChange={(valorEscolhido) =>
-                        mudar(e.id, { category: valorEscolhido as CategoriaDeConversao })
-                      }
-                    >
-                      {CATEGORIAS_DE_CONVERSAO.map((c) => (
-                        <option key={c.valor} value={c.valor}>
-                          {t(c.rotulo)}
-                        </option>
-                      ))}
-                    </Escolha>
-                    <p className="text-xs text-muted-foreground">
-                      {t("É como o Google agrupa a conversão nos relatórios e nos lances.")}
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`canal-${e.id}`}>{t("Canal de entrada")}</Label>
-                    <Escolha
-                      id={`canal-${e.id}`}
-                      value={r.channel}
-                      onValueChange={(valorEscolhido) => mudar(e.id, { channel: valorEscolhido as CanalDeEntrada })}
-                    >
-                      {CANAIS_DE_ENTRADA.map((c) => (
-                        <option key={c.valor} value={c.valor}>
-                          {t(c.rotulo)}
-                        </option>
-                      ))}
-                    </Escolha>
-                  </div>
-                  <div className="flex items-center gap-3 md:col-span-2">
-                    <Switch
-                      id={`incluida-${e.id}`}
-                      checked={r.includedInConversions}
-                      onCheckedChange={(v) => mudar(e.id, { includedInConversions: v })}
-                    />
-                    <Label htmlFor={`incluida-${e.id}`}>
-                      {t('Incluir na coluna "Conversões" (os lances otimizam por ela)')}
-                    </Label>
-                  </div>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+
+                    {r.enabled && (
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`nome-${e.id}`}>{t("Nome da conversão")}</Label>
+                          <Input
+                            id={`nome-${e.id}`}
+                            value={r.label}
+                            maxLength={100}
+                            onChange={(ev) => mudar(e.id, { label: ev.target.value })}
+                            placeholder={t("ex.: Lead qualificado")}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`acao-${e.id}`}>{t("Ação de conversão (ID)")}</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id={`acao-${e.id}`}
+                              inputMode="numeric"
+                              value={r.googleActionId}
+                              onChange={(ev) =>
+                                mudar(e.id, { googleActionId: ev.target.value.replace(/\D/g, "") })
+                              }
+                              placeholder="123456789"
+                            />
+                            <CriarAcaoNoGoogle
+                              idioma={idioma}
+                              habilitado={podeCriarAcao}
+                              nome={r.label}
+                              categoria={r.category}
+                              incluirEmConversoes={r.includedInConversions}
+                              onCriada={(id, nomeFinal) =>
+                                mudar(e.id, { googleActionId: id, label: r.label || nomeFinal })
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`categoria-${e.id}`}>{t("Categoria da conversão")}</Label>
+                          <Escolha
+                            id={`categoria-${e.id}`}
+                            value={r.category}
+                            onValueChange={(valorEscolhido) =>
+                              mudar(e.id, { category: valorEscolhido as CategoriaDeConversao })
+                            }
+                          >
+                            {CATEGORIAS_DE_CONVERSAO.map((c) => (
+                              <option key={c.valor} value={c.valor}>
+                                {t(c.rotulo)}
+                              </option>
+                            ))}
+                          </Escolha>
+                          <p className="text-xs text-muted-foreground">
+                            {t("É como o Google agrupa a conversão nos relatórios e nos lances.")}
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor={`canal-${e.id}`}>{t("Canal de entrada")}</Label>
+                          <Escolha
+                            id={`canal-${e.id}`}
+                            value={r.channel}
+                            onValueChange={(valorEscolhido) => mudar(e.id, { channel: valorEscolhido as CanalDeEntrada })}
+                          >
+                            {CANAIS_DE_ENTRADA.map((c) => (
+                              <option key={c.valor} value={c.valor}>
+                                {t(c.rotulo)}
+                              </option>
+                            ))}
+                          </Escolha>
+                        </div>
+                        <div className="flex items-center gap-3 md:col-span-2">
+                          <Switch
+                            id={`incluida-${e.id}`}
+                            checked={r.includedInConversions}
+                            onCheckedChange={(v) => mudar(e.id, { includedInConversions: v })}
+                          />
+                          <Label htmlFor={`incluida-${e.id}`}>
+                            {t('Incluir na coluna "Conversões" (os lances otimizam por ela)')}
+                          </Label>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        ))}
+      </div>
 
       <p className="text-xs text-muted-foreground">
         {t(
