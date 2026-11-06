@@ -271,16 +271,18 @@ function colunasComAcl(db: string): string {
 
 /**
  * Fork (9009/9099): nas tabelas de SELECT por coluna, authenticated não lê o envelope da senha
- * e lê o resto. Devolve as colunas da senha legíveis (tem de ser nenhuma) e quantas legíveis há.
+ * e lê TODO o resto. Devolve as colunas da senha legíveis e as sem segredo ilegíveis (as duas listas vazias).
  */
 function senhaLegivel(db: string): string {
   return psql(
     db,
     `select coalesce(string_agg(c.relname || '.' || at.attname, ',' order by 1), '') || '|' ||
-            (select count(*) from pg_attribute a2 join pg_class c2 on c2.oid = a2.attrelid
+            (select coalesce(string_agg(c2.relname || '.' || a2.attname, ',' order by 1), '')
+               from pg_attribute a2 join pg_class c2 on c2.oid = a2.attrelid
               where c2.relnamespace = 'public'::regnamespace and c2.relname in (${SELECT_POR_COLUNA_SQL})
                 and a2.attnum > 0 and not a2.attisdropped
-                and has_column_privilege('authenticated', c2.oid, a2.attnum, 'SELECT'))
+                and a2.attname not in ('password_encrypted', 'password_iv', 'password_tag')
+                and not has_column_privilege('authenticated', c2.oid, a2.attnum, 'SELECT'))
        from pg_attribute at
        join pg_class c on c.oid = at.attrelid and c.relnamespace = 'public'::regnamespace
       where c.relname in (${SELECT_POR_COLUNA_SQL})
@@ -354,18 +356,18 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     ).toBe("1");
     expect(aclMedido(BANCO_UMA_APLICACAO)).toEqual(aclEsperado());
     expect(colunasComAcl(BANCO_UMA_APLICACAO)).toBe("0");
-    const [senha, legiveis] = senhaLegivel(BANCO_UMA_APLICACAO).split("|");
+    const [senha, ilegiveis] = senhaLegivel(BANCO_UMA_APLICACAO).split("|");
     expect(senha, "authenticated lê o envelope da senha").toBe("");
-    expect(Number(legiveis)).toBeGreaterThan(0);
+    expect(ilegiveis, "coluna sem segredo que authenticated não lê (a view _safe dá permission denied)").toBe("");
   });
 
   it("atualização (baseline aplicado DUAS vezes): o ACL é exatamente o do mapa", () => {
     expect(sql("select count(*) from test_db.aplicacoes_do_baseline;")).toBe("2");
     expect(aclMedido("postgres")).toEqual(aclEsperado());
     expect(colunasComAcl("postgres")).toBe("0");
-    const [senha, legiveis] = senhaLegivel("postgres").split("|");
+    const [senha, ilegiveis] = senhaLegivel("postgres").split("|");
     expect(senha, "authenticated lê o envelope da senha").toBe("");
-    expect(Number(legiveis)).toBeGreaterThan(0);
+    expect(ilegiveis, "coluna sem segredo que authenticated não lê (a view _safe dá permission denied)").toBe("");
   });
 
   it("controle negativo: depois do corte, sem o bloco, authenticated e service_role não alcançam nada", () => {
@@ -384,6 +386,23 @@ describe("grants explícitos das tabelas do apêndice (9037)", () => {
     expect(aclMedido("postgres")).toEqual(aclEsperado());
     sql(SQL_DA_MIGRATION);
     expect(aclMedido("postgres")).toEqual(aclEsperado());
+  });
+
+  it("ordem de PRODUÇÃO: a 9037 depois da 9099 derruba coluna, a seção 5 da 9100 devolve", () => {
+    // Em produção a 9037 (carimbo 20261029) roda depois da 9099 (--include-all); o `revoke all` dela
+    // apaga o grant por coluna que a 9099 devolveu. A 9100 roda por último e devolve tudo menos a senha.
+    const nove100 = readdirSync(DIR_MIGRATIONS).find((f) => f.includes("_9100_integracao_da_subida_1_95"));
+    expect(nove100, "migration 9100 não encontrada").toBeTruthy();
+    const texto = readFileSync(join(DIR_MIGRATIONS, nove100 as string), "utf8");
+    const secao = texto.match(/-- ---- 5\. SELECT por coluna[\s\S]*?end \$grants_por_coluna\$;/)?.[0];
+    expect(secao, "seção 5 da 9100 não encontrada").toBeTruthy();
+    sql(SQL_DA_MIGRATION);
+    const [, quebrado] = senhaLegivel("postgres").split("|");
+    expect(quebrado, "controle negativo: a 9037 sozinha não derruba coluna, o caso não mede nada").not.toBe("");
+    sql(secao as string);
+    const [senha, ilegiveis] = senhaLegivel("postgres").split("|");
+    expect(senha, "authenticated lê o envelope da senha").toBe("");
+    expect(ilegiveis, "coluna sem segredo ilegível depois da 9100").toBe("");
   });
 
   it("⭐ o BLOCO do apêndice (extraído do baseline) devolve, depois do corte, exatamente o mapa", () => {

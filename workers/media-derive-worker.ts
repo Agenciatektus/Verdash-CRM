@@ -801,7 +801,8 @@ async function lerBindingDoPonto(
   );
 }
 
-function buildDeriveDeps(
+// Exportado para o teste da recusa de destino (tests/unit/transcricao-a0-recusa-destino-interno.test.ts).
+export function buildDeriveDeps(
   llm: Pick<OrgLlmConfig, "provider" | "apiKey" | "defaultModel" | "orcamento" | "orcamentoIndisponivelPorque" | "origemDaChave">,
   decisao: DecisaoDeTranscricao,
   orgId: string,
@@ -1169,9 +1170,9 @@ function buildDeriveDeps(
     ? semTranscricao
     : decisao.origem === "servico_da_instalacao"
       ? transcriberDeServico(comTeto(comCusto(decisao.transcriber)))
-      : decisao.origem === "modelo_da_organizacao"
-        ? transcriberDaOrganizacao(comTeto(comCusto(decisao.transcriber)))
-        : comTeto(comCusto(decisao.transcriber));
+      : // Todo destino que não é o serviço da instalação passa pela recusa de destino interno
+        // (sem baseUrlDoDestino ela não faz nada). O A0 da OpenRouter escapava (Cassio, #518).
+        transcriberDaOrganizacao(comTeto(comCusto(decisao.transcriber)));
   return {
     transcriber,
     describeImage,

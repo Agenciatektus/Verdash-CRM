@@ -35,6 +35,10 @@ do $conversations_select$ begin
               and cp.organization_id = conversations.organization_id
               and cp.user_id = (select auth.uid())
               and cp.left_at is null
+              -- Membro desligado (revoked_at) não fecha a participação: o escopo é que barra.
+              and cp.organization_id in (
+                select e.organization_id from public.fn_escopo_orgs() e
+                 where e.papel in ('agent', 'manager', 'admin'))
               and not exists (
                 select 1 from public.contacts pc
                  where pc.id = conversations.contact_id
@@ -1232,5 +1236,25 @@ $$;
 
 revoke execute on function public.fn_vocabulario_de_tags_operar(uuid, text, text, text, text) from public, anon;
 grant  execute on function public.fn_vocabulario_de_tags_operar(uuid, text, text, text, text) to authenticated, service_role;
+
+-- ---- 5. SELECT por coluna das tabelas com senha, depois da 9037 do upstream ----
+-- Em produção a 9037 (carimbo 20261029) roda DEPOIS da 9099 (--include-all) e o `revoke all` dela
+-- derruba o grant por coluna que a 9099 devolveu: a view `_safe` (security_invoker) voltaria a dar
+-- permission denied. Aqui, que roda por último nas duas ordens, authenticated lê toda coluna menos o
+-- envelope da senha. Coluna nova do upstream entra sozinha; segredo novo precisa entrar no filtro.
+do $grants_por_coluna$
+declare
+  t text;
+  cols text;
+begin
+  foreach t in array array['external_db_connections', 'voip_trunk_settings'] loop
+    if to_regclass('public.' || t) is null then continue; end if;
+    select string_agg(quote_ident(c.column_name), ', ' order by c.ordinal_position) into cols
+      from information_schema.columns c
+     where c.table_schema = 'public' and c.table_name = t
+       and c.column_name not in ('password_encrypted', 'password_iv', 'password_tag');
+    execute format('grant select (%s) on public.%I to authenticated', cols, t);
+  end loop;
+end $grants_por_coluna$;
 
 notify pgrst, 'reload schema';

@@ -47,6 +47,14 @@ VARREDURA anon, depois de todas as redefinições do upstream.
    Depois do deploy: conferir na Central quais números ficaram presos.
 2. Setores de atendimento (0801) e atendimento conjunto chegam desligados até configurar.
 
+## Revisão do Cassio (06/11)
+
+| achado | decisão |
+|---|---|
+| Ramo de participante de `conversations_select` sem checar membro ativo | Já barrado pela RLS de `conversation_participants` (`fn_user_org_ids`), provado em `atendimento-conjunto-participantes` (caso do revogado). Ficou a checagem explícita por `fn_escopo_orgs` no próprio ramo, como defesa extra. |
+| A 9037 roda depois da 9099 em produção e o `revoke all` derruba o SELECT por coluna de `external_db_connections` | Seção 5 da 9100 (e fim do baseline): authenticated lê toda coluna menos `password_encrypted/iv/tag`, nas duas tabelas. Teste novo reproduz a ordem de produção, com controle negativo. |
+| Degrau A0 (OpenRouter) da transcrição sem a recusa de destino interno | O worker aplica a recusa a toda origem que não é o serviço da instalação. Teste `transcricao-a0-recusa-destino-interno` (vermelho com o código antigo). |
+
 ## Pendências
 - Telas do upstream que entraram inteiras (respostas rápidas, modelos do canal oficial): conferir no padrão do DS.
 - O typecheck a frio estoura 6 GB no Windows; no CI (Linux) vale o resultado do job.
