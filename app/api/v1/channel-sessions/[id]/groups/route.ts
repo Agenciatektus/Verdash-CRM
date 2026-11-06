@@ -3,7 +3,7 @@
  * Só gerente ou administrador. A organização vem da sessão autenticada, nunca do body.
  */
 import { randomUUID } from "node:crypto";
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
@@ -65,18 +65,20 @@ function falhaDeGrupo(err: unknown, requestId: string): Response {
   );
 }
 
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const requestId = randomUUID();
   const authz = await requireRole("manager", { requestId, resource: "channel_session_groups" });
   if (!authz.ok) return authz.response;
   const id = idSchema.safeParse((await ctx.params).id);
   if (!id.success) return fail("validation_error", "id inválido", 400, { requestId });
   try {
-    const grupos = await listarGruposDoNumero(criarDepsDeGrupos(createAdminClient()), {
+    const { grupos, atualizadoEm, desatualizado } = await listarGruposDoNumero(criarDepsDeGrupos(createAdminClient()), {
       organizationId: authz.org.orgId,
       channelSessionId: id.data,
+      refresh: req.nextUrl.searchParams.get("refresh") === "1",
+      agendar: (tarefa) => after(tarefa),
     });
-    return ok(grupos, { requestId });
+    return ok(grupos, { requestId, meta: { atualizado_em: atualizadoEm, desatualizado } });
   } catch (err) {
     return falhaDeGrupo(err, requestId);
   }

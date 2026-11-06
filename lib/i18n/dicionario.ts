@@ -2376,9 +2376,11 @@ export const DICIONARIO: Traducoes = {
   "NIPC": { es: "NIPC" },
   "DPO email": { es: "Email del DPO" },
   "Retenção de mídia (dias)": { es: "Retención de archivos multimedia (días)" },
+  "Retenção de mídia de grupos (dias)": { es: "Retención de archivos multimedia de grupos (días)" },
+  "Grupos recebem muita mídia. Fotos, vídeos e áudios de grupo são apagados depois deste prazo; o texto fica.": { es: "Los grupos reciben muchos archivos. Las fotos, videos y audios de grupo se borran después de este plazo; el texto se conserva." },
   "Limpeza automática de mídia antiga": { es: "Limpieza automática de multimedia antigua" },
-  "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.": {
-    es: "Activado: elimina la multimedia y los archivos adjuntos de notas internas con más de {n} días.",
+  "Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias, e a mídia de grupo com mais de {g} dias.": {
+    es: "Activado: elimina la multimedia y los archivos adjuntos de notas internas con más de {n} días, y la multimedia de grupos con más de {g} días.",
   },
   "Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.": {
     es: "Desactivado: la multimedia de las conversaciones y los archivos adjuntos de notas internas no se eliminan por antigüedad.",
@@ -7727,6 +7729,19 @@ export const DICIONARIO: Traducoes = {
     es: "Permitir que la IA responda en este grupo",
   },
   "Atualizar lista": { es: "Actualizar lista" },
+  "Atualizado agora": { es: "Actualizado ahora" },
+  "Atualizado há": { es: "Actualizado hace" },
+  "Não consegui falar com o WhatsApp agora. Esta é a última lista salva.": { es: "No pude hablar con WhatsApp ahora. Esta es la última lista guardada." },
+  "Comunidades": { es: "Comunidades" },
+  "Grupos de comunidade": { es: "Grupos de comunidad" },
+  "Grupo de comunidade": { es: "Grupo de comunidad" },
+  "Ativos": { es: "Activos" },
+  "Arquivados no WhatsApp": { es: "Archivados en WhatsApp" },
+  "Os arquivados aparecem aqui quando você arquiva ou desarquiva um grupo no WhatsApp.": { es: "Los archivados aparecen aquí cuando archivas o desarchivas un grupo en WhatsApp." },
+  "Comunidade": { es: "Comunidad" },
+  "Só admins enviam": { es: "Solo los admins envían" },
+  "membros": { es: "miembros" },
+  "admins": { es: "admins" },
   "Ligar mesmo assim": { es: "Activar de todos modos" },
   "Grupo sem nome": { es: "Grupo sin nombre" },
   "O número saiu deste grupo. Desligue a chave se não precisar mais dela.": {

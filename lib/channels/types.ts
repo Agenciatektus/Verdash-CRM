@@ -153,6 +153,13 @@ export interface OutboundContact {
 export interface ChannelGroup {
   chatId: string;
   subject: string | null;
+  /** Campos do diretório: só presentes quando o transporte os informa. Nunca há participantes aqui. */
+  participantCount?: number | null;
+  adminCount?: number;
+  /** Papel DESTE número no grupo; `null` = não se sabe. */
+  papel?: "dono" | "admin" | "membro" | null;
+  isAnnounce?: boolean;
+  tipo?: "grupo" | "comunidade" | "grupo_da_comunidade";
 }
 
 /**

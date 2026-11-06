@@ -24,6 +24,7 @@
  */
 import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
 import { samePhone } from "@/lib/channels/phone-variants";
+import type { ChannelGroup } from "@/lib/channels/types";
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 
 import { verdashFunctionsUrl } from "./credentials";
@@ -606,7 +607,7 @@ const JID_DE_GRUPO = /^[\d-]+@g\.us$/;
  * O FZAP muda o envelope entre versões (`data: [...]`, `data.Groups`, `data.groups`) e o nome
  * entre `Name`/`name`; o que não for JID de grupo fica de fora.
  */
-export function gruposDaLista(data: unknown): Array<{ chatId: string; subject: string | null }> {
+export function gruposDaLista(data: unknown): ChannelGroup[] {
   const d = data as Record<string, unknown> | unknown[] | null;
   const lista = Array.isArray(d)
     ? d
@@ -615,21 +616,50 @@ export function gruposDaLista(data: unknown): Array<{ chatId: string; subject: s
       : Array.isArray(d?.Groups)
         ? (d.Groups as unknown[])
         : [];
-  const out: Array<{ chatId: string; subject: string | null }> = [];
+  const out: ChannelGroup[] = [];
   for (const item of lista) {
     const g = (item ?? {}) as Record<string, unknown>;
     const chatId = String(g.chatId ?? g.JID ?? g.jid ?? "");
     if (!JID_DE_GRUPO.test(chatId)) continue;
     const nome = String(g.subject ?? g.Name ?? g.name ?? "").trim().slice(0, 200);
-    out.push({ chatId, subject: nome || null });
+    out.push({ chatId, subject: nome || null, ...detalhesDoGrupo(g) });
   }
   return out;
 }
 
+/**
+ * Contagens, papel e tipo. Pareado, a Verdash já devolve pronto (`adminCount`, `tipo`…);
+ * direto, vêm do FZAP cru e saem dos participantes, pela mesma regra do `crm-listar-grupos`.
+ * Os participantes são lidos só para contar: nunca saem desta função. No modo direto o
+ * telefone da sessão não está à mão, então `papel` fica `null`.
+ */
+function detalhesDoGrupo(g: Record<string, unknown>): Omit<ChannelGroup, "chatId" | "subject"> {
+  const gente = (Array.isArray(g.participants) ? g.participants : Array.isArray(g.Participants) ? g.Participants : []) as Array<
+    Record<string, unknown>
+  >;
+  const ehAdmin = (p: Record<string, unknown>) =>
+    p.isSuperAdmin === true || p.IsSuperAdmin === true || p.isAdmin === true || p.IsAdmin === true;
+  const total = g.participantCount ?? g.ParticipantCount;
+  const pai = String(g.linkedParentJid ?? g.LinkedParentJID ?? "");
+  const tipo =
+    g.tipo === "grupo" || g.tipo === "comunidade" || g.tipo === "grupo_da_comunidade"
+      ? g.tipo
+      : g.isParent === true || g.IsParent === true
+        ? "comunidade"
+        : pai.endsWith("@g.us")
+          ? "grupo_da_comunidade"
+          : "grupo";
+  return {
+    participantCount: typeof total === "number" ? total : gente.length || null,
+    adminCount: typeof g.adminCount === "number" ? g.adminCount : gente.filter(ehAdmin).length,
+    papel: g.papel === "dono" || g.papel === "admin" || g.papel === "membro" ? g.papel : null,
+    isAnnounce: g.isAnnounce === true || g.IsAnnounce === true,
+    tipo,
+  };
+}
+
 /** Grupos do número. Pareado pergunta à Verdash (o token daqui não vale no FZAP); direto, ao FZAP. */
-export async function verdashListarGrupos(
-  creds: VerdashCredentials,
-): Promise<Array<{ chatId: string; subject: string | null }>> {
+export async function verdashListarGrupos(creds: VerdashCredentials): Promise<ChannelGroup[]> {
   // 35 s: o `/group/list` traz todos os participantes (vários MB num número comercial).
   if (!creds.vinculoId) return gruposDaLista(await fzapRequest(creds, "/group/list", { method: "GET", timeoutMs: 35_000 }));
 
