@@ -5927,5 +5927,8 @@
   "Em alerta": "预警",
   "No prazo": "未逾期",
   "Ver só as urgentes": "仅看紧急",
-  "Dados que serão afetados": "将受影响的数据"
+  "Dados que serão afetados": "将受影响的数据",
+  "Nenhuma solicitação neste filtro": "此筛选下没有请求",
+  "Há mais resultados na próxima página.": "下一页还有更多结果。",
+  "Titular anonimizado": "数据主体已匿名化"
 }

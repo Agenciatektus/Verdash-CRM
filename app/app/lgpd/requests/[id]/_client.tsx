@@ -22,6 +22,8 @@ interface Props {
   id: string;
   /** Volta para a lista. O hub de `/account-suspended` passa o próprio endereço (ver `RequestsTable`). */
   hrefDaLista?: string;
+  /** Nível do título quando embutido sob outro (o hub de `/account-suspended` já tem h1 e h2). */
+  titulo?: "h1" | "h2" | "h3";
 }
 
 const TYPE_LABELS: Record<LgpdRequestType, string> = {
@@ -49,7 +51,7 @@ const STATUS_VARIANT: Record<
   pending_review: "warning",
 };
 
-export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Props) {
+export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests", titulo }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const { data, isLoading, error } = useLgpdRequest(id);
@@ -82,12 +84,13 @@ export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Pr
   return (
     <>
       <CabecalhoDaPagina
+        como={titulo}
         tituloNoCelular
         antes={<LinkDeVolta href={hrefDaLista}>{t("Solicitações")}</LinkDeVolta>}
         titulo={
           <span className="flex flex-wrap items-center gap-2">
             <span className="break-words">
-              {typeLabel} · {titular.nome ?? `#${shortId}`}
+              {typeLabel} · {!terminal && titular.nome ? titular.nome : `#${shortId}`}
             </span>
             <Badge variant={STATUS_VARIANT[request.status] ?? "neutral"}>{statusLabel}</Badge>
             {request.emergency && <Badge variant="error">{t("Urgente")}</Badge>}
@@ -137,8 +140,15 @@ export function LgpdRequestDetail({ id, hrefDaLista = "/app/lgpd/requests" }: Pr
       </Bloco>
 
       <Bloco titulo={t("Titular")}>
-        <Row label={t("Nome")} value={titular.nome ?? t("Sem nome no cadastro")} />
-        <Row label={t("Envio para")} value={titular.email_destino ?? "—"} />
+        {/* Minimização: depois de concluído ou falho, nome e e-mail do titular não voltam à tela. */}
+        {terminal ? (
+          <p className="text-muted-foreground">{t("Titular anonimizado")}</p>
+        ) : (
+          <>
+            <Row label={t("Nome")} value={titular.nome ?? t("Sem nome no cadastro")} />
+            <Row label={t("Envio para")} value={titular.email_destino ?? "—"} />
+          </>
+        )}
         {request.contact_id && <Row label="Contact ID" value={request.contact_id} mono />}
         {request.external_customer_id && (
           <Row label="External customer ID" value={request.external_customer_id} />

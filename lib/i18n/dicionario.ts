@@ -10315,6 +10315,9 @@ export const DICIONARIO: Traducoes = {
 
   // ─── LGPD: solicitações (fila, ficha, SLA, aprovação, prévia, auditoria) ───
   "Solicitações LGPD": { es: "Solicitudes LGPD" },
+  "Nenhuma solicitação neste filtro": { es: "Ninguna solicitud en este filtro" },
+  "Há mais resultados na próxima página.": { es: "Hay más resultados en la página siguiente." },
+  "Titular anonimizado": { es: "Titular anonimizado" },
   "Vence hoje": { es: "Vence hoy" },
   "dia em atraso": { es: "día de atraso" },
   "dias em atraso": { es: "días de atraso" },
