@@ -219,6 +219,20 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               onChange={(e) => set("media_retention_days", Number(e.target.value))}
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="group_media_retention_days">{t("Retenção de mídia de grupos (dias)")}</Label>
+            <Input
+              id="group_media_retention_days"
+              type="number"
+              min={7}
+              max={365}
+              value={form.group_media_retention_days}
+              onChange={(e) => set("group_media_retention_days", Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("Grupos recebem muita mídia. Fotos, vídeos e áudios de grupo são apagados depois deste prazo; o texto fica.")}
+            </p>
+          </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
               <Label htmlFor="media_retention_enforced">
@@ -226,10 +240,9 @@ export function TenantForm({ initial, onSave, onSaved }: Props) {
               </Label>
               <p className="text-xs text-muted-foreground">
                 {form.media_retention_enforced
-                  ? t("Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias.").replace(
-                      "{n}",
-                      String(form.media_retention_days),
-                    )
+                  ? t("Ligado: apaga a mídia e o anexo de nota interna com mais de {n} dias, e a mídia de grupo com mais de {g} dias.")
+                      .replace("{n}", String(form.media_retention_days))
+                      .replace("{g}", String(Math.min(form.group_media_retention_days, form.media_retention_days)))
                   : t("Desligado: a mídia das conversas e os anexos de nota interna não são apagados por idade.")}
               </p>
             </div>

@@ -94,6 +94,7 @@ const ACOES: Array<[string, () => Promise<{ ok: boolean; error?: string }>]> = [
         locale: "pt-BR",
         currency: "BRL",
         media_retention_days: 365,
+        group_media_retention_days: 30,
         media_retention_enforced: true,
         dpo_email: null,
         privacy_policy_url: null,
