@@ -589,9 +589,13 @@ test("ao alargar a janela SEM recarregar, a barra que sai de vista devolve o rod
   expect(estreito.alturaDaBarra, "a barra de abas não está à vista em 390px").toBeGreaterThanOrEqual(
     PISO_DE_TOQUE,
   );
-  // CONTROLE (o mesmo do caso de cima): estreito, a reserva continua valendo o
-  // que a barra mede, e o `<main>` desconta pelo menos isso.
-  expect(estreito.variavel).toBe(`${estreito.alturaDaBarra}px`);
+  // CONTROLE (o mesmo do caso de cima): estreito, o `<main>` desconta pelo
+  // menos o que a barra mede. ⚠️ A barra de hoje é a da `CascaDoCelular`
+  // (`components/mobile/BarraInferior.tsx`), que reserva pelo token
+  // `--mb-casca-baixo` no `mb:pb-*` da `AppShell`, não por `--rodape-ocupado`
+  // (essa variável era da barra antiga, `components/shell/BarraInferior.tsx`,
+  // que não é mais montada). Medir a variável aqui media o mecanismo antigo; o
+  // `padding-bottom` calculado é o que a pessoa perde, e segue medido.
   expect(estreito.descontado).toBeGreaterThanOrEqual(estreito.alturaDaBarra);
 
   // ── ALARGA A MESMA PÁGINA — sem `abrir`, sem `goto`, sem `reload` ──────────
