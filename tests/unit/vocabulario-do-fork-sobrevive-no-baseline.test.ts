@@ -90,6 +90,12 @@ describe("vocabulário do fork — o que as migrations 9xxx acrescentaram sobrev
     const provider = nossas.get("channel_sessions_provider_check");
     expect(provider, "channel_sessions_provider_check não aparece nas 9xxx").toBeDefined();
     expect(ordenado(provider!.valores)).toEqual(expect.arrayContaining(["instagram", "verdash"]));
+
+    // 9101: o PDV MercadoPhone é provider de tenant_integrations; o baseline não pode perdê-lo.
+    const integracoes = nossas.get("tenant_integrations_provider_check");
+    expect(integracoes, "tenant_integrations_provider_check não aparece nas 9xxx").toBeDefined();
+    expect(ordenado(integracoes!.valores)).toEqual(expect.arrayContaining(["mercadophone"]));
+    expect(ordenado(noBaseline.get("tenant_integrations_provider_check")!.valores)).toContain("mercadophone");
   });
 
   it("toda constraint que uma 9xxx nomeia existe no baseline", () => {

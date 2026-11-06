@@ -47,6 +47,8 @@ export const AUDIT_ACTIONS = [
   "nuvemshop.disconnected",
   "nuvemshop.pedidos_pipeline_set",
   "nuvemshop.oauth_failed",
+  "mercadophone.connected",
+  "mercadophone.disconnected",
   "nuvemshop.webhook_received",
   "nuvemshop.webhook_invalid_signature",
   "lead.created",

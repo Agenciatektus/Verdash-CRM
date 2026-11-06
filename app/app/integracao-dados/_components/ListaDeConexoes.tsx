@@ -60,7 +60,7 @@ function ResumoDasFontes({ conexao, canWrite }: { conexao: ConexaoExternaRow; ca
   }
   if (conexao.sources_count === 0) {
     return (
-      <p className="text-xs text-amber-700 dark:text-amber-400">
+      <p className="text-xs text-warning-fg">
         {t("O assistente ainda não enxerga nada deste banco.")}{" "}
         {canWrite && (
           <Link href={`/app/integracao-dados/${conexao.id}?fontes=1`} className="underline">
@@ -198,7 +198,7 @@ export function ListaDeConexoes({ initialData, canWrite }: Props) {
               <AvisoDoTeste aviso={conexao.last_test_aviso} />
               <ResumoDasFontes conexao={conexao} canWrite={canWrite} />
               {!conexao.customer_key_column && (
-                <p className="text-xs text-amber-700 dark:text-amber-400">
+                <p className="text-xs text-warning-fg">
                   {t(
                     "Nas conversas, o assistente consulta este banco sem limitar ao cliente que está falando. Escolha, em Editar, a coluna que identifica o cliente.",
                   )}

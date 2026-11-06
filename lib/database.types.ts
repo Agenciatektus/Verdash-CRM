@@ -4991,6 +4991,69 @@ export type Database = {
           },
         ];
       };
+      channel_session_group_directory: {
+        Row: {
+          admin_count: number;
+          archived: boolean | null;
+          archived_changed_at: string | null;
+          channel_session_id: string;
+          group_chat_id: string;
+          is_announce: boolean;
+          organization_id: string;
+          papel: string | null;
+          participant_count: number | null;
+          pinned: boolean | null;
+          refreshed_at: string;
+          subject: string | null;
+          tipo: string;
+        };
+        Insert: {
+          admin_count?: number;
+          archived?: boolean | null;
+          archived_changed_at?: string | null;
+          channel_session_id: string;
+          group_chat_id: string;
+          is_announce?: boolean;
+          organization_id: string;
+          papel?: string | null;
+          participant_count?: number | null;
+          pinned?: boolean | null;
+          refreshed_at?: string;
+          subject?: string | null;
+          tipo?: string;
+        };
+        Update: {
+          admin_count?: number;
+          archived?: boolean | null;
+          archived_changed_at?: string | null;
+          channel_session_id?: string;
+          group_chat_id?: string;
+          is_announce?: boolean;
+          organization_id?: string;
+          papel?: string | null;
+          participant_count?: number | null;
+          pinned?: boolean | null;
+          refreshed_at?: string;
+          subject?: string | null;
+          tipo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "channel_session_group_directory_channel_session_id_fkey";
+            columns: ["channel_session_id"];
+            isOneToOne: false;
+            referencedRelation: "channel_sessions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "channel_session_group_directory_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       channel_session_groups: {
         Row: {
           channel_session_id: string;

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
 import { exigirProvaDeMfa, mfaEmDividaEstrita, requireAuth } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { CadastroDoServidorMcpExterno } from "./_components/CadastroDoServidorMcpExterno";
@@ -41,19 +42,17 @@ export default async function ServidorMcpExternoPage() {
   const idioma = user.idioma;
 
   return (
-    <div className="flex h-full flex-col gap-6 p-6">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {traduzir("Servidor MCP externo", idioma)}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {traduzir(
-            "O endereço e a chave do sistema de fora que a IA desta empresa pode consultar. Só o dono da instalação vê esta tela.",
-            idioma,
-          )}
-        </p>
-      </header>
-      <CadastroDoServidorMcpExterno />
-    </div>
+    <Pagina largura="leitura">
+      <CabecalhoDaPagina
+        titulo={traduzir("Servidor MCP externo", idioma)}
+        descricao={traduzir(
+          "O endereço e a chave do sistema de fora que a IA desta empresa pode consultar. Só o dono da instalação vê esta tela.",
+          idioma,
+        )}
+      />
+      <SecaoDaPagina>
+        <CadastroDoServidorMcpExterno />
+      </SecaoDaPagina>
+    </Pagina>
   );
 }

@@ -74862,6 +74862,50 @@ create trigger trg_cobranca_compras_touch
   before update on public.cobranca_compras
   for each row execute function public.fn_touch_updated_at();
 
+-- ---- Historico de pagamentos relido no provedor (migration 9230) ----
+create table if not exists public.cobranca_pagamentos (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  provedor text not null check (provedor in ('stripe', 'asaas')),
+  pagamento_ref text not null check (length(pagamento_ref) between 1 and 255),
+  cobranca_ref text check (cobranca_ref is null or length(cobranca_ref) between 1 and 255),
+  valor_cents integer not null check (valor_cents >= 0),
+  moeda text not null check (moeda ~ '^[a-z]{3}$'),
+  status text not null default 'pago' check (status in ('pago', 'estornado_parcial', 'estornado', 'contestado')),
+  valor_estornado_cents integer not null default 0 check (valor_estornado_cents >= 0),
+  pago_em timestamptz not null,
+  estornado_em timestamptz,
+  plano_id uuid references public.cobranca_planos(id) on delete set null,
+  url_do_recibo text check (url_do_recibo is null or url_do_recibo ~ '^https?://'),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint cobranca_pagamentos_estorno_ate_o_valor check (valor_estornado_cents <= valor_cents),
+  constraint cobranca_pagamentos_provedor_ref_key unique (provedor, pagamento_ref)
+);
+
+create index if not exists cobranca_pagamentos_org_pago_em_idx
+  on public.cobranca_pagamentos (organization_id, pago_em desc);
+-- O webhook de disputa acha a empresa por aqui (a Dispute não traz o cliente).
+create index if not exists cobranca_pagamentos_cobranca_ref_idx
+  on public.cobranca_pagamentos (provedor, cobranca_ref) where cobranca_ref is not null;
+
+comment on table public.cobranca_pagamentos is
+  'Pagamentos das empresas, relidos no provedor por sincronizar (migration 9230). Unico em (provedor, pagamento_ref). Leitura: platform admin e admin da org; escrita so service_role. Sem dado de cartao.';
+
+alter table public.cobranca_pagamentos enable row level security;
+drop policy if exists tenant_isolation_cobranca_pagamentos_select on public.cobranca_pagamentos;
+create policy tenant_isolation_cobranca_pagamentos_select on public.cobranca_pagamentos
+  for select to authenticated
+  using ((select public.fn_is_platform_admin()) or public.fn_role_at_least(organization_id, 'admin'));
+revoke all on public.cobranca_pagamentos from anon, authenticated;
+grant select on public.cobranca_pagamentos to authenticated;
+grant select, insert, update, delete on public.cobranca_pagamentos to service_role;
+
+drop trigger if exists trg_cobranca_pagamentos_touch on public.cobranca_pagamentos;
+create trigger trg_cobranca_pagamentos_touch
+  before update on public.cobranca_pagamentos
+  for each row execute function public.fn_touch_updated_at();
+
 -- ---- fatia 3 da compra pela landing (migration 9081): cria a empresa a partir da compra ----
 -- Mesmo corpo da migration 9081. Fica ANTES da VARREDURA anon porque cria funcao.
 
@@ -78606,7 +78650,45 @@ $function$;
 revoke execute on function public.fn_enfileirar_midia_vencida(integer) from public, anon, authenticated;
 grant execute on function public.fn_enfileirar_midia_vencida(integer) to service_role;
 
--- ---- SUBIDA 1.99 (migration 9101): fn_enfileirar_midia_vencida integrada ----
+-- ---- diretorio (cache) dos grupos de cada numero (migration 9223) ----
+-- Mesmo bloco da migration 9223.
+
+-- manifest: 9223 — diretório (cache) dos grupos de cada número: a tela Canais > Grupos lia o FZAP inteiro a cada abertura (5,8 MB, até 30 s). Tabela própria, separada de channel_session_groups, que significa "grupo LIGADO". Guarda também archived/pinned espelhados do WhatsApp por evento.
+-- Participantes nunca entram aqui: só contagens. Leitura só da própria organização; escrita só service_role.
+
+set lock_timeout = '3s';
+
+create table if not exists public.channel_session_group_directory (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  channel_session_id uuid not null references public.channel_sessions(id) on delete cascade,
+  group_chat_id text not null check (group_chat_id like '%@g.us'),
+  subject text,
+  participant_count integer,
+  admin_count integer not null default 0,
+  papel text check (papel in ('dono', 'admin', 'membro')),
+  is_announce boolean not null default false,
+  tipo text not null default 'grupo' check (tipo in ('grupo', 'comunidade', 'grupo_da_comunidade')),
+  archived boolean,
+  pinned boolean,
+  archived_changed_at timestamptz,
+  refreshed_at timestamptz not null default now(),
+  primary key (channel_session_id, group_chat_id)
+);
+create index if not exists idx_channel_session_group_directory_org
+  on public.channel_session_group_directory (organization_id);
+alter table public.channel_session_group_directory enable row level security;
+
+drop policy if exists channel_session_group_directory_select on public.channel_session_group_directory;
+create policy channel_session_group_directory_select on public.channel_session_group_directory
+  for select using (organization_id in (select public.fn_user_org_ids()));
+-- O default ACL de tabelas em `public` concede tudo a anon/authenticated (CLAUDE.md, 0258).
+revoke insert, update, delete, truncate on public.channel_session_group_directory from anon, authenticated;
+-- Grant explícito (9037): desde 30/10/2026 tabela sem grant próprio nasce fora da Data API.
+grant select on public.channel_session_group_directory to authenticated;
+grant select, insert, update, delete on public.channel_session_group_directory to service_role;
+
+notify pgrst, 'reload schema';
+-- ---- SUBIDA 1.99 (migration 9238): fn_enfileirar_midia_vencida integrada ----
 -- 9222 (prazo de mídia de grupo) + passo 2c da 9050 do upstream (#3756).
 alter table public.conversation_notes
   add column if not exists media_expired_at timestamptz,
@@ -84013,3 +84095,15 @@ begin
   end loop;
 end $grants_por_coluna$;
 
+
+-- ---- provider 'mercadophone' em tenant_integrations (migration 9101) ----
+-- Mesmo bloco da migration 9101. Nao cria funcao: pode ficar depois da VARREDURA anon.
+
+-- manifest: 9101 — tenant_integrations_provider_check aceita 'mercadophone' (PDV; conexão por dois tokens colados, sem OAuth)
+
+alter table public.tenant_integrations
+  drop constraint if exists tenant_integrations_provider_check;
+alter table public.tenant_integrations
+  add constraint tenant_integrations_provider_check check (provider in (
+    'nuvemshop', 'vtex', 'shopify', 'mercadophone'
+  ));

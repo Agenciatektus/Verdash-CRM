@@ -27,8 +27,8 @@ select count(*) from crm_leads l
                     and s.organization_id = l.organization_id);
 ```
 
-### Objetos redefinidos pelos dois lados → migration `9101`
-`20261106130000_9101_integracao_da_subida_1_99.sql` roda por último.
+### Objetos redefinidos pelos dois lados → migration `9238`
+`20261106200000_9238_integracao_da_subida_1_99.sql` roda por último.
 
 | objeto | upstream | fork | versão integrada |
 |---|---|---|---|
@@ -38,7 +38,7 @@ select count(*) from crm_leads l
 ### baseline.sql
 Montado com `git merge-file --diff3`. Grant de `fn_validate_lost_reason_required`: o nosso (`revoke ... from public, anon`).
 Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndice Tektus segue no fim). Bloco
-"SUBIDA 1.99 (migration 9101)" logo antes da VARREDURA anon.
+"SUBIDA 1.99 (migration 9238)" logo antes da VARREDURA anon.
 
 ### Antes do deploy
 - Índice sem `concurrently` em tabela grande: `conversations_org_sector_awaiting` (9062, parcial `sector_id is not null`,
@@ -46,7 +46,7 @@ Os dois blocos com base vazia: o do upstream primeiro e o nosso depois (apêndic
   `create index concurrently if not exists conversations_org_sector_awaiting on public.conversations (organization_id, sector_id, awaiting_since) where sector_id is not null;`
   Os demais (avisos, honorários, entregas de aviso, `agent_inbox_items`) são de tabela pequena.
 - A 9050 só acrescenta colunas nullable em `conversation_notes` (sem backfill).
-- Tudo num `db push` só: entre a 9050 e a 9101 a produção fica com a função do upstream sem o prazo de grupo.
+- Tudo num `db push` só: entre a 9050 e a 9238 a produção fica com a função do upstream sem o prazo de grupo.
 
 ## Decisões por área
 | área | decisão |

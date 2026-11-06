@@ -1,6 +1,6 @@
--- manifest: 9101 — Tektus: a subida do upstream 1.99 sem um lado apagar o outro. Roda por último e deixa a versão INTEGRADA de fn_enfileirar_midia_vencida: o prazo de mídia de GRUPO da nossa 9222 + o rastro da nota que perdeu o anexo por retenção (media_expired_at/media_retention_days no passo 2c) da 9050 do upstream (#3756). Repete as duas colunas da 9050 (add column if not exists) para não depender da ordem. Idempotente.
+-- manifest: 9238 — Tektus: a subida do upstream 1.99 sem um lado apagar o outro. Roda por último e deixa a versão INTEGRADA de fn_enfileirar_midia_vencida: o prazo de mídia de GRUPO da nossa 9222 + o rastro da nota que perdeu o anexo por retenção (media_expired_at/media_retention_days no passo 2c) da 9050 do upstream (#3756). Repete as duas colunas da 9050 (add column if not exists) para não depender da ordem. Idempotente.
 --
--- 9101: integração da subida do upstream 1.99 (mesmo defeito de ordem da 9099/9100).
+-- 9238: integração da subida do upstream 1.99 (mesmo defeito de ordem da 9099/9100).
 -- A 9050 do upstream (carimbo 30/10) roda DEPOIS do que já está em produção e a
 -- nossa 9222 (06/11) redefine a mesma função: quem rodasse por último apagaria o
 -- outro. Esta é a versão letra a letra da 9222 com o passo 2c da 9050.
