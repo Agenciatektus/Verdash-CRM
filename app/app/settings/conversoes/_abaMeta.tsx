@@ -24,7 +24,7 @@ export function AbaMeta({
   idioma: Idioma;
   leituraConectada: boolean;
   vendaPeloCanal: boolean;
-  identidade: { pageId: string; whatsappBusinessAccountId: string };
+  identidade: { pageId: string | null; whatsappBusinessAccountId: string | null };
   etapasAbertas: EtapaAberta[];
   /** A leitura das etapas não falhou. */
   podeListarEtapas: boolean;
