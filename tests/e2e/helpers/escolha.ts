@@ -10,3 +10,16 @@ import type { Locator } from "@playwright/test";
 export function nativoDaEscolha(gatilho: Locator): Locator {
   return gatilho.locator("xpath=following-sibling::select[@data-escolha-nativa][1]");
 }
+
+/**
+ * O `<input>` escondido de um `CampoDeData` (`components/ui/campo-de-data.tsx`):
+ * o visível é um botão que abre o calendário; o valor viaja no nativo
+ * (`data-campo-nativo`), que repassa a mudança. Achado pelo `<label>` que
+ * começa com o rótulo — dois candidatos reprovam pelo strict mode.
+ */
+export function nativoDoCampoDeData(dentroDe: Locator, rotulo: string): Locator {
+  return dentroDe
+    .locator("label")
+    .filter({ hasText: new RegExp(`^${rotulo}`) })
+    .locator("input[data-campo-nativo]");
+}

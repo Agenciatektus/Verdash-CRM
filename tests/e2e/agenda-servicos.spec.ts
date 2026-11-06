@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { nativoDaEscolha } from "./helpers/escolha";
+import { nativoDaEscolha, nativoDoCampoDeData } from "./helpers/escolha";
 import { createClient } from "@supabase/supabase-js";
 import { test, expect, type Page } from "./helpers/test";
 import { credenciaisSupabaseDeTeste } from "../../scripts/lib/env-de-teste";
@@ -102,7 +102,7 @@ test("painel configura, bloqueia e reserva três pessoas pela conversa; publica�
   await expect(nativoDaEscolha(form.getByLabel("Como reservar", { exact: true }))).toHaveValue("collective_unlimited");
   await clickAndAssert(page, "/api/v1/agenda/servicos", "Salvar programação");
   await form.getByRole("tab", { name: "Horários", exact: true }).click();
-  await form.getByLabel("Data", { exact: true }).fill(day);
+  await nativoDoCampoDeData(form, "Data").fill(day);
   await form.getByRole("tab", { name: "Horários", exact: true }).click();
   await clickAndAssert(page, "/api/v1/agenda/servicos", "Atualizar fontes e conferir");
   await expect(form.getByRole("list", { name: "Prévia dos horários" })).toContainText("Disponível");
@@ -123,7 +123,7 @@ test("painel configura, bloqueia e reserva três pessoas pela conversa; publica�
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2)).toBe(true);
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(`/app/inbox?id=${f.conversation}`);
   await page.getByRole("button", { name: "Reservar serviço", exact: true }).click();
-  const sheet = page.getByRole("dialog"); await sheet.getByLabel("Data", { exact: true }).fill(day);
+  const sheet = page.getByRole("dialog"); await nativoDoCampoDeData(sheet, "Data").fill(day);
   await sheet.getByRole("button", { name: "Consultar horários", exact: true }).click();
   await sheet.getByRole("button", { name: /14:00.*Sem limite automático/ }).click();
   await sheet.getByLabel("Pessoas atendidas (uma por linha)", { exact: true }).fill("Pessoa fictícia A\nPessoa fictícia B\nPessoa fictícia C");
