@@ -34,10 +34,20 @@ describe("grupos do número", () => {
   });
   it("lista os grupos com a organização da sessão, nunca do body", async () => {
     autorizado();
-    vi.mocked(listarGruposDoNumero).mockResolvedValue([{ chatId: "1@g.us", subject: "A", enabled: false, enabledAt: null, presente: true, iaResponde: false }]);
-    const res = await GET(new NextRequest("http://x"), ctx);
+    vi.mocked(listarGruposDoNumero).mockResolvedValue({
+      grupos: [{ chatId: "1@g.us", subject: "A", enabled: false, enabledAt: null, presente: true, iaResponde: false }] as never,
+      atualizadoEm: "2026-09-23T12:00:00.000Z",
+      desatualizado: false,
+    });
+    const res = await GET(new NextRequest("http://x?refresh=1"), ctx);
     expect(res.status).toBe(200);
-    expect(listarGruposDoNumero).toHaveBeenCalledWith(expect.anything(), { organizationId: ORG, channelSessionId: SESS });
+    expect(listarGruposDoNumero).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: ORG, channelSessionId: SESS, refresh: true }),
+    );
+    const j = await res.json();
+    expect(j.data).toHaveLength(1);
+    expect(j.meta).toEqual({ atualizado_em: "2026-09-23T12:00:00.000Z", desatualizado: false });
   });
   it("liga um grupo", async () => {
     autorizado();

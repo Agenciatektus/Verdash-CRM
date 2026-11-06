@@ -98,11 +98,29 @@ describe("canal Verdash: mensagem de grupo", () => {
 describe("lista de grupos do número (Conexões › Grupos)", () => {
   it("lê os envelopes do FZAP e da Verdash e descarta o que não é grupo", async () => {
     const { gruposDaLista } = await import("@/lib/channels/verdash/client");
-    expect(gruposDaLista([{ JID: "1-2@g.us", Name: "Equipe" }, { JID: "5511@s.whatsapp.net", Name: "p" }])).toEqual([
-      { chatId: "1-2@g.us", subject: "Equipe" },
-    ]);
-    expect(gruposDaLista({ Groups: [{ JID: "9@g.us", Name: " " }] })).toEqual([{ chatId: "9@g.us", subject: null }]);
-    expect(gruposDaLista([{ chatId: "7@g.us", subject: "Vendas" }])).toEqual([{ chatId: "7@g.us", subject: "Vendas" }]);
+    const so = (l: unknown) => gruposDaLista(l).map((g) => ({ chatId: g.chatId, subject: g.subject }));
+    expect(so([{ JID: "1-2@g.us", Name: "Equipe" }, { JID: "5511@s.whatsapp.net", Name: "p" }])).toEqual([{ chatId: "1-2@g.us", subject: "Equipe" }]);
+    expect(so({ Groups: [{ JID: "9@g.us", Name: " " }] })).toEqual([{ chatId: "9@g.us", subject: null }]);
+    expect(so([{ chatId: "7@g.us", subject: "Vendas" }])).toEqual([{ chatId: "7@g.us", subject: "Vendas" }]);
     expect(gruposDaLista(null)).toEqual([]);
+  });
+
+  it("modo direto: calcula contagens e tipo do FZAP cru, sem devolver participantes", async () => {
+    const { gruposDaLista } = await import("@/lib/channels/verdash/client");
+    const [g, com, filho] = gruposDaLista([
+      { jid: "1@g.us", name: "G", participantCount: 8, isAnnounce: true, participants: [{ jid: "a", isAdmin: true }, { jid: "b", isSuperAdmin: true }, { jid: "c" }] },
+      { jid: "2@g.us", name: "C", isParent: true },
+      { jid: "3@g.us", name: "F", linkedParentJid: "2@g.us" },
+    ]);
+    expect(g).toEqual({ chatId: "1@g.us", subject: "G", participantCount: 8, adminCount: 2, papel: null, isAnnounce: true, tipo: "grupo" });
+    expect(com?.tipo).toBe("comunidade");
+    expect(filho?.tipo).toBe("grupo_da_comunidade");
+  });
+
+  it("modo pareado: aceita o que a Verdash já devolve pronto", async () => {
+    const { gruposDaLista } = await import("@/lib/channels/verdash/client");
+    expect(gruposDaLista([{ chatId: "4@g.us", subject: "P", participantCount: 3, adminCount: 1, papel: "dono", isAnnounce: false, tipo: "comunidade" }])).toEqual([
+      { chatId: "4@g.us", subject: "P", participantCount: 3, adminCount: 1, papel: "dono", isAnnounce: false, tipo: "comunidade" },
+    ]);
   });
 });

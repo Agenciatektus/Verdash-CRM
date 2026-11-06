@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_CHANNEL_PROVIDER } from "@/lib/channels/capabilities";
+import type { ChannelGroup } from "@/lib/channels/types";
 import { logger } from "@/lib/logger";
 
 import {
@@ -10,6 +11,7 @@ import {
   GrupoError,
   listarGruposDoNumero,
   type DepsDeGrupos,
+  type LinhaDoDiretorio,
 } from "./servico";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -25,6 +27,9 @@ function deps(
     confirma?: boolean;
     /** Grupos com a chave da IA ligada (`ia_responde = true`). */
     iaLiberado?: string[];
+    diretorio?: LinhaDoDiretorio[];
+    agora?: string;
+    falhaAoVivo?: boolean;
   } = {},
 ) {
   const linhas = new Map<
@@ -46,6 +51,8 @@ function deps(
       ia_responde: (opts.iaLiberado ?? []).includes(g),
     });
   }
+  // Diretório em memória: começa vazio (ou com `opts.diretorio`), `gravarDiretorio` o enche como o banco.
+  let diretorio: LinhaDoDiretorio[] = opts.diretorio ?? [];
   const d: DepsDeGrupos & { setGroupIntake: ReturnType<typeof vi.fn>; audit: ReturnType<typeof vi.fn> } = {
     db: {
       lerSessao: vi.fn(async () => ({
@@ -54,6 +61,23 @@ function deps(
         groupsCapability: opts.capability ?? "full",
       })),
       listarLinhas: vi.fn(async () => [...linhas.values()]),
+      lerDiretorio: vi.fn(async () => diretorio),
+      gravarDiretorio: vi.fn(async (_o: string, _s: string, grupos: ChannelGroup[], agoraIso: string) => {
+        const antigos = new Map(diretorio.map((l) => [l.group_chat_id, l]));
+        diretorio = grupos.map((g) => ({
+          group_chat_id: g.chatId,
+          subject: g.subject,
+          participant_count: g.participantCount ?? null,
+          admin_count: g.adminCount ?? 0,
+          papel: g.papel ?? null,
+          is_announce: g.isAnnounce ?? false,
+          tipo: g.tipo ?? "grupo",
+          // archived/pinned sobrevivem ao refresh, como no upsert que não os envia.
+          archived: antigos.get(g.chatId)?.archived ?? null,
+          pinned: antigos.get(g.chatId)?.pinned ?? null,
+          refreshed_at: agoraIso,
+        }));
+      }),
       contarLigados: vi.fn(async () => [...linhas.values()].filter((l) => l.enabled).length),
       gravarLinha: vi.fn(async (_o, _s, row) => {
         // Como no banco: linha NOVA nasce com a chave da IA no default
@@ -71,13 +95,16 @@ function deps(
         return { id: "row-" + chatId };
       }),
     },
-    listGroups: vi.fn(async () => [
-      { chatId: G1, subject: "Cliente A" },
-      { chatId: G2, subject: "Família" },
-    ]),
+    listGroups: vi.fn(async () => {
+      if (opts.falhaAoVivo) throw new Error("fzap_fora");
+      return [
+        { chatId: G1, subject: "Cliente A", participantCount: 10, adminCount: 2, papel: "admin" as const, isAnnounce: true, tipo: "grupo" as const },
+        { chatId: G2, subject: "Família" },
+      ];
+    }),
     setGroupIntake: vi.fn(async () => opts.confirma ?? true),
     audit: vi.fn(async () => {}),
-    agora: () => new Date("2026-09-23T12:00:00.000Z"),
+    agora: () => new Date(opts.agora ?? "2026-09-23T12:00:00.000Z"),
   };
   return d;
 }
@@ -85,14 +112,20 @@ const base = { organizationId: ORG, channelSessionId: SESS, subject: "Cliente A"
 
 describe("listarGruposDoNumero", () => {
   it("junta a lista do WhatsApp com o estado gravado; o padrão é desligado", async () => {
-    const r = await listarGruposDoNumero(deps({ ligados: [G1] }), { organizationId: ORG, channelSessionId: SESS });
-    expect(r).toEqual([
-      { chatId: G1, subject: "Cliente A", enabled: true, enabledAt: "2026-09-23T00:00:00.000Z", presente: true, iaResponde: false },
-      { chatId: G2, subject: "Família", enabled: false, enabledAt: null, presente: true, iaResponde: false },
+    const { grupos } = await listarGruposDoNumero(deps({ ligados: [G1] }), { organizationId: ORG, channelSessionId: SESS });
+    expect(grupos).toEqual([
+      {
+        chatId: G1, subject: "Cliente A", enabled: true, enabledAt: "2026-09-23T00:00:00.000Z", presente: true, iaResponde: false,
+        participantCount: 10, adminCount: 2, papel: "admin", isAnnounce: true, tipo: "grupo", archived: null, pinned: null,
+      },
+      {
+        chatId: G2, subject: "Família", enabled: false, enabledAt: null, presente: true, iaResponde: false,
+        participantCount: null, adminCount: 0, papel: null, isAnnounce: false, tipo: "grupo", archived: null, pinned: null,
+      },
     ]);
   });
   it("#2729: a chave da IA vem junto de cada grupo, e o padrão é DESLIGADO", async () => {
-    const r = await listarGruposDoNumero(deps({ ligados: [G1], iaLiberado: [G1] }), {
+    const { grupos: r } = await listarGruposDoNumero(deps({ ligados: [G1], iaLiberado: [G1] }), {
       organizationId: ORG,
       channelSessionId: SESS,
     });
@@ -106,7 +139,7 @@ describe("listarGruposDoNumero", () => {
       .rejects.toMatchObject({ code: "canal_sem_grupos" });
   });
   it("grupo ligado que o número já deixou continua na lista, marcado presente=false, para poder ser desligado", async () => {
-    const r = await listarGruposDoNumero(deps({ ligados: [G1, G3_ORFAO] }), {
+    const { grupos: r } = await listarGruposDoNumero(deps({ ligados: [G1, G3_ORFAO] }), {
       organizationId: ORG,
       channelSessionId: SESS,
     });
@@ -117,6 +150,7 @@ describe("listarGruposDoNumero", () => {
       enabledAt: "2026-09-23T00:00:00.000Z",
       presente: false,
       iaResponde: false,
+      participantCount: null, adminCount: 0, papel: null, isAnnounce: false, tipo: "grupo", archived: null, pinned: null,
     });
   });
   it("grupo DESLIGADO que o número já deixou não aparece — não há nada para desligar", async () => {
@@ -124,7 +158,57 @@ describe("listarGruposDoNumero", () => {
     // aparece no `listarLinhas` também (nenhuma linha foi criada), então este
     // caso é o default: nada extra na lista além de G1/G2.
     const r = await listarGruposDoNumero(deps(), { organizationId: ORG, channelSessionId: SESS });
-    expect(r).toHaveLength(2);
+    expect(r.grupos).toHaveLength(2);
+  });
+});
+
+describe("listarGruposDoNumero: cache do diretório", () => {
+  const linha = (id: string, refreshed_at: string, extra: Partial<LinhaDoDiretorio> = {}): LinhaDoDiretorio => ({
+    group_chat_id: id, subject: "Do cache", participant_count: 5, admin_count: 1, papel: null, is_announce: false,
+    tipo: "grupo", archived: null, pinned: null, refreshed_at, ...extra,
+  });
+  const e = { organizationId: ORG, channelSessionId: SESS };
+
+  it("cache com menos de 10 min: devolve sem chamar o WhatsApp", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:55:00.000Z", { archived: true })] });
+    const r = await listarGruposDoNumero(d, e);
+    expect(d.listGroups).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ atualizadoEm: "2026-09-23T11:55:00.000Z", desatualizado: false });
+    expect(r.grupos[0]).toMatchObject({ chatId: G1, subject: "Do cache", archived: true });
+  });
+  it("cache velho com `agendar`: responde na hora e atualiza depois", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:00:00.000Z")] });
+    const tarefas: Array<() => Promise<void>> = [];
+    const r = await listarGruposDoNumero(d, { ...e, agendar: (t) => tarefas.push(t) });
+    expect(d.listGroups).not.toHaveBeenCalled();
+    expect(r.grupos[0]?.subject).toBe("Do cache");
+    await tarefas[0]!();
+    expect(d.listGroups).toHaveBeenCalledTimes(1);
+    expect(d.db.gravarDiretorio).toHaveBeenCalled();
+  });
+  it("cache velho sem `agendar`: atualiza e espera; archived/pinned sobrevivem; quem sumiu sai", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:00:00.000Z", { archived: true, pinned: true }), linha(G3_ORFAO, "2026-09-23T11:00:00.000Z")] });
+    const r = await listarGruposDoNumero(d, e);
+    expect(r.grupos.map((g) => g.chatId)).toEqual([G1, G2]);
+    expect(r.grupos[0]).toMatchObject({ subject: "Cliente A", archived: true, pinned: true });
+    expect(r.atualizadoEm).toBe("2026-09-23T12:00:00.000Z");
+  });
+  it("sem cache: busca ao vivo e grava", async () => {
+    const d = deps();
+    await listarGruposDoNumero(d, e);
+    expect(d.listGroups).toHaveBeenCalledTimes(1);
+    expect(d.db.gravarDiretorio).toHaveBeenCalledTimes(1);
+  });
+  it("refresh força ao vivo mesmo com cache novo", async () => {
+    const d = deps({ diretorio: [linha(G1, "2026-09-23T11:59:00.000Z")] });
+    await listarGruposDoNumero(d, { ...e, refresh: true });
+    expect(d.listGroups).toHaveBeenCalledTimes(1);
+  });
+  it("falha ao vivo com cache: devolve o cache marcado desatualizado; sem cache: erro", async () => {
+    const d = deps({ falhaAoVivo: true, diretorio: [linha(G1, "2026-09-23T11:00:00.000Z")] });
+    const r = await listarGruposDoNumero(d, { ...e, refresh: true });
+    expect(r).toMatchObject({ desatualizado: true, atualizadoEm: "2026-09-23T11:00:00.000Z" });
+    await expect(listarGruposDoNumero(deps({ falhaAoVivo: true }), e)).rejects.toThrow("fzap_fora");
   });
 });
 
@@ -289,7 +373,7 @@ describe("definirIaDoGrupo", () => {
       expect.objectContaining({ action: "channel.group_ai_disabled", metadata: expect.objectContaining({ ia_responde: false }) }),
     );
     // A chave não muda quem está na inbox: o grupo continua ligado.
-    const lista = await listarGruposDoNumero(d, { organizationId: ORG, channelSessionId: SESS });
+    const { grupos: lista } = await listarGruposDoNumero(d, { organizationId: ORG, channelSessionId: SESS });
     expect(lista.find((g) => g.chatId === G1)).toMatchObject({ enabled: true, iaResponde: false });
   });
 
