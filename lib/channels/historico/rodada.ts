@@ -72,9 +72,30 @@ import { getWahaClient } from "@/lib/waha/client";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { criarFonteIzzy } from "@/lib/channels/historico/fonte-izzy";
 import { ehReacao, parseChatId, type WahaPayload } from "@/lib/waha/ingest";
+import { resumirErroDaImportacao } from "@/lib/channels/historico/resumo-do-erro";
 import { MARGEM_PARA_CHAMADA_MS } from "@/lib/channels/historico/prazo";
 import { FonteAdiada, mensagemDeErro, type FonteDeHistorico, type Importacao } from "@/lib/channels/historico/comum";
-import { garantirContatoEConversa, gravarMensagens } from "@/lib/channels/historico/rodada-gravar";
+import {
+  garantirContatoEConversa,
+  garantirConversaDoContato,
+  gravarMensagens,
+  type MensagemGravadaDaRodada,
+} from "@/lib/channels/historico/rodada-gravar";
+import {
+  fichaDoCrmParaOChat,
+  telefonesDoChatParaFicha,
+  type EscopoDaImportacao,
+  type FichaDoCrm,
+} from "@/lib/channels/historico/fichas-do-crm";
+import {
+  avisarClienteSemResposta,
+  avisarResumoDaRecuperacao,
+  fecharResumoDaRecuperacao,
+} from "@/lib/channels/historico/avisos-da-queda";
+import {
+  aplicarEfeitosDaRecuperacao,
+  type EntradaDaRecuperacao,
+} from "@/lib/channels/pos-entrada";
 import { resolverMidias } from "@/lib/channels/historico/rodada-midia";
 import { titularApagadoNaPagina } from "@/lib/channels/historico/rodada-titular";
 
@@ -107,7 +128,41 @@ export interface CursorDaImportacao {
   adiamentos?: { chave: string; n: number };
   /** Conversas sem telefone (Instagram do Izzy), contadas uma vez: `ate` é a maior posição já contada. */
   semTelefone?: { n: number; ate: number };
+  /**
+   * Escopo `so_crm`: a ficha que a conversa de `indiceConversa` já casou. A
+   * decisão sai da 1ª página (telefones do chat e `remoteJidAlt` das mensagens);
+   * uma rodada que retoma a conversa no meio lê outra página, que pode não ter o
+   * `remoteJidAlt` — reconsultar ali faria o resto da conversa virar "sem ficha".
+   * `null` = ainda não decidida nesta conversa. Vale SÓ para o chat gravado em
+   * `fichaChatId`: o cursor guarda a conversa pela posição na lista, e se a lista
+   * mudar de ordem entre rodadas a posição aponta outro chat — reaproveitar a
+   * ficha ali gravaria as mensagens de um cliente na ficha de outro.
+   */
+  fichaContactId?: string | null;
+  fichaChatId?: string | null;
+  /**
+   * Só da importação da queda (Spec 32 §2): por conversa que recebeu mensagem
+   * recuperada, quem é o contato e de quem foi a última mensagem gravada. É o
+   * que o fim da importação lê para avisar a equipe. Vive fora do cursor de
+   * posição (ver `tocadas` em `rodarUmaRodada`): não volta atrás quando a página
+   * é refeita, porque a mensagem que ele descreve já foi gravada.
+   */
+  tocadas?: Record<string, TocadaDaRecuperacao>;
 }
+
+export interface TocadaDaRecuperacao {
+  contactId: string;
+  /** Lado da mensagem mais nova recuperada nessa conversa. */
+  ultima: "in" | "out";
+  /** ISO da mensagem de `ultima` (a mais nova vence). */
+  em: string;
+}
+
+/** O cursor de posição: o que a rodada firma e refaz. `tocadas` tem vida própria. */
+type CursorDePosicao = Omit<CursorDaImportacao, "tocadas"> &
+  Required<Omit<CursorDaImportacao, "adiamentos" | "semTelefone" | "tocadas">>;
+
+export type { MensagemGravadaDaRodada };
 
 /** Adiamentos seguidos na mesma posição antes de desistir da conversa (senão a importação não conclui nunca). */
 const ADIAMENTOS_MAXIMOS = 5;
@@ -122,7 +177,8 @@ export interface OpcoesDaRodada {
   relogio?: () => number;
 }
 
-export type StatusDaImportacao = "previa" | "rodando" | "concluida" | "erro" | "cancelada";
+/** `aguardando`: a importação da queda espera o número voltar a ler (Spec 32 §2); a rodada não a roda. */
+export type StatusDaImportacao = "previa" | "aguardando" | "rodando" | "concluida" | "erro" | "cancelada";
 
 export interface ResultadoDaRodada {
   /**
@@ -184,18 +240,46 @@ export async function rodarUmaRodada(
   if (imp.status !== "rodando") throw new Error("importacao_nao_esta_rodando");
 
   const cursorSalvo = imp.cursor ?? {};
-  const cursor: CursorDaImportacao & Required<Omit<CursorDaImportacao, "adiamentos" | "semTelefone">> = {
+  const escopo: EscopoDaImportacao = imp.escopo ?? "todos";
+  const origemDaQueda = imp.origem === "queda";
+  // Janela com fim (Spec 32 §1): `desde` manda sobre `dias`; `ate` é exclusivo e
+  // filtra LOCAL, na rodada (o canal só filtra o início).
+  const desdeDaLinha = imp.desde ? Math.floor(Date.parse(imp.desde) / 1000) : null;
+  const ateSegundos = imp.ate ? Math.floor(Date.parse(imp.ate) / 1000) : null;
+  const dentroDoFim = (p: WahaPayload) =>
+    // Sem instante numérico não há como provar que está antes do fim: com `ate`
+    // definido fica fora (o mapeador gravaria 1970 e ela viraria a "última" da conversa).
+    ateSegundos === null || (typeof p.timestamp === "number" && p.timestamp < ateSegundos);
+  const cursor: CursorDePosicao = {
     indiceConversa: cursorSalvo.indiceConversa ?? 0,
     offsetMensagens: cursorSalvo.offsetMensagens ?? 0,
-    desde: cursorSalvo.desde ?? Math.floor(Date.now() / 1000) - imp.dias * SEGUNDOS_POR_DIA,
+    desde:
+      cursorSalvo.desde ??
+      desdeDaLinha ??
+      Math.floor(Date.now() / 1000) - (imp.dias ?? 0) * SEGUNDOS_POR_DIA,
     conferida: cursorSalvo.conferida ?? false,
     adiamentos: cursorSalvo.adiamentos,
     semTelefone: cursorSalvo.semTelefone,
+    fichaContactId: cursorSalvo.fichaContactId ?? null,
+    fichaChatId: cursorSalvo.fichaChatId ?? null,
+  };
+  // Só da queda; mudar `tocadas` não mexe no cursor de posição (não é refeito).
+  let tocadas: Record<string, TocadaDaRecuperacao> = origemDaQueda ? { ...(cursorSalvo.tocadas ?? {}) } : {};
+  /** Manual grava o cursor como sempre; a queda leva também as conversas tocadas. */
+  const cursorParaGravar = (): CursorDaImportacao => {
+    // `fichaContactId` só vai ao banco quando há ficha decidida: o cursor da
+    // importação manual (`todos`) fica exatamente como sempre foi.
+    const { fichaContactId, fichaChatId, ...posicao } = cursor;
+    const base: CursorDaImportacao =
+      fichaContactId && fichaChatId ? { ...posicao, fichaContactId, fichaChatId } : posicao;
+    return origemDaQueda ? { ...base, tocadas } : base;
   };
   const irParaConversa = (posicao: number) => {
     cursor.indiceConversa = posicao;
     cursor.offsetMensagens = 0;
     cursor.conferida = false;
+    cursor.fichaContactId = null;
+    cursor.fichaChatId = null;
   };
   const desta = { conversas: 0, gravadas: 0, existentes: 0, ignoradas: 0 };
   // Fora de `desta` de propósito: mídia resolvida não volta a `pendente` quando a
@@ -214,7 +298,7 @@ export async function rodarUmaRodada(
     const { data, error } = await admin
       .from("importacoes_de_historico")
       .update({
-        cursor,
+        cursor: cursorParaGravar(),
         conversas_feitas: (imp.conversas_feitas ?? 0) + desta.conversas,
         mensagens_gravadas: (imp.mensagens_gravadas ?? 0) + desta.gravadas,
         mensagens_existentes: (imp.mensagens_existentes ?? 0) + desta.existentes,
@@ -240,17 +324,118 @@ export async function rodarUmaRodada(
     return (atual as { status?: StatusDaImportacao } | null)?.status ?? "cancelada";
   };
 
+  /**
+   * Por mensagem NOVA da queda (Spec 32 §3): a recebida chama só os efeitos de "o
+   * cliente respondeu"; a enviada pelo aparelho não tem efeito. Nas duas, a conversa
+   * guarda a mais nova, para o aviso do fim (§2). Só o que esta rodada gravou chega
+   * aqui: a página refeita não reaplica nada (a mensagem já é "própria" e fica de fora).
+   */
+  const registrarRecuperadas = async (
+    alvo: { contactId: string; conversationId: string },
+    gravadas: MensagemGravadaDaRodada[],
+  ) => {
+    for (const g of gravadas) {
+      const recebida = g.linha.direction === "inbound";
+      if (recebida) {
+        const entrada: EntradaDaRecuperacao = {
+          organizationId: imp.organization_id,
+          contactId: alvo.contactId,
+          conversationId: alvo.conversationId,
+          // Sem id de linha: a rodada não o devolve, e nenhum efeito desta trilha o usa.
+          messageId: null,
+          // A queda é do número de WhatsApp: a rede é sempre ela.
+          rede: "whatsapp",
+          channelSessionId: imp.channel_session_id,
+          texto: g.texto,
+          nomeDoContato: g.nome,
+          // Identifica a mensagem: é o id do evento em memória do follow-up (idempotência).
+          requestId: `recuperacao:${imp.id}:${g.linha.external_id}`,
+          origem: "historico_queda",
+          enviadaEm: g.linha.sent_at,
+          previa: g.previa,
+        };
+        await aplicarEfeitosDaRecuperacao(admin, entrada);
+      }
+      const atual = tocadas[alvo.conversationId];
+      if (!atual || g.linha.sent_at >= atual.em) {
+        tocadas = {
+          ...tocadas,
+          [alvo.conversationId]: {
+            contactId: alvo.contactId,
+            ultima: recebida ? "in" : "out",
+            em: g.linha.sent_at,
+          },
+        };
+      }
+    }
+  };
+
+  /**
+   * Fim da importação da queda (Spec 32 §2). Só roda quando ESTA rodada de fato
+   * trocou o status (`salvar` devolveu `null`): um cancelamento no meio não avisa.
+   * Concluída: quem ficou sem resposta (a última mensagem é do cliente) entra na
+   * Central, e o resumo sai se algo foi gravado; sem nada gravado, só fecha o resumo
+   * aberto. Erro: só o resumo, com o motivo. Importação manual não avisa nada.
+   */
+  const avisarFimDaQueda = async (status: "concluida" | "erro", erro?: string) => {
+    if (!origemDaQueda) return;
+    const organizationId = imp.organization_id;
+    const channelSessionId = imp.channel_session_id;
+    if (status === "erro") {
+      await avisarResumoDaRecuperacao(admin, {
+        organizationId,
+        channelSessionId,
+        motivo: "erro",
+        erro: resumirErroDaImportacao(erro ?? ""),
+      });
+      return;
+    }
+    for (const [conversationId, tocada] of Object.entries(tocadas)) {
+      if (tocada.ultima !== "in") continue;
+      // A importação termina minutos depois da volta: a equipe pode já ter
+      // respondido AO VIVO. Esse "já respondeu" é anterior ao aviso, e o fechador
+      // só olha saída depois dele — então se confere aqui, antes de abrir.
+      const { data: conversa, error: erroDaConversa } = await admin
+        .from("conversations")
+        .select("last_outbound_at")
+        .eq("organization_id", organizationId)
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (erroDaConversa) continue;
+      const ultimaSaida = (conversa as { last_outbound_at: string | null } | null)?.last_outbound_at ?? null;
+      if (ultimaSaida && Date.parse(ultimaSaida) >= Date.parse(tocada.em)) continue;
+      await avisarClienteSemResposta(admin, { organizationId, conversationId, contactId: tocada.contactId });
+    }
+    const mensagens = (imp.mensagens_gravadas ?? 0) + desta.gravadas;
+    if (mensagens > 0) {
+      await avisarResumoDaRecuperacao(admin, {
+        organizationId,
+        channelSessionId,
+        motivo: "concluida",
+        mensagens,
+        conversas: Object.keys(tocadas).length,
+        desde: imp.desde ?? undefined,
+        ate: imp.ate ?? undefined,
+      });
+    } else {
+      await fecharResumoDaRecuperacao(admin, { organizationId, channelSessionId });
+    }
+  };
+
   const encerrar = async (
     status: "rodando" | "concluida" | "erro",
     extra: Record<string, unknown> = {},
   ): Promise<ResultadoDaRodada> => {
     const outro = await salvar(status === "rodando" ? extra : { status, ...extra });
+    if (outro === null && status !== "rodando") {
+      await avisarFimDaQueda(status, typeof extra.erro === "string" ? extra.erro : undefined);
+    }
     return { status: outro ?? status, gravadas: desta.gravadas, existentes: desta.existentes };
   };
 
   // O cursor que vale ao parar por erro é o do último ponto inteiro: o pedaço em
   // andamento é refeito na próxima (a deduplicação absorve a repetição).
-  let cursorFirme = { ...cursor };
+  let cursorFirme: CursorDePosicao = { ...cursor };
   let firmes = { ...desta };
   const firmar = () => {
     cursorFirme = { ...cursor };
@@ -300,6 +485,10 @@ export async function rodarUmaRodada(
         }
 
         let alvo: { contactId: string; conversationId: string } | null = null;
+        // Escopo `so_crm`: a ficha do chat, decidida na 1ª página lida (`undefined` = ainda não).
+        // `null` = o chat não tem ficha viva: sai da importação e não gasta o teto de conversas.
+        let fichaDaConversa: FichaDoCrm | null | undefined;
+        let ignorada = false;
         // Identidades desta conversa já conferidas na trava de apagamento (por rodada).
         const conferidas = new Set<string>();
         // Chat @lid: o telefone pode não vir em mensagem nenhuma do acervo, e quem
@@ -327,6 +516,35 @@ export async function rodarUmaRodada(
             offset: cursor.offsetMensagens,
             desde: cursor.desde,
           });
+          // Escopo `so_crm` (Spec 32 §1): a ficha é decidida na 1ª página, antes de
+          // qualquer gravação. Erro na consulta LANÇA (falha fechada) e a rodada para em erro.
+          if (
+            escopo === "so_crm" &&
+            fichaDaConversa === undefined &&
+            cursor.fichaContactId &&
+            cursor.fichaChatId === conversa.chatId
+          ) {
+            // Retomada no meio da MESMA conversa: a ficha já foi decidida numa rodada anterior.
+            fichaDaConversa = { contactId: cursor.fichaContactId };
+          }
+          if (escopo === "so_crm" && fichaDaConversa === undefined) {
+            fichaDaConversa = await fichaDoCrmParaOChat(admin, {
+              organizationId: imp.organization_id,
+              telefones: telefonesDoChatParaFicha(conversa.chatId, telefoneDoChat ?? null, mensagens),
+              lid: parseChatId(conversa.chatId).lid,
+            });
+            if (fichaDaConversa) {
+              cursor.fichaContactId = fichaDaConversa.contactId;
+              cursor.fichaChatId = conversa.chatId;
+            }
+            if (fichaDaConversa === null) {
+              // Sem ficha: a página lida conta em `ignoradas` (só a 1ª página; o resto do
+              // chat não é lido) e o chat não entra no teto de conversas.
+              desta.ignoradas += lidas;
+              ignorada = true;
+              break;
+            }
+          }
           // Só `lidas === 0` é fim: página inteira recusada pelo schema não é.
           if (lidas === 0) {
             if (cursor.conferida || cursor.offsetMensagens === 0) break;
@@ -358,6 +576,9 @@ export async function rodarUmaRodada(
           const validas: WahaPayload[] = [];
           for (const p of mensagens) {
             if (!p.id || ehReacao(p)) desta.ignoradas += 1;
+            // Janela com fim: `ate` é exclusivo. A mensagem cortada não é gravada, mas
+            // conta no offset (o `lidas` abaixo), senão a próxima página repetiria.
+            else if (!dentroDoFim(p)) desta.ignoradas += 1;
             else validas.push(p);
           }
           if (validas.length > 0 && (await titularApagadoNaPagina(admin, imp, conversa.chatId, telefoneDoChat, validas, conferidas))) {
@@ -366,14 +587,25 @@ export async function rodarUmaRodada(
             break;
           }
           if (validas.length > 0) {
-            alvo ??= await garantirContatoEConversa(admin, imp, conversa.chatId, conversa.ultimaEm, validas);
+            // `so_crm` nunca cria ficha (quem cria é `fn_upsert_wa_contact`, no `todos`):
+            // acha só a conversa do contato que já tem ficha.
+            const ficha = fichaDaConversa;
+            alvo ??=
+              escopo === "so_crm"
+                ? ficha
+                  ? { contactId: ficha.contactId, conversationId: await garantirConversaDoContato(admin, imp, ficha.contactId, conversa.ultimaEm) }
+                  : null
+                : await garantirContatoEConversa(admin, imp, conversa.chatId, conversa.ultimaEm, validas);
             if (!alvo) {
               // Chat que não é endereçável (nem telefone nem @lid): nada a gravar nele.
               desta.ignoradas += validas.length;
             } else {
               // Soma direto em `desta`: um erro no meio do linha a linha não perde
               // do contador as linhas que já entraram.
-              await gravarMensagens(admin, imp, alvo, validas, desta);
+              const gravadasAgora = await gravarMensagens(admin, imp, alvo, validas, desta);
+              if (origemDaQueda) {
+                await registrarRecuperadas(alvo, gravadasAgora);
+              }
               const completa = await resolverMidias(admin, imp, canal, nomeNoCanal, conversa.chatId, alvo.conversationId, validas, {
                 noTeto,
                 contarChamada: () => {
@@ -397,6 +629,12 @@ export async function rodarUmaRodada(
           firmar();
         }
 
+        if (ignorada) {
+          // Chat fora do escopo: não conta como conversa feita, e não gasta o teto.
+          irParaConversa(cursor.indiceConversa + 1);
+          firmar();
+          continue;
+        }
         desta.conversas += 1;
         irParaConversa(cursor.indiceConversa + 1);
         firmar();

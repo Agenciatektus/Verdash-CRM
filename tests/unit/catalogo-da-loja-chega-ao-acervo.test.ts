@@ -51,6 +51,14 @@ describe("o catálogo da loja chega ao acervo", () => {
     expect(worker).toContain('row.payload["product_id"]');
   });
 
+  it("⭐ a auditoria do aviso não põe o id externo na coluna uuid", () => {
+    // `resource_id` é uuid; `product/created:<loja>:<produto>` ali fazia o
+    // INSERT falhar em todo aviso — medido: 10 de 10 erros no log do app.
+    const webhook = ler("app/api/v1/webhooks/nuvemshop/[event]/route.ts");
+    expect(webhook).not.toContain("resourceId: externalId");
+    expect(webhook).toContain("external_id: externalId");
+  });
+
   it("⭐ o indexador procura a loja por um status que a tabela aceita", () => {
     // A leitura da credencial mora em `lib/nuvemshop/credenciais.ts` (o worker e a consulta
     // de estoque ao vivo a dividem); o worker só precisa continuar usando-a.

@@ -16,8 +16,9 @@ import type { ContextoDoTurno } from '../portoes-de-entrada';
 import type { EstadoDoTurno } from '../estado-do-turno';
 import type { DependenciasDoEnvio } from './guardrails-do-envio';
 // Valor lido só dentro das funções (nunca na carga do módulo): o ciclo de import é seguro.
-import { eTurnoDeResposta, ferramentasDeAgendaDoAgente, temFerramentaDeAgenda } from '../../inbound-turn';
-import { registroDoTurno } from '../estado-do-turno';
+import { eTurnoDeResposta, ferramentasDeAgendaDoAgente, temFerramentaDeAgenda, uploadDeVoz } from '../../inbound-turn';
+import { horariosDaAgendaDoTurno, registroDoTurno } from '../estado-do-turno';
+import { textoParaFalar } from '@/lib/ai/voz/texto-falavel';
 
 export function montarArgumentosDoEnvio(
   c: ContextoDoTurno,
@@ -29,8 +30,38 @@ export function montarArgumentosDoEnvio(
   const {
     agentConfig, agentOperation, liveChannel, optedOutThisTurn, lgpd, camadas, restricaoComercial, maxSendsPerTurn, semanticClassifier,
     conferirAfirmacoes, knobsDeAtrasoHumano, pacingDoTurno, inicioDoProcessamento, pararDigitando, followupDisponivel,
+    vozParaEsteTurno,
   } = r;
   const { body, hasOpenCase, fotosDoProduto } = envio;
+  // Voz (Fase 6b): o TEXTO do turno sai como UMA nota de voz, no lugar das bolhas
+  // (depois da saída configurável e das fotos). `null` = não fala; segue em bolhas.
+  const enviarVoz = (texto: string): Promise<ChannelSendResult> | null => {
+    const voz = vozParaEsteTurno;
+    // Link ou resposta longa: `null` e o texto segue em bolhas (ver `textoParaFalar`).
+    const falado = voz ? textoParaFalar(texto) : null;
+    if (!voz || falado === null) return null;
+    estado.seq += 1;
+    const seqDesteEnvio = estado.seq;
+    return liveChannel().send({
+      tenantId,
+      leadId,
+      jobId: liveJob().id,
+      jobClaim: claimOfJob(liveJob()),
+      agentOperation,
+      seq: seqDesteEnvio,
+      conversationId: input.conversationId,
+      // `body` é o texto FALADO: é ele que entra no hash de idempotência do ledger.
+      body: falado,
+      voz: {
+        textoOriginal: texto,
+        apiKey: voz.apiKey,
+        voiceId: voz.voiceId,
+        ...(voz.modelId ? { modelId: voz.modelId } : {}),
+        upload: (audio, mimeType) =>
+          uploadDeVoz({ tenantId, conversationId: input.conversationId, jobId: liveJob().id, seq: seqDesteEnvio, audio, mimeType }),
+      },
+    });
+  };
   return {
     pool,
     log: runLog,
@@ -86,6 +117,8 @@ export function montarArgumentosDoEnvio(
       ferramentas: agentConfig === null ? [] : ferramentasDeAgendaDoAgente(agentConfig.toolIds),
       toolCalledThisTurn: estado.agendaToolCalledThisTurn,
     },
+    // #3596: compromissos já lidos (`executarCadeiaDoEnvio` espera a leitura antes).
+    horariosDaAgenda: horariosDaAgendaDoTurno(agentConfig, estado),
     followup: {
       disponivel: followupDisponivel(),
       agendadoNesteTurno: estado.followupAgendadoNesteTurno,
@@ -209,7 +242,7 @@ export function montarArgumentosDoEnvio(
           restantes: () => maxSendsPerTurn - estado.seq,
           enviarFoto: (foto, legenda) => enviar(legenda, foto),
           enviarTexto: (texto) =>
-            sendInBubbles(texto, {
+            enviarVoz(texto) ?? sendInBubbles(texto, {
               enabled: agentConfig?.splitMessages ?? false,
               maxChars: agentConfig?.splitMaxChars ?? 600,
               // O teto do turno vale para as bolhas: o que passa dele vai junto na última.

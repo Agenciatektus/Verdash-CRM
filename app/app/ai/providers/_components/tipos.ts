@@ -5,7 +5,11 @@ export interface Ponto {
   papel: string;
   exige: { tools?: boolean; imagem?: boolean; audio?: boolean; embeddingDims?: number };
   sintomaDeFalha: string;
-  fixo: { razao: string } | null;
+  fixo: {
+    razao: string;
+    /** Menu fechado de serviços — ver o cabeçalho de `fixo` em registro.ts. */
+    opcoes?: { provider: string; modelId: string; rotulo: string }[];
+  } | null;
   mandadoPeloAgente: boolean;
   efetivo: {
     provider: string;

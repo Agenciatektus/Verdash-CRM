@@ -1643,6 +1643,15 @@ const CHAVE_DE_RUNTIME_CONGELADA: { arquivo: string; expressao: string; motivo: 
       "autorNaTela(kind) chamado dentro do componente (linha 45): helper sobre o tipo de autoria, " +
       "conjunto fechado não resolvível estaticamente",
   },
+  {
+    arquivo: "components/shell/PaletaDeDestinos.tsx",
+    expressao: "label",
+    motivo:
+      "rotuloGrupo.get(grupoId) ?? grupoId: o fallback é o próprio id de runtime. A dívida veio de " +
+      "components/shell/CommandPalette.tsx quando o miolo da paleta foi extraído para cá — é o MESMO " +
+      "sítio (rótulo de grupo resolvido por mapa), agora compartilhado com a busca do painel do " +
+      "administrador. Não é chamada nova: o total congelado segue igual",
+  },
 ];
 
 function ehChaveDeRuntimeCongelada(sitio: SitioDeChaveDeRuntime): boolean {

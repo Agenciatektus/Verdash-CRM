@@ -36,6 +36,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { CartaoDeMapas } from "./CartaoDeMapas";
 import { CartaoDoJev, useDadosDoJev } from "./CartaoDoJev";
 import { CartaoDoPadrao } from "./CartaoDoPadrao";
+import { CartaoDeVoz } from "./CartaoDeVoz";
 import { ListaDeGrupos } from "./ListaDeGrupos";
 import type { Dados, Ponto } from "./tipos";
 
@@ -150,6 +151,7 @@ export function PainelDeProvedores({ antesDosPontos }: { antesDosPontos?: ReactN
         )}
 
         <CartaoDoPadrao dados={dados} aoSalvar={carregar} midia={antesDosPontos} />
+        <CartaoDeVoz podeEditar={dados.podeEditar} />
 
         <ListaDeGrupos grupos={porPapel} dados={dados} jev={jev.dados} aoSalvar={carregar} />
 
