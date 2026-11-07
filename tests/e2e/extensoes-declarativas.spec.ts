@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 
 import {
@@ -75,7 +76,7 @@ async function trocarOrganizacao(page: Page, organizationId: string): Promise<vo
   // menu aberto: medido, item do seletor em y=-1410 com scrollY=1463. Quem usa sobe a
   // página antes de trocar de organização; a prova faz o mesmo.
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.getByTestId("tenant-switcher").click();
+  await seletorDeOrganizacao(page).click();
   const item = page.getByTestId(`tenant-switcher-item-${organizationId}`);
   if ((await item.getByText("✓", { exact: true }).count()) > 0) {
     await page.keyboard.press("Escape");
@@ -675,7 +676,7 @@ test("pacote pós-build atravessa catálogo, tenants, guia e Tarefas com recuper
     await recargaDoContexto;
 
     await expect(page.getByTestId("extensions-manager")).toBeVisible({ timeout: 30_000 });
-    await page.getByTestId("tenant-switcher").click();
+    await seletorDeOrganizacao(page).click();
     await expect(
       page
         .getByTestId(`tenant-switcher-item-${atores!.organizacaoB}`)

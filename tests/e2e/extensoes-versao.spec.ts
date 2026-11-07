@@ -1,4 +1,5 @@
 import { mkdir } from "node:fs/promises";
+import { seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 
 import { expect as expectBase, test, type BrowserContext, type Page } from "./helpers/test";
 
@@ -68,7 +69,7 @@ async function login(page: Page, email: string, senha: string): Promise<void> {
 async function trocarOrganizacao(page: Page, organizationId: string): Promise<void> {
   // Mesma receita medida no J25: subir a página antes do seletor e esperar o documento novo.
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.getByTestId("tenant-switcher").click();
+  await seletorDeOrganizacao(page).click();
   const item = page.getByTestId(`tenant-switcher-item-${organizationId}`);
   if ((await item.getByText("✓", { exact: true }).count()) > 0) {
     await page.keyboard.press("Escape");

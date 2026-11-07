@@ -12,6 +12,7 @@ import { mkdirSync } from "node:fs";
 import * as path from "node:path";
 
 import { test, expect, type Page } from "./helpers/test";
+import { nativoDaEscolha } from "./helpers/escolha";
 
 import { lerCreds, loginComoAdmin, loginComoDono } from "./helpers/login-admin";
 import { afirmarAdminDeTenantPuro, afirmarDonoDoServidor } from "./utils/precondicao";
@@ -343,7 +344,7 @@ test.describe("navegação agrupada", () => {
     await expect(trilho(page).getByRole("button", { name: "Conversas" })).toBeVisible();
   });
 
-  test("a equipe carregada no Inbox continua legível em Financeiro e Faturamento sem recarregar", async ({
+  test("a equipe carregada em Financeiro continua legível em Faturamento sem recarregar", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -362,15 +363,18 @@ test.describe("navegação agrupada", () => {
     await expect(modulo.getByText("Instalado", { exact: true })).toBeVisible({ timeout: 30_000 });
 
     // A jornada medida é de administrador de tenant, com autenticação real.
-    // Depois do Inbox só há cliques em Link, mantendo o QueryClient da casca.
+    // Depois de Financeiro só há navegação do cliente, mantendo o QueryClient.
     await loginAdmin(page);
     const equipeRecebida = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === "/api/v1/team/assignable" && r.request().method() === "GET",
     );
-    await page.goto("/app/inbox");
-    await page.getByRole("tab", { name: /^Todas/ }).click();
-    await expect(page.getByLabel("Filtrar por atendente")).toBeVisible();
+    // O cenário antigo partia do Inbox, que pedia a equipe ao abrir pelo
+    // "Filtrar por atendente". O filtro saiu, e nem o Inbox nem o Funil buscam a
+    // equipe no cliente ao abrir (medido: nenhum GET em 120 s). Quem busca hoje
+    // é Financeiro, com a MESMA chave ["team","assignable"] que Faturamento lê:
+    // é esse cache compartilhado, sem recarga, que o caso mede.
+    await page.goto("/app/settings/tenant/financeiro");
     const resposta = await equipeRecebida;
     expect(resposta.ok()).toBe(true);
     const { data: equipe } = (await resposta.json()) as {
@@ -382,14 +386,15 @@ test.describe("navegação agrupada", () => {
     const inicioDoDocumento = await page.evaluate(() => performance.timeOrigin);
     const erros: string[] = [];
     page.on("pageerror", (erro) => erros.push(erro.message));
+    // Cache compartilhado: depois da 1ª resposta, ninguém busca a equipe de novo.
+    let buscasDaEquipeDepois = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/api/v1/team/assignable" && r.method() === "GET") buscasDaEquipeDepois++;
+    });
 
-    await page.getByRole("link", { name: "Configurações", exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/settings$/);
-    await page.locator('a[href="/app/settings/tenant/financeiro"]').click();
-    await expect(page).toHaveURL(/\/app\/settings\/tenant\/financeiro$/);
     await expect(page.getByRole("heading", { name: "Comissão", exact: true })).toBeVisible();
     await expect(
-      page.getByLabel("Pessoa").locator(`option[value="${pessoa!.user_id}"]`),
+      nativoDaEscolha(page.getByLabel("Pessoa")).locator(`option[value="${pessoa!.user_id}"]`),
     ).toHaveText("E2E Admin");
     await expect(page.getByText("Algo deu errado", { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(inicioDoDocumento);
@@ -398,14 +403,17 @@ test.describe("navegação agrupada", () => {
       fullPage: true,
     });
 
-    await sidebar(page).getByRole("link", { name: "Ver tudo em Análise", exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/analise$/);
+    // O "Ver tudo em Análise" saiu da coluna (09/10/2026) e Faturamento é fora
+    // do sidebar de propósito; a porta sem recarga é o ⌘K (navegação do cliente).
     const relatorioRecebido = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === "/api/v1/reports/financeiro" &&
         r.request().method() === "GET",
     );
-    await page.locator('a[href="/app/faturamento"]').click();
+    await page.keyboard.press("ControlOrMeta+k");
+    const paleta = page.getByRole("dialog");
+    await paleta.getByRole("combobox").fill("Faturamento");
+    await paleta.getByRole("option", { name: /Faturamento/ }).first().click();
     await expect(page).toHaveURL(/\/app\/faturamento$/);
     const relatorio = await relatorioRecebido;
     expect(relatorio.ok()).toBe(true);
@@ -415,6 +423,7 @@ test.describe("navegação agrupada", () => {
     await expect(
       page.getByRole("heading", { name: "Comissão por pessoa", exact: true }),
     ).toBeVisible();
+    expect(buscasDaEquipeDepois, "Faturamento leu a equipe do cache, sem novo GET").toBe(0);
     // O período pode estar vazio. Nomes de responsáveis só são comprovados
     // aqui quando o relatório real tem essa linha; o unitário cobre os demais.
     for (const linha of totais.por_profissional) {
