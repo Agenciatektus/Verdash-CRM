@@ -529,7 +529,7 @@ it("anti-backlog: ordena a última inbound por coalesce(sent_at, created_at), n�
  * este arquivo não toca.
  */
 it('#2729: grupo só passa pela guarda do engine quando a chave por grupo libera a IA', async () => {
-  const chamadas = async (grupo: { is_group: boolean; ia_responde: boolean | null }) => {
+  const chamadas = async (grupo: { is_group: boolean; ia_responde: boolean | null; ia_modo?: string; chamada?: boolean | null }) => {
     const calls: string[] = [];
     const query = (sql: string) => {
       calls.push(sql);
@@ -560,6 +560,21 @@ it('#2729: grupo só passa pela guarda do engine quando a chave por grupo libera
 
   const individual = await chamadas({ is_group: false, ia_responde: null });
   expect(individual.some((s) => s.includes('tem_agente'))).toBe(true);
+
+  // 9224: mesma régua do ingest (`grupoLiberaIa(modo, chamada)`).
+  for (const [modo, chamada, passa] of [
+    ['chamada', true, true],
+    ['chamada', false, false],
+    ['chamada', null, false],
+    ['todas', null, true],
+    ['off', true, false],
+  ] as const) {
+    const c = await chamadas({ is_group: true, ia_responde: modo !== 'off', ia_modo: modo, chamada });
+    expect(c.some((s) => s.includes('tem_agente')), `${modo}/${chamada}`).toBe(passa);
+  }
+  // Desligado pelo app antigo depois do backfill da 9224 (só `ia_responde=false`): continua calado.
+  const desligadoPeloAntigo = await chamadas({ is_group: true, ia_responde: false, ia_modo: 'todas', chamada: true });
+  expect(desligadoPeloAntigo.some((s) => s.includes('tem_agente'))).toBe(false);
 });
 
 /**

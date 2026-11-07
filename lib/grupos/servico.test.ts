@@ -92,7 +92,7 @@ function deps(
         // Mesma régua do banco: a atualização só alcança linha LIGADA. Grupo
         // sem linha (nunca ligado) ou desligado → null.
         if (!l || !l.enabled) return null;
-        linhas.set(chatId, { ...l, ia_responde: valor });
+        linhas.set(chatId, { ...l, ia_responde: valor !== "off" });
         return { id: "row-" + chatId };
       }),
     },
@@ -117,11 +117,11 @@ describe("listarGruposDoNumero", () => {
     const { grupos } = await listarGruposDoNumero(deps({ ligados: [G1] }), { organizationId: ORG, channelSessionId: SESS });
     expect(grupos).toEqual([
       {
-        chatId: G1, subject: "Cliente A", enabled: true, enabledAt: "2026-09-23T00:00:00.000Z", presente: true, iaResponde: false,
+        chatId: G1, subject: "Cliente A", enabled: true, enabledAt: "2026-09-23T00:00:00.000Z", presente: true, iaResponde: false, iaModo: "off",
         participantCount: 10, adminCount: 2, papel: "admin", isAnnounce: true, tipo: "grupo", archived: null, pinned: null,
       },
       {
-        chatId: G2, subject: "Família", enabled: false, enabledAt: null, presente: true, iaResponde: false,
+        chatId: G2, subject: "Família", enabled: false, enabledAt: null, presente: true, iaResponde: false, iaModo: "off",
         participantCount: null, adminCount: 0, papel: null, isAnnounce: false, tipo: "grupo", archived: null, pinned: null,
       },
     ]);
@@ -151,7 +151,7 @@ describe("listarGruposDoNumero", () => {
       enabled: true,
       enabledAt: "2026-09-23T00:00:00.000Z",
       presente: false,
-      iaResponde: false,
+      iaResponde: false, iaModo: "off",
       participantCount: null, adminCount: 0, papel: null, isAnnounce: false, tipo: "grupo", archived: null, pinned: null,
     });
   });
@@ -373,8 +373,8 @@ describe("definirIaDoGrupo", () => {
 
   it("liga a chave num grupo LIGADO, sem tocar no filtro do WhatsApp, e audita", async () => {
     const d = deps({ ligados: [G1] });
-    await expect(definirIaDoGrupo(d, { ...ia, iaResponde: true })).resolves.toEqual({ ia_responde: true });
-    expect(d.db.definirIa).toHaveBeenCalledWith(ORG, SESS, G1, true);
+    await expect(definirIaDoGrupo(d, { ...ia, iaModo: "todas" })).resolves.toEqual({ ia_responde: true, ia_modo: "todas" });
+    expect(d.db.definirIa).toHaveBeenCalledWith(ORG, SESS, G1, "todas");
     // A chave é local: o transporte não é perguntado nem reiniciado.
     expect(d.setGroupIntake).not.toHaveBeenCalled();
     expect(d.audit).toHaveBeenCalledWith(
@@ -389,7 +389,7 @@ describe("definirIaDoGrupo", () => {
 
   it("desliga a chave e audita o desligar", async () => {
     const d = deps({ ligados: [G1], iaLiberado: [G1] });
-    await expect(definirIaDoGrupo(d, { ...ia, iaResponde: false })).resolves.toEqual({ ia_responde: false });
+    await expect(definirIaDoGrupo(d, { ...ia, iaModo: "off" })).resolves.toEqual({ ia_responde: false, ia_modo: "off" });
     expect(d.audit).toHaveBeenCalledWith(
       expect.objectContaining({ action: "channel.group_ai_disabled", metadata: expect.objectContaining({ ia_responde: false }) }),
     );
@@ -400,18 +400,18 @@ describe("definirIaDoGrupo", () => {
 
   it("grupo DESLIGADO (ou nunca ligado) é recusado: nada a liberar, nada gravado", async () => {
     const d = deps({ ligados: [] });
-    await expect(definirIaDoGrupo(d, { ...ia, iaResponde: true })).rejects.toMatchObject({ code: "grupo_desligado" });
+    await expect(definirIaDoGrupo(d, { ...ia, iaModo: "todas" })).rejects.toMatchObject({ code: "grupo_desligado" });
     expect(d.audit).not.toHaveBeenCalled();
   });
 
   it("id que não é de grupo é recusado antes de qualquer efeito", async () => {
     const d = deps({ ligados: [G1] });
-    await expect(definirIaDoGrupo(d, { ...ia, groupChatId: "5521999990000@c.us", iaResponde: true })).rejects.toThrow();
+    await expect(definirIaDoGrupo(d, { ...ia, groupChatId: "5521999990000@c.us", iaModo: "todas" })).rejects.toThrow();
     expect(d.db.definirIa).not.toHaveBeenCalled();
   });
 
   it("canal sem capacidade de grupos é recusado", async () => {
     const d = deps({ ligados: [G1], capability: "none" });
-    await expect(definirIaDoGrupo(d, { ...ia, iaResponde: true })).rejects.toMatchObject({ code: "canal_sem_grupos" });
+    await expect(definirIaDoGrupo(d, { ...ia, iaModo: "todas" })).rejects.toMatchObject({ code: "canal_sem_grupos" });
   });
 });

@@ -80,13 +80,13 @@ describe("grupos do número", () => {
   // ── #2729 — a chave POR GRUPO "Permitir que a IA responda neste grupo" ────
   it("#2729: libera a IA num grupo, sem tocar no filtro do WhatsApp", async () => {
     autorizado();
-    vi.mocked(definirIaDoGrupo).mockResolvedValue({ ia_responde: true });
+    vi.mocked(definirIaDoGrupo).mockResolvedValue({ ia_responde: true, ia_modo: "todas" });
     const res = await PUT(
       new NextRequest("http://x", { method: "PUT", body: JSON.stringify({ group_chat_id: "1@g.us", ia_responde: true }) }),
       ctx,
     );
     expect(res.status).toBe(200);
-    expect(definirIaDoGrupo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: ORG, groupChatId: "1@g.us", iaResponde: true, actorUserId: "u1" }));
+    expect(definirIaDoGrupo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: ORG, groupChatId: "1@g.us", iaModo: "todas", actorUserId: "u1" }));
     expect(alternarGrupo).not.toHaveBeenCalled();
     // O mesmo `organization_id` forjado no body que o teste acima prova ignorado.
     expect(vi.mocked(definirIaDoGrupo).mock.calls[0]![1]).not.toHaveProperty("organization_id");

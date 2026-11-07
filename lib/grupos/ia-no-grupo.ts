@@ -24,11 +24,21 @@
  * evento vira job). Uma cópia inline em cada lugar é como a régua local do
  * worker passou a discordar da tela em produção (ver `pos-entrada.ts`).
  *
+ * 9224: três modos (`off`, `chamada`, `todas`). `chamada` só libera a mensagem que
+ * respondeu ou marcou este número (`metadata.group_chamada`).
+ *
  * `=== true` e não truthy de propósito: é FALHA FECHADA. Coluna nula (linha
  * gravada por uma versão anterior, banco ainda sem a migration), `undefined`
  * (leitura que não trouxe a coluna) e qualquer outra coisa significam "não
  * sei se o operador liberou" — e não sei não responde.
  */
-export function grupoLiberaIa(iaResponde: unknown): boolean {
-  return iaResponde === true;
+export function grupoLiberaIa(modo: unknown, chamada?: unknown): boolean {
+  return modo === "todas" || (modo === "chamada" && chamada === true);
+}
+
+export type IaModo = "off" | "chamada" | "todas";
+
+/** Valor desconhecido vira `off` (falha fechada). */
+export function modoDaIa(v: unknown): IaModo {
+  return v === "todas" || v === "chamada" ? v : "off";
 }

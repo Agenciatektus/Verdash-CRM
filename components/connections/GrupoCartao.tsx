@@ -1,6 +1,7 @@
 "use client";
 /** Um grupo na lista de Canais › Grupos: nome, selos, contagens e as duas chaves (entrar na inbox / IA responde). */
 import { Badge } from "@/components/ui/badge";
+import { Escolha } from "@/components/ui/escolha";
 import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
 
@@ -15,7 +16,7 @@ export function GrupoCartao({
   g: Grupo;
   bloqueado: boolean;
   onLigar: (g: Grupo, enabled: boolean) => void;
-  onIa: (g: Grupo, iaResponde: boolean) => void;
+  onIa: (g: Grupo, iaModo: "off" | "chamada" | "todas") => void;
 }) {
   const t = useT();
   const nome = g.subject ?? t("Grupo sem nome");
@@ -53,13 +54,19 @@ export function GrupoCartao({
           parecerem uma só. */}
       {g.enabled && (
         <div className="flex items-center gap-2 pl-1">
-          <Switch
+          <Escolha
             aria-label={t("Permitir que a IA responda neste grupo")}
-            checked={g.iaResponde === true}
+            value={g.iaModo ?? (g.iaResponde === true ? "todas" : "off")}
             disabled={bloqueado}
-            onCheckedChange={(v) => onIa(g, v)}
-          />
-          <span className="text-xs text-muted-foreground">{t("Permitir que a IA responda neste grupo")}</span>
+            onValueChange={(v) => onIa(g, v as "off" | "chamada" | "todas")}
+          >
+            <option value="off">{t("Desligada")}</option>
+            <option value="chamada">{t("Só quando chamada")}</option>
+            <option value="todas">{t("Toda mensagem")}</option>
+          </Escolha>
+          <span className="text-xs text-muted-foreground">
+            {t("Só quando chamada: a IA responde quem marcar o número com @ ou responder uma mensagem dele.")}
+          </span>
         </div>
       )}
     </li>

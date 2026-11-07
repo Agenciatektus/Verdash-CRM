@@ -13,6 +13,8 @@ export interface Grupo {
    * `=== true`, falha fechada).
    */
   iaResponde?: boolean;
+  /** 9224 — modo da IA; ausente (servidor antigo) vale `iaResponde ? "todas" : "off"`. */
+  iaModo?: "off" | "chamada" | "todas";
   /** Do diretório do WhatsApp; ausentes em servidor antigo. `archived`/`pinned` `null` = desconhecido. */
   participantCount?: number | null;
   adminCount?: number;
