@@ -21,6 +21,8 @@
  * para em 100% e "quanto falta" fica ausente em vez de negativo: `-7` seria uma
  * dívida que não existe.
  */
+import { ErroDoPainel } from "./ErroDoPainel";
+import { BarraDeProgresso } from "@/components/ui/barra-de-progresso";
 import { useT } from "@/hooks/i18n/useT";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,9 +57,11 @@ interface Props {
    * `null` = nada a mostrar (resposta antiga ou leitura ainda sem o bloco).
    */
   valores?: ValoresDoPeriodo | null;
+  /** Refaz a leitura quando o estado é `erro`. */
+  aoTentar: () => void;
 }
 
-export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores }: Props) {
+export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores, aoTentar }: Props) {
   const t = useT();
   const mes = mesLegivel(periodo);
 
@@ -82,11 +86,10 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
         ) : null}
 
         {estado === "erro" ? (
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta.",
-            )}
-          </p>
+          <ErroDoPainel
+            mensagem={t("Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta.")}
+            aoTentar={aoTentar}
+          />
         ) : null}
 
         {estado === "vazio" ? (
@@ -126,15 +129,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
                   </span>
                 </div>
 
-                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    data-meta="barra"
-                    className={`h-full rounded-full transition-[width] ${
-                      m.atingida ? "bg-emerald-500" : "bg-primary"
-                    }`}
-                    style={{ width: `${Math.min(100, Math.max(0, m.percentual))}%` }}
-                  />
-                </div>
+                <BarraDeProgresso valor={m.percentual} rotulo={t("Meta do mês")} tom={m.atingida ? "ok" : "marca"} />
 
                 <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                   <span>

@@ -1,4 +1,4 @@
-import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
+import { Pagina } from "@/components/pagina";
 import type { Metadata } from "next";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -22,16 +22,16 @@ export default async function MetricsPage() {
 
   return (
     <Pagina>
-      <CabecalhoDaPagina
+      <MetricsClient
+        canCompare={canCompare}
+        currentUserId={user.id}
         titulo={t("Desempenho")}
-        descricao={canCompare
+        descricao={
+          canCompare
             ? t("Atrito, funil e performance por atendente nos últimos 30 dias.")
-            : t("Atrito, seu funil e sua performance nos últimos 30 dias.")}
+            : t("Atrito, seu funil e sua performance nos últimos 30 dias.")
+        }
       />
-      <SecaoDaPagina>
-
-      <MetricsClient canCompare={canCompare} currentUserId={user.id} />
-      </SecaoDaPagina>
     </Pagina>
   );
 }

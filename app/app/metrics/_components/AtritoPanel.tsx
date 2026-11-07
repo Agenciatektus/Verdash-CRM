@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 
+import { ErroDoPainel } from "./ErroDoPainel";
 import { useT } from "@/hooks/i18n/useT";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,7 +132,7 @@ function ReguaAbandono({ horas, padrao, podeEditar }: { horas: number; padrao: n
 
 export function AtritoPanel({ podeEditarRegua }: { podeEditarRegua: boolean }) {
   const t = useT();
-  const { data, isLoading, isError } = useAtritoMetrics();
+  const { data, isLoading, isError, refetch, isFetching } = useAtritoMetrics();
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">{t("Carregando o índice de atrito…")}</p>;
@@ -139,7 +140,7 @@ export function AtritoPanel({ podeEditarRegua }: { podeEditarRegua: boolean }) {
   // Falha aberta na informação: dizer que não carregou é melhor que sumir com a
   // seção — seção ausente lê-se como "não há atrito" (doutrina cap. 4.5).
   if (isError || !data) {
-    return <p className="text-sm text-destructive">{t("Erro ao carregar o índice de atrito.")}</p>;
+    return <ErroDoPainel mensagem={t("Erro ao carregar o índice de atrito.")} aoTentar={() => void refetch()} recarregando={isFetching} />;
   }
 
   const { escopo, pares, regua } = data.data;
@@ -175,7 +176,7 @@ export function AtritoPanel({ podeEditarRegua }: { podeEditarRegua: boolean }) {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {pares.map((p) => (
           <ParCard key={p.chave} par={p} />
         ))}

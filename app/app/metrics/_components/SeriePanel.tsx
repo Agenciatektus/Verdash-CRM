@@ -25,6 +25,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { TABELA_EMPILHADA } from "@/components/pagina";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -43,6 +44,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
+import { ErroDoPainel } from "./ErroDoPainel";
 import { useT } from "@/hooks/i18n/useT";
 import { useSerieTemporal } from "@/hooks/metrics/useSerieTemporal";
 import { granularidadeValida, type Granularidade } from "@/lib/metrics/serie-temporal";
@@ -65,7 +67,7 @@ export function SeriePanel() {
   const t = useT();
   const tagDoIdioma = useTagDeIdioma();
   const [granularidade, setGranularidade] = useState<Granularidade>("dia");
-  const { data, isLoading, isError } = useSerieTemporal(granularidade);
+  const { data, isLoading, isError, refetch, isFetching } = useSerieTemporal(granularidade);
 
   if (isLoading) {
     return (
@@ -83,9 +85,7 @@ export function SeriePanel() {
           <CardTitle className="text-base">{t("Ganhos por período")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">
-            {t("Erro ao carregar a evolução dos ganhos.")}
-          </p>
+          <ErroDoPainel mensagem={t("Erro ao carregar a evolução dos ganhos.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );
@@ -171,7 +171,7 @@ export function SeriePanel() {
               </ResponsiveContainer>
             </div>
 
-            <Table>
+            <Table className={TABELA_EMPILHADA}>
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("Período")}</TableHead>
@@ -184,7 +184,7 @@ export function SeriePanel() {
                     <TableCell className="font-medium tabular-nums">
                       {rotuloDoBalde(b.balde, tagDoIdioma)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatar(b.ganhos)}</TableCell>
+                    <TableCell data-rotulo={t("Ganhos")} className="text-right tabular-nums">{formatar(b.ganhos)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

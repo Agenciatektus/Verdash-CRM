@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ErroDoPainel } from "./ErroDoPainel";
 import { useT } from "@/hooks/i18n/useT";
 import { useChannelMetrics } from "@/hooks/metrics/useChannelMetrics";
 import { formatarDuracao, rotuloCanal, totalDeConversas } from "@/lib/metrics/canais";
@@ -38,7 +39,7 @@ interface Props {
 
 export function CanaisPanel({ owner }: Props) {
   const t = useT();
-  const { data, isLoading, isError } = useChannelMetrics(owner);
+  const { data, isLoading, isError, refetch, isFetching } = useChannelMetrics(owner);
 
   if (isLoading) {
     return (
@@ -56,7 +57,7 @@ export function CanaisPanel({ owner }: Props) {
           <CardTitle className="text-base">{t("Por canal")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{t("Erro ao carregar os canais.")}</p>
+          <ErroDoPainel mensagem={t("Erro ao carregar os canais.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );

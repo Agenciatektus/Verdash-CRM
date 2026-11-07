@@ -12,6 +12,7 @@
  * Só manager+ (a rota é manager+): é o funil inteiro, não o pedaço de quem
  * olha.
  */
+import { ErroDoPainel } from "./ErroDoPainel";
 import { useT } from "@/hooks/i18n/useT";
 import { rotuloDoMotivoDePerda } from "@/lib/schemas/leads";
 import { SEM_CATEGORIA, SEM_ETAPA, SEM_MOEDA, SEM_MOTIVO } from "@/lib/metrics/perdas";
@@ -79,10 +80,16 @@ function Bloco({
 
 export function PerdasPanel() {
   const t = useT();
-  const { data, isLoading, isError } = usePerdasMetrics();
+  const { data, isLoading, isError, refetch, isFetching } = usePerdasMetrics();
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Carregando…")}</p>;
   if (isError || !data)
-    return <p className="text-sm text-destructive">{t("Erro ao carregar o relatório de perdas.")}</p>;
+    return (
+      <ErroDoPainel
+        mensagem={t("Erro ao carregar o relatório de perdas.")}
+        aoTentar={() => void refetch()}
+        recarregando={isFetching}
+      />
+    );
 
   const relatorio = data.data;
 

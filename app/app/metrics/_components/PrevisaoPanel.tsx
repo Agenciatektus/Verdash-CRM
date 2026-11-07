@@ -1,8 +1,11 @@
 "use client";
 
+import { ErroDoPainel } from "./ErroDoPainel";
 import { useT } from "@/hooks/i18n/useT";
 import { usePrevisaoFunil } from "@/hooks/metrics/usePrevisaoFunil";
 import { formatValorDoNegocio } from "@/lib/money";
+import { TABELA_EMPILHADA } from "@/components/pagina";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
@@ -19,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
  */
 export function PrevisaoPanel() {
   const t = useT();
-  const { data, isLoading, isError } = usePrevisaoFunil();
+  const { data, isLoading, isError, refetch, isFetching } = usePrevisaoFunil();
 
   if (isLoading) {
     return (
@@ -41,7 +44,7 @@ export function PrevisaoPanel() {
           <CardTitle className="text-sm font-semibold">{t("Previsão")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{t("Erro ao carregar a previsão.")}</p>
+          <ErroDoPainel mensagem={t("Erro ao carregar a previsão.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );
@@ -69,37 +72,36 @@ export function PrevisaoPanel() {
           </p>
         ) : null}
 
-        {/* A caixa que rola é a da tabela, não a tela: cinco colunas de valor em
-            reais não quebram linha e passam dos 390px do celular. */}
+        {/* No celular a tabela vira lista empilhada (TABELA_EMPILHADA), sem rolagem lateral. */}
         {data.meses.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="py-1 font-medium">{t("Mês")}</th>
-                  <th className="py-1 font-medium">{t("Moeda")}</th>
-                  <th className="py-1 text-right font-medium">{t("Ponderado")}</th>
-                  <th className="py-1 text-right font-medium">{t("Bruto")}</th>
-                  <th className="py-1 text-right font-medium">{t("Negócios")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.meses.map((faixa) => (
-                  <tr key={`${faixa.moeda}-${faixa.mes}`} className="border-b border-border/50">
-                    <td className="py-1 tabular-nums">{faixa.mes}</td>
-                    <td className="py-1">{faixa.moeda}</td>
-                    <td className="py-1 text-right tabular-nums">
-                      {formatValorDoNegocio(faixa.ponderado_cents, faixa.moeda)}
-                    </td>
-                    <td className="py-1 text-right tabular-nums text-muted-foreground">
-                      {formatValorDoNegocio(faixa.bruto_cents, faixa.moeda)}
-                    </td>
-                    <td className="py-1 text-right tabular-nums">{faixa.n}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table className={TABELA_EMPILHADA}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("Mês")}</TableHead>
+                <TableHead>{t("Moeda")}</TableHead>
+                <TableHead className="text-right">{t("Ponderado")}</TableHead>
+                <TableHead className="text-right">{t("Bruto")}</TableHead>
+                <TableHead className="text-right">{t("Negócios")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.meses.map((faixa) => (
+                <TableRow key={`${faixa.moeda}-${faixa.mes}`}>
+                  <TableCell className="tabular-nums">{faixa.mes}</TableCell>
+                  <TableCell>{faixa.moeda}</TableCell>
+                  <TableCell data-rotulo={t("Ponderado")} className="text-right tabular-nums">
+                    {formatValorDoNegocio(faixa.ponderado_cents, faixa.moeda)}
+                  </TableCell>
+                  <TableCell data-rotulo={t("Bruto")} className="text-right tabular-nums text-muted-foreground">
+                    {formatValorDoNegocio(faixa.bruto_cents, faixa.moeda)}
+                  </TableCell>
+                  <TableCell data-rotulo={t("Negócios")} className="text-right tabular-nums">
+                    {faixa.n}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
 
         {data.sem_data.length > 0 && (

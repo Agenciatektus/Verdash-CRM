@@ -1,11 +1,12 @@
 "use client";
 
-import { TABELA_EMPILHADA } from "@/components/pagina";
+import { CabecalhoDaPagina, SecaoDaPagina, TABELA_EMPILHADA } from "@/components/pagina";
 import { useT } from "@/hooks/i18n/useT";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useAttendantMetrics, type AttendantMetric } from "@/hooks/metrics/useAttendantMetrics";
 import { EmptyState } from "@/components/empty/EmptyState";
+import { BarraDeProgresso } from "@/components/ui/barra-de-progresso";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatarDuracao } from "@/lib/metrics/canais";
 import { WarningOctagon } from "@/lib/ui/icons";
@@ -15,6 +16,7 @@ import { MetaDoMesPanel, type EstadoDaMeta } from "./MetaDoMesPanel";
 import { PerdasPanel } from "./PerdasPanel";
 import { PrevisaoPanel } from "./PrevisaoPanel";
 import { SeriePanel } from "./SeriePanel";
+import { IndicadoresDoTopo } from "./IndicadoresDoTopo";
 import { useMetasDoMes } from "@/hooks/metrics/useMetasDoMes";
 import { janelaDoMes, mesLocal } from "@/lib/metas/periodo";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
@@ -45,9 +47,13 @@ function attendantLabel(a: AttendantMetric, t: (texto: string) => string): strin
 interface Props {
   canCompare: boolean;
   currentUserId: string;
+  /** Já traduzidos pela página (servidor). */
+  titulo: string;
+  descricao: string;
 }
 
-export function MetricsClient({ canCompare, currentUserId }: Props) {
+
+export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: Props) {
   const t = useT();
   const [owner, setOwner] = useState<string>(ALL);
   const selectedOwner = owner === ALL ? null : owner;
@@ -69,6 +75,32 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
         ? "vazio"
         : "ok";
 
+  // O filtro mora no cabeçalho (board Aud_Desempenho); aparece também enquanto carrega.
+  const filtro = canCompare ? (
+    <Select value={owner} onValueChange={setOwner}>
+      <SelectTrigger aria-label={t("Atendente")} className="w-64 mb:h-11 mb:w-full">
+        <SelectValue placeholder={t("Todos os atendentes")} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL}>{t("Todos os atendentes")}</SelectItem>
+        {(team.data?.data ?? [])
+          .filter((m) => m.role !== "viewer")
+          .map((m) => (
+            <SelectItem key={m.user_id} value={m.user_id}>
+              {rotuloDoMembro(m, t)}
+              {m.user_id === currentUserId ? ` ${t("(você)")}` : ""}
+            </SelectItem>
+          ))}
+      </SelectContent>
+    </Select>
+  ) : undefined;
+  const moldura = (corpo: ReactNode) => (
+    <>
+      <CabecalhoDaPagina titulo={titulo} descricao={descricao} acoes={filtro} />
+      <SecaoDaPagina>{corpo}</SecaoDaPagina>
+    </>
+  );
+
   // ─── CARREGANDO: a SILHUETA da tela, não a palavra "Carregando…" ──────────
   //
   // Era `<p>Carregando…</p>`: uma linha de texto cinza no alto de uma tela
@@ -80,14 +112,13 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
   // As três faixas abaixo são as três seções reais: o filtro de atendente, os
   // painéis de atrito/perdas/previsão, e a tabela por atendente.
   if (isLoading) {
-    return (
+    return moldura(
       <div
         className="flex flex-col gap-6"
         aria-busy="true"
         aria-label={t("Carregando o desempenho")}
       >
-        {canCompare ? <Skeleton className="h-10 w-64" /> : null}
-        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-24 w-full" />
         <Skeleton className="h-48 w-full" />
         <div className="flex flex-col gap-2">
           <Skeleton className="h-5 w-40" />
@@ -95,7 +126,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
             <Skeleton key={i} className="h-10 w-full" />
           ))}
         </div>
-      </div>
+      </div>,
     );
   }
 
@@ -110,49 +141,34 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
   // a tela de erro passa a ter a mesma forma das outras — e um "Tentar de novo"
   // que de fato refaz a consulta, em vez de pedir F5.
   if (isError || !data) {
-    return (
+    return moldura(
       <EmptyState
         icon={WarningOctagon}
         headline="Não consegui carregar o desempenho"
         subcopy="Pode ser uma falha de rede, ou este painel pode não estar incluído no plano da sua empresa."
         primary={{ label: t("Tentar de novo"), onClick: () => void refetch() }}
-      />
+      />,
     );
   }
 
   const metrics = data.data;
   const funnelTotal = metrics.funnel.reduce((acc, s) => acc + s.count, 0);
   const maxCount = Math.max(1, ...metrics.funnel.map((s) => s.count));
+  // Só a meta da EMPRESA: a de um funil com o rótulo "Meta do mês" seria lida como a da empresa.
+  const metaDaEmpresa = metasDoMes.data?.data.metas.find((m) => m.escopo === "empresa");
 
-  return (
+  return moldura(
     <div className="flex flex-col gap-6">
-      {canCompare ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground">{t("Atendente")}</span>
-          <Select value={owner} onValueChange={setOwner}>
-            <SelectTrigger className="w-64 mb:h-11 mb:w-full">
-              <SelectValue placeholder={t("Todos os atendentes")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>{t("Todos os atendentes")}</SelectItem>
-              {(team.data?.data ?? [])
-                .filter((m) => m.role !== "viewer")
-                .map((m) => (
-                  <SelectItem key={m.user_id} value={m.user_id}>
-                    {rotuloDoMembro(m, t)}
-                    {m.user_id === currentUserId ? ` ${t("(você)")}` : ""}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
+      <IndicadoresDoTopo meta={metaDaEmpresa} estadoDaMeta={estadoDaMeta} atendentes={metrics.attendants} />
 
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
       {/* Acima do funil e da performance de propósito: é o número do sistema
           inteiro, ao qual as métricas de área se subordinam (doutrina §3.6).
           Não filtra por atendente — atrito é propriedade do sistema, e quebrá-lo
           por pessoa convida a otimização local que degrada o todo. */}
-      <AtritoPanel podeEditarRegua={canCompare} />
+      <div className="lg:col-span-2">
+        <AtritoPanel podeEditarRegua={canCompare} />
+      </div>
 
       {/* Relatório "Perdas" (#1537): manager+, porque é o funil inteiro — o
           mesmo critério do /metrics para quem compara. */}
@@ -176,6 +192,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
         metas={metasDoMes.data?.data.metas ?? []}
         podeConfigurar={canCompare}
         valores={metasDoMes.data?.data.valores_do_periodo ?? null}
+        aoTentar={() => void metasDoMes.refetch()}
       />
 
       <Card>
@@ -192,12 +209,11 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
             metrics.funnel.map((s) => (
               <div key={s.stage_id} className="flex items-center gap-3">
                 <span className="w-24 shrink-0 truncate text-sm md:w-40">{s.stage_name}</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-[width]"
-                    style={{ width: `${(s.count / maxCount) * 100}%` }}
-                  />
-                </div>
+                <BarraDeProgresso
+                  className="flex-1"
+                  valor={(s.count / maxCount) * 100}
+                  rotulo={s.stage_name}
+                />
                 <span className="w-8 shrink-0 text-right text-sm tabular-nums">{s.count}</span>
               </div>
             ))
@@ -258,7 +274,10 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
           operação (rodízio #1330). Fora do filtro de atendente a RLS é quem
           escopa: agent vê as próprias conversas, manager+ a organização. */}
       <CanaisPanel owner={selectedOwner} />
-      <SeriePanel />
-    </div>
+      <div className="lg:col-span-2">
+        <SeriePanel />
+      </div>
+      </div>
+    </div>,
   );
 }
