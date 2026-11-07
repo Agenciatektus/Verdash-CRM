@@ -24,6 +24,7 @@ import { textoDoAviso, type TextoDoAviso } from "@/lib/cobranca/avisos";
 import { toleranciaDias } from "@/lib/cobranca/configuracao";
 import { enviarAvisoAosAdmins } from "@/lib/cobranca/emails";
 import { aplicarLeitura } from "@/lib/cobranca/estado";
+import { gravarPagamentos } from "@/lib/cobranca/pagamentos";
 import { SEM_TROCA } from "@/lib/cobranca/prorata";
 import { adaptador as adaptadorPadrao } from "@/lib/cobranca/provedores";
 import {
@@ -185,9 +186,10 @@ export async function sincronizar(
   }
 
   const lidoEm = agora();
+  const adaptadorDaLeitura = (deps.adaptador ?? adaptadorPadrao)(provedor);
   let situacao: Situacao;
   try {
-    situacao = await (deps.adaptador ?? adaptadorPadrao)(provedor).lerSituacao({ clienteRef: cliente });
+    situacao = await adaptadorDaLeitura.lerSituacao({ clienteRef: cliente });
   } catch (e) {
     const erro = paraErroDeLeitura(e);
     const { error } = await admin
@@ -204,6 +206,9 @@ export async function sincronizar(
     });
     return { tipo: "falhou", erro, transitorio: erro === "provedor_fora" };
   }
+
+  // Histórico de pagamentos: melhor esforço, nunca derruba a leitura da assinatura.
+  await gravarPagamentos(admin, orgId, provedor, adaptadorDaLeitura, cliente);
 
   // Concorrência otimista na linha INTEIRA: `updated_at` é a versão dela. Se
   // alguém gravou entre a leitura da linha e agora (troca de plano, publicação,

@@ -64,16 +64,18 @@ execFileSync(
   },
 );
 
-// A 9096 faz toda org nascer em openrouter/haiku; os invariantes montam o dublê do motor para
-// 'anthropic' (o padrão de sempre). Depois do gatilho do produto (ordem alfabética), devolve ao
-// padrão antigo SÓ o que o produto semeou; settings.llm escrito pelo teste fica como está.
+// O gatilho do produto faz toda org nascer em openrouter (haiku-5.5 até a 9096; flash-lite desde a 9250);
+// os invariantes montam o dublê do motor para 'anthropic' (o padrão de sempre). Depois do gatilho do
+// produto (ordem alfabética), devolve ao padrão antigo SÓ o que o produto semeou, nas DUAS seeds;
+// settings.llm escrito pelo teste fica como está. Sem a seed nova aqui, 20 invariantes do turno do agente
+// quebram com llm_not_configured (06/11/2026).
 execFileSync(
   "docker",
   ["exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres", "-qtA", "-v", "ON_ERROR_STOP=1", "-f", "-"],
   {
     input: `create function public.zz_teste_llm_padrao_anthropic() returns trigger language plpgsql set search_path = public as $$
 begin
-  if new.settings->'llm'->>'provider' = 'openrouter' and new.settings->'llm'->>'default_model' = 'anthropic/claude-haiku-5.5' then
+  if new.settings->'llm'->>'provider' = 'openrouter' and new.settings->'llm'->>'default_model' in ('anthropic/claude-haiku-5.5', 'google/gemini-2.5-flash-lite') then
     new.settings := jsonb_set(new.settings, '{llm}', (new.settings->'llm') || '{"provider":"anthropic","default_model":"claude-sonnet-4-6"}'::jsonb);
   end if;
   return new;

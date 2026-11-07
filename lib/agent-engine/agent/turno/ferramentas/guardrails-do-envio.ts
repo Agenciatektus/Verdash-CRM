@@ -12,6 +12,7 @@ import type { loadChannelKnobs } from '../../../pacing/store';
 import type { esperarComoHumano } from '../../atraso-humano';
 import type { FotoParaEnvio } from '../../fotos-do-produto';
 import { hasOpenCaseForContact, openCase } from '../../human-cases';
+import type { VozResolvidaDoTurno } from '../../voz-do-turno';
 import type { ContextoDoTurno, SaidaDosPortoes } from '../portoes-de-entrada';
 import type { SaidaDoRoteamento } from '../roteamento';
 import type { SaidaDosDesvios } from '../desvios-deterministicos';
@@ -34,6 +35,8 @@ export interface DependenciasDoEnvio {
   restricaoComercial: SaidaDosPortoes['restricaoComercial'];
   passarComercialParaEquipe: SaidaDosDesvios['passarComercialParaEquipe'];
   maxSendsPerTurn: number;
+  /** Voz (Fase 6b) resolvida no orquestrador; `null` = o texto segue em bolhas. */
+  vozParaEsteTurno: VozResolvidaDoTurno | null;
   promiseTable: Parameters<typeof decidePromise>[0]['table'] | null;
   semanticClassifier: NonNullable<Parameters<typeof runBeforeSend>[0]['classifyPromiseSemantic']> | undefined;
   conferirAfirmacoes: ReturnType<typeof criarConferidorDeAfirmacoes>;
@@ -73,8 +76,16 @@ export async function executarCadeiaDoEnvio(
         : false;
     // Args reusados EXATAMENTE (mesmo objeto) no re-run do fail-safe abaixo — só
     // hasOpenCase/openedCaseThisTurn mudam depois do auto-abre-caso.
+    // #3596: o gate de horário precisa dos compromissos do contato já lidos.
+    await estado.agendaDoTurno.leituraDosCompromissos;
     const beforeSendArgs = montarArgumentosDoEnvio(c, r, estado, { body, hasOpenCase, fotosDoProduto });
     let chain = await runBeforeSend(beforeSendArgs);
+    if (
+      chain.status === 'vetoed' &&
+      (chain.code === 'horario_sem_fonte' || chain.code === 'agenda_confirmou_sem_marcar')
+    ) {
+      estado.agendaDoTurno.vetos += 1;
+    }
     if (chain.status === 'vetoed' && chain.code === 'case_promise_without_case') {
       // Wave 4 — fail-safe da invariante sagrada: o lead NUNCA recebe promessa-de-
       // humano sem caso aberto. 1ª vez no turno: erro-de-ensino (o modelo re-tenta —

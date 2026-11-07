@@ -59,6 +59,8 @@ interface KanbanCardProps {
   /** Repassados ao menu de ações ("Mover para…"). */
   etapas?: Stage[];
   onMoverPara?: (lead: Lead, stageId: string) => void;
+  /** Funil ARQUIVADO (#1298): só leitura — sem arraste, seleção nem menu de ações. */
+  somenteLeitura?: boolean;
 }
 
 function formatValor(cents: number | null, currency: string | null): string | null {
@@ -93,6 +95,7 @@ export function KanbanCard({
   limiteDaEtapa = null,
   etapas,
   onMoverPara,
+  somenteLeitura = false,
 }: KanbanCardProps) {
   const t = useT();
   const value = formatValor(card.valueCents, card.currency);
@@ -145,7 +148,7 @@ export function KanbanCard({
   const handleClick = (e: MouseEvent<HTMLDivElement>) => decidirClique(e);
 
   return (
-    <Draggable draggableId={card.id} index={index}>
+    <Draggable draggableId={card.id} index={index} isDragDisabled={somenteLeitura}>
       {(provided, snapshot) => (
         <div
           ref={provided.innerRef}
@@ -156,7 +159,7 @@ export function KanbanCard({
           // teclado do dnd (tabIndex e handlers continuam vindo do spread) sem
           // aninhar dois controles — nada de aria-hidden nem de suprimir regra.
           role="group"
-          aria-label={`${t("Lead")}: ${nome}`}
+          aria-label={`${t("Negócio")}: ${card.title}`}
           data-densidade={compacto ? "compacta" : "confortavel"}
           onClick={handleClick}
           // A lista inteira das etiquetas fica a um hover (o card mostra 2 + "+N").
@@ -244,6 +247,8 @@ export function KanbanCard({
                 condicional (uma caixa que aparece EMPURRANDO o nome faria o
                 quadro tremer com o mouse). `focus:opacity-100`: caixa
                 invisível e tabulável seria armadilha de teclado. */}
+            {!somenteLeitura && (
+              <>
             <input
               type="checkbox"
               checked={Boolean(isSelected)}
@@ -271,6 +276,8 @@ export function KanbanCard({
                 onMoverPara={onMoverPara}
               />
             </div>
+              </>
+            )}
           </div>
 
           {/* ② valor — só quando existe. `card-valor` carrega o valor único E a

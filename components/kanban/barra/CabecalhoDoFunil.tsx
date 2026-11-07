@@ -84,7 +84,7 @@ export function CabecalhoDoFunil({
         {vista === "kanban" && <SeletorDeDensidade compacto={compacto} onChange={onCompacto} />}
         {!celular && (
           <Button onClick={onNovo} disabled={!carregado} className="shrink-0">
-            <Plus size={16} className="mr-2" /> {t("Novo Lead")}
+            <Plus size={16} className="mr-2" /> {t("Novo negócio")}
           </Button>
         )}
       </div>

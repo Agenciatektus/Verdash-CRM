@@ -221,7 +221,8 @@ describe("a renovação não ressuscita a linha desconectada", () => {
       },
     });
 
-    expect(r).toEqual({ ok: false, motivo: "falha" });
+    // #3371: a recusa agora carrega `motivoDetalhe`; o desfecho continua `falha`.
+    expect(r).toMatchObject({ ok: false, motivo: "falha" });
     expect(fake.linha!.is_active).toBe(false);
     expect(fake.linha!.api_key_encrypted).toBe("\\x");
   });

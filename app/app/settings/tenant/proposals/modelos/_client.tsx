@@ -126,15 +126,17 @@ export function ModelosDeProposta() {
 
   if (propostasDesligadas) {
     return (
-      <div className="w-full space-y-3 p-6">
-        <h1 className="text-xl font-semibold">{t("Modelos de proposta")}</h1>
+      <Pagina largura="leitura">
+        <CabecalhoDaPagina titulo={t("Modelos de proposta")} />
+        <SecaoDaPagina>
         <p>
           {t("As propostas estão desligadas para esta organização. Para editar os modelos, ligue as propostas em Configurações › Propostas e salve.")}
         </p>
         <Button asChild variant="outline">
           <Link href="/app/settings/tenant/proposals">{t("Ir para Configurações › Propostas")}</Link>
         </Button>
-      </div>
+        </SecaoDaPagina>
+      </Pagina>
     );
   }
 

@@ -6,7 +6,7 @@ import { argumentos, bancoFalso, operacao, type BancoFalso, type Cadeia, type Re
 const h = vi.hoisted(() => ({
   ligada: true,
   segredo: "whsec_teste" as string | null,
-  sinal: { eventoId: "evt_1", tipo: "invoice.paid", clienteRef: "cus_1" } as { eventoId: string; tipo: string; clienteRef: string | null } | null,
+  sinal: { eventoId: "evt_1", tipo: "invoice.paid", clienteRef: "cus_1" } as { eventoId: string; tipo: string; clienteRef: string | null; cobrancaRef?: string | null } | null,
   permitido: true,
   baldes: [] as string[],
   aviso: vi.fn(),
@@ -36,6 +36,7 @@ interface Mundo {
   duplicado: boolean;
   statusExistente: string;
   dona: { organization_id: string } | null;
+  donaDaCobranca: { organization_id: string } | null;
   emit: Resposta;
   flag: string | null;
   compra: Resposta;
@@ -50,6 +51,7 @@ function responder(c: Cadeia): Resposta {
     return { data: null };
   }
   if (c.tabela === "cobranca_assinaturas") return { data: m.dona };
+  if (c.tabela === "cobranca_pagamentos") return { data: m.donaDaCobranca };
   if (c.tabela === "platform_config") return { data: m.flag === null ? null : { valor: m.flag } };
   if (c.tabela === "cobranca_compras") return m.compra;
   return {};
@@ -81,7 +83,7 @@ beforeEach(() => {
   h.sinal = { eventoId: "evt_1", tipo: "invoice.paid", clienteRef: "cus_1" };
   h.permitido = true;
   h.baldes = [];
-  m = { duplicado: false, statusExistente: "received", dona: { organization_id: ORG }, emit: { data: "ev-1" }, flag: null, compra: { data: [{ id: "compra-1" }] } };
+  m = { duplicado: false, statusExistente: "received", dona: { organization_id: ORG }, donaDaCobranca: null, emit: { data: "ev-1" }, flag: null, compra: { data: [{ id: "compra-1" }] } };
   h.banco = bancoFalso(responder, () => m.emit);
 });
 
@@ -365,5 +367,33 @@ describe("venda direta: compra da LP de cliente desconhecido (fatia 2)", () => {
     expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "error", error_message: "cliente_desconhecido" });
     expect(compras()).toEqual([]);
     expect(flagLida()).toEqual([]);
+  });
+});
+
+describe("webhook da cobrança: disputa da Stripe (sem customer, só a cobrança)", () => {
+  const disputa = () => ({ eventoId: "evt_dp", tipo: "charge.dispute.created", clienteRef: null, cobrancaRef: "ch_1" });
+  const consultas = (tabela: string) => h.banco.cadeias.filter((c) => c.tabela === tabela);
+
+  it("acha a org pela cobrança já gravada no histórico e emite o sinal", async () => {
+    h.sinal = disputa();
+    m.donaDaCobranca = { organization_id: ORG };
+    expect((await pedido()).status).toBe(200);
+    expect(emits()).toHaveLength(1);
+    expect(emits()[0]?.args).toMatchObject({ p_organization_id: ORG, p_entity_id: ORG });
+    const c = consultas("cobranca_pagamentos")[0]!;
+    expect(c.passos.filter((p) => p.metodo === "eq").map((p) => p.args)).toEqual([["provedor", "stripe"], ["cobranca_ref", "ch_1"]]);
+    expect(consultas("cobranca_assinaturas")).toEqual([]);
+  });
+
+  it("controle: cobrança que ninguém tem no histórico continua cliente_desconhecido, sem sinal", async () => {
+    h.sinal = disputa();
+    expect((await pedido()).status).toBe(200);
+    expect(emits()).toEqual([]);
+    expect(argumentos(doLog("update")[0]!, "update")?.[0]).toMatchObject({ status: "error", error_message: "cliente_desconhecido" });
+  });
+
+  it("com clienteRef, o histórico nem é consultado", async () => {
+    expect((await pedido()).status).toBe(200);
+    expect(consultas("cobranca_pagamentos")).toEqual([]);
   });
 });
