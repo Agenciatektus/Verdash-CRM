@@ -57,7 +57,11 @@ const sidebar = (page: Page) => page.getByRole("navigation", { name: "Navegaçã
  */
 const trilho = (page: Page) => page.getByRole("navigation", { name: "Grupos da navegação" });
 async function abrirGrupo(page: Page, nome: string): Promise<void> {
-  await trilho(page).getByRole("button", { name: nome, exact: true }).click();
+  // O nome acessível do grupo pode trazer o estado ao lado (ex.: "Canais
+  // Conectando…", o ponto de saúde das conexões). Ancorado no início para não
+  // casar outro grupo cujo nome só CONTENHA este.
+  const exato = new RegExp(`^${nome}(\\s|$)`);
+  await trilho(page).getByRole("button", { name: exato }).click();
 }
 
 async function expectSemOverflowHorizontal(page: Page, contexto: string): Promise<void> {
@@ -99,7 +103,10 @@ test.describe("navegação agrupada", () => {
     // Organização não aparece no trilho: seu hub (Configurações) é o link
     // "Ajustes" do rodapé fixo — ver o teste do rodapé abaixo.
     const grupos = trilho(page).getByRole("button");
-    await expect(grupos).toHaveText(["Conversas", "CRM", "Agentes", "Canais", "Análise"]);
+    // O botão de Conversas leva o contador da fila ("Conversas1") quando há
+    // alguém esperando — depende do que outra spec deixou no banco. O número é
+    // aceito; o rótulo e a ORDEM continuam exatos.
+    await expect(grupos).toHaveText([/^Conversas\d*$/, "CRM", "Agentes", "Canais", "Análise"]);
 
     await page.screenshot({
       path: path.join(EVIDENCE, "nav-sidebar-agrupado.png"),
@@ -134,7 +141,8 @@ test.describe("navegação agrupada", () => {
 
     await page.screenshot({ path: path.join(EVIDENCE, "nav-hub-crm.png"), fullPage: true });
 
-    await page.getByRole("link", { name: /Etapas do funil/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Etapas do funil/ }).click();
     await page.waitForURL(/settings\/tenant\/pipelines/);
     await expect(page.getByRole("heading", { name: "Etapas do funil", level: 1 })).toBeVisible();
   });
@@ -155,7 +163,8 @@ test.describe("navegação agrupada", () => {
     // tem); o hub continua sendo a rota `/app/crm`.
     await page.goto("/app/crm");
     await page.waitForURL(/\/app\/crm$/);
-    await page.getByRole("link", { name: /Produtos/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Produtos/ }).click();
     await page.waitForURL(/\/app\/products/);
   });
 
@@ -182,7 +191,8 @@ test.describe("navegação agrupada", () => {
 
     await page.screenshot({ path: path.join(EVIDENCE, "nav-hub-ia.png"), fullPage: true });
 
-    await page.getByRole("link", { name: /Conhecimento/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Conhecimento/ }).click();
     await page.waitForURL(/knowledge\/sources/);
   });
 
@@ -197,7 +207,15 @@ test.describe("navegação agrupada", () => {
     await abrirGrupo(page, "Canais");
     await sidebar(page).getByRole("link", { name: "Conexões" }).click();
     await page.waitForURL(/\/app\/connections/);
-    await expect(page.getByRole("tab", { name: /oficial/i })).toBeVisible();
+    // Conexões virou página única (#354): o oficial deixou de ser aba e é um
+    // dos métodos do assistente "Conectar" › WhatsApp. O passo do nome só
+    // avança a tela (nada é criado antes de escolher o método e concluir).
+    await page.getByRole("main").getByRole("button", { name: "Conectar", exact: true }).click();
+    await page.getByRole("dialog", { name: "O que você quer conectar?" }).getByRole("button", { name: /^WhatsApp/ }).click();
+    const assistente = page.getByRole("dialog");
+    await assistente.getByLabel("Nome da conexão").fill("Navegação E2E");
+    await assistente.getByRole("button", { name: "Continuar" }).click();
+    await expect(assistente.getByRole("radio", { name: /API Oficial/ })).toBeVisible();
   });
 
   test("o ⌘K acha o canal oficial por nome, mesmo sem tela própria", async ({ page }) => {
@@ -265,21 +283,24 @@ test.describe("navegação agrupada", () => {
   test.describe("mobile", () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test("em 390px, o sidebar vira gaveta e não cria overflow horizontal", async ({ page }) => {
+    // ⚠️ Abaixo de 760px a casca é a do app de celular (`CascaDoCelular`): o
+    // hambúrguer saiu, e o inventário completo mora no "Mais" da barra de abas.
+    test("em 390px, o sidebar vira o menu Mais e não cria overflow horizontal", async ({ page }) => {
       await loginAdmin(page);
 
       await expect(sidebar(page), "o sidebar desktop fica fora da árvore acessível no mobile").toHaveCount(0);
       await expectSemOverflowHorizontal(page, "shell mobile após login");
 
-      await page.getByRole("button", { name: "Abrir navegação" }).click();
-      await expect(sidebar(page)).toBeVisible();
-      await expectSemOverflowHorizontal(page, "shell mobile com drawer aberto");
+      await page.getByRole("navigation", { name: "Seções do CRM" }).getByRole("button", { name: "Mais" }).click();
+      const mais = page.getByRole("dialog", { name: "Mais" });
+      await expect(mais).toBeVisible();
+      await expectSemOverflowHorizontal(page, "shell mobile com o Mais aberto");
       await page.screenshot({
         path: path.join(EVIDENCE, "nav-mobile-390-drawer-aberta.png"),
         fullPage: true,
       });
 
-      await sidebar(page).getByRole("link", { name: "Funis", exact: true }).click();
+      await mais.getByRole("link", { name: /^Funis(\s|$)/ }).click();
       await page.waitForURL(/\/app\/kanban/);
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expectSemOverflowHorizontal(page, "shell mobile após navegar pelo drawer");

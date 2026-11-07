@@ -130,7 +130,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-muted-foreground">{t("Atendente")}</span>
           <Select value={owner} onValueChange={setOwner}>
-            <SelectTrigger className="w-64 mb:w-full">
+            <SelectTrigger className="w-64 mb:h-11 mb:w-full">
               <SelectValue placeholder={t("Todos os atendentes")} />
             </SelectTrigger>
             <SelectContent>
