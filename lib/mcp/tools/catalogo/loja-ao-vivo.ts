@@ -15,3 +15,16 @@ export const TOOLS_LOJA_AO_VIVO = declararTools([
     pacotes: ["reter"],
   },
 ]);
+
+export const TOOLS_PDV_AO_VIVO = declararTools([
+  {
+    name: "crm_check_pdv_stock",
+    category: "read",
+    rotulo: "Ver estoque e preço no PDV",
+    explicacao:
+      "Consulta o PDV da loja na hora e informa quais aparelhos e acessórios estão disponíveis para venda, com quantidade e preço, sem mostrar custo.",
+    oQueToca: "PDV MercadoPhone conectado",
+    risco: "seguro",
+    pacotes: ["reter"],
+  },
+]);

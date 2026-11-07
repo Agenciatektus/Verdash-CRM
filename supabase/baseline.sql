@@ -82148,6 +82148,43 @@ alter table public.crm_stages
 comment on column public.crm_stages.gatilho_frases is
   'Ate 5 frases (9092). Mensagem ENVIADA pela loja que contem uma delas (sem acento nem caixa) leva o negocio aberto do contato a esta etapa; so avanca. Fala do cliente nunca aciona.';
 
+-- Mesmo bloco da migration 9240. Nao cria funcao: pode ficar depois da VARREDURA anon.
+
+-- manifest: 9240 — order_margins (custo e lucro por item vendido no MercadoPhone; só manager+ lê, escrita só service_role) — a margem não pode ir em orders.payload, que o time inteiro e as ferramentas MCP leem.
+
+create table if not exists public.order_margins (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  order_id uuid references public.orders(id) on delete set null,
+  venda_id text not null,
+  item_seq int not null,
+  produto text,
+  categoria text,
+  quantidade numeric,
+  valor_total_cents bigint not null,
+  valor_custo_cents bigint not null,
+  lucro_cents bigint not null,
+  origem text,
+  vendedor text,
+  data_venda timestamptz not null,
+  status text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint order_margins_item_key unique (organization_id, venda_id, item_seq)
+);
+
+create index if not exists order_margins_org_data_idx
+  on public.order_margins (organization_id, data_venda);
+
+alter table public.order_margins enable row level security;
+drop policy if exists order_margins_select on public.order_margins;
+create policy order_margins_select on public.order_margins
+  for select to authenticated
+  using (public.fn_role_at_least(organization_id, 'manager'));
+revoke all on public.order_margins from anon, authenticated;
+grant select on public.order_margins to authenticated;
+grant select, insert, update, delete on public.order_margins to service_role;
+
 -- ---- a linha não troca de organização em NENHUMA tabela de public (migration 9031) ----
 --
 -- A 9030 pôs trg_organizacao_nao_muda nas 52 tabelas cuja for all só exigia
@@ -82327,4 +82364,31 @@ begin
     execute format('grant select (%s) on public.%I to authenticated', cols, t);
   end loop;
 end $grants_por_coluna$;
+
+
+-- ---- provider 'mercadophone' em tenant_integrations (migration 9101) ----
+-- Mesmo bloco da migration 9101. Nao cria funcao: pode ficar depois da VARREDURA anon.
+
+-- manifest: 9101 — tenant_integrations_provider_check aceita 'mercadophone' (PDV; conexão por dois tokens colados, sem OAuth)
+
+alter table public.tenant_integrations
+  drop constraint if exists tenant_integrations_provider_check;
+alter table public.tenant_integrations
+  add constraint tenant_integrations_provider_check check (provider in (
+    'nuvemshop', 'vtex', 'shopify', 'mercadophone'
+  ));
+
+-- ---- 6. Fonte e credencial da importação do histórico (migration 9102) ----
+-- Mesmo corpo da migration 9102. Roda por último: o select por coluna precisa ver todas as colunas.
+alter table public.importacoes_de_historico add column if not exists fonte text not null default 'waha';
+alter table public.importacoes_de_historico add column if not exists credencial_cifrada text;
+do $grants_importacoes$
+declare cols text;
+begin
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'importacoes_de_historico' and column_name <> 'credencial_cifrada';
+  revoke select on public.importacoes_de_historico from authenticated;
+  execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
+end $grants_importacoes$;
 

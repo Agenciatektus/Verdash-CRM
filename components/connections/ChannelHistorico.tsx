@@ -9,6 +9,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { resumirErroDaImportacao } from "@/lib/channels/historico/resumo-do-erro";
+import { Input } from "@/components/ui/input";
 import { Escolha } from "@/components/ui/escolha";
 
 interface Previa {
@@ -32,6 +33,8 @@ interface Importacao {
   midias_baixadas?: number;
   midias_indisponiveis?: number;
   erro?: string | null;
+  fonte?: string | null;
+  cursor?: { semTelefone?: { n: number } } | null;
 }
 
 interface Historico {
@@ -60,10 +63,14 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
   const [dias, setDias] = useState<number>(30);
   const [contando, setContando] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [erroDaPrevia, setErroDaPrevia] = useState<"conflito" | "rede" | null>(null);
+  const [izzyAberto, setIzzyAberto] = useState(false);
+  const [tokenIzzy, setTokenIzzy] = useState("");
+  const [erroDaPrevia, setErroDaPrevia] = useState<"conflito" | "rede" | "token" | null>(null);
   const rota = `/api/v1/channel-sessions/${channelId}/historico`;
-  const frase = (tipo: "conflito" | "rede") =>
-    tipo === "conflito"
+  const frase = (tipo: "conflito" | "rede" | "token") =>
+    tipo === "token"
+      ? t("O Izzy recusou esse token. Confira se copiou inteiro e se ainda está ativo.")
+      : tipo === "conflito"
       ? t("A importação mudou enquanto você olhava. A tela foi atualizada com o estado atual.")
       : t("Não foi possível falar com o número agora. Tente de novo em instantes.");
   const chave = ["channel-historico", channelId];
@@ -91,13 +98,18 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
     }
   }
 
-  async function pedirPrevia() {
+  async function pedirPrevia(izzy = false) {
     setContando(true);
     setErroDaPrevia(null);
     try {
-      await apiClient.post(rota, { acao: "previa", dias }, { timeoutMs: PREVIA_TIMEOUT_MS });
+      await apiClient.post(
+        rota,
+        izzy ? { acao: "previa", dias, fonte: "izzy", token: tokenIzzy.trim() } : { acao: "previa", dias },
+        { timeoutMs: PREVIA_TIMEOUT_MS },
+      );
+      if (izzy) setTokenIzzy("");
     } catch (err) {
-      setErroDaPrevia(ehConflito(err) ? "conflito" : "rede");
+      setErroDaPrevia(ehConflito(err) ? "conflito" : izzy && err instanceof ApiError && err.status === 422 ? "token" : "rede");
     } finally {
       await qc.invalidateQueries({ queryKey: chave });
       setContando(false);
@@ -111,21 +123,15 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
 
   const titulo = <p className="text-xs font-medium">{t("Trazer conversas antigas para o atendimento")}</p>;
 
-  if (!guardar) {
-    return (
-      <div className="flex flex-col gap-1">
-        {titulo}
-        <p className="text-[11px] text-muted-foreground">{t("Ligue 'Guardar o histórico' e conecte o número de novo")}</p>
-      </div>
-    );
-  }
-
+  const doIzzy = imp?.fonte === "izzy";
   const p = imp?.previa ?? null;
   const rodando = imp?.status === "rodando";
   const status = imp?.status;
   // Nova prévia: sem nada, depois de prévia (refazer), cancelada ou concluída.
   const podePedirPrevia = !rodando && status !== "erro";
-  const numeros = p
+  const numeros = p && doIzzy
+    ? t("{conversas} conversas no Izzy").replace("{conversas}", String(p.conversas))
+    : p
     ? t(p.parcial
         ? "Pelo menos {conversas} conversas, {mensagens} mensagens, {audios} áudios e {imagens} imagens"
         : "{conversas} conversas, {mensagens} mensagens, {audios} áudios e {imagens} imagens")
@@ -134,6 +140,44 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
         .replace("{audios}", String(p.audios))
         .replace("{imagens}", String(p.imagens))
     : null;
+
+  // Outro CRM (Izzy): independe de 'Guardar o histórico', que é do número do WhatsApp.
+  const formDoIzzy = podePedirPrevia && (
+    <div className="flex flex-col gap-1">
+      <div>
+        <Button size="sm" variant="ghost" disabled={contando || busy} onClick={() => setIzzyAberto((a) => !a)}>
+          {t("Importar de outro CRM (Izzy)")}
+        </Button>
+      </div>
+      {izzyAberto && (
+        <div className="flex items-center gap-2">
+          <Input
+            type="password"
+            autoComplete="off"
+            className="h-8 text-xs"
+            placeholder="izzy_..."
+            aria-label={t("Token da API do Izzy")}
+            value={tokenIzzy}
+            onChange={(e) => setTokenIzzy(e.target.value)}
+          />
+          <Button size="sm" variant="outline" disabled={contando || busy || tokenIzzy.trim().length < 8} onClick={() => void pedirPrevia(true)}>
+            {contando ? t("Contando as conversas…") : t("Ver prévia")}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!guardar && !doIzzy) {
+    return (
+      <div className="flex flex-col gap-1">
+        {titulo}
+        <p className="text-[11px] text-muted-foreground">{t("Ligue 'Guardar o histórico' e conecte o número de novo")}</p>
+        {formDoIzzy}
+        {erroDaPrevia && <p role="alert" className="text-[11px] text-destructive">{frase(erroDaPrevia)}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -166,9 +210,11 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
           {/* Erro que se repete (o mesmo chat sempre recusado) não tem saída por
               "Tentar de novo": cancelar libera o número para uma prévia nova. */}
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => void acao({ acao: "retomar", importacaoId: imp.id })}>
-              {t("Tentar de novo")}
-            </Button>
+            {!doIzzy && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void acao({ acao: "retomar", importacaoId: imp.id })}>
+                {t("Tentar de novo")}
+              </Button>
+            )}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => void acao({ acao: "cancelar", importacaoId: imp.id })}>
               {t("Cancelar")}
             </Button>
@@ -184,6 +230,11 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
               .replace("{gravadas}", String(imp.mensagens_gravadas ?? 0))
               .replace("{indisponiveis}", String(imp.midias_indisponiveis ?? 0))}
           </p>
+          {!!imp.cursor?.semTelefone?.n && (
+            <p className="text-[11px] text-muted-foreground">
+              {t("{n} conversas do Instagram não foram importadas.").replace("{n}", String(imp.cursor.semTelefone.n))}
+            </p>
+          )}
         </>
       )}
 
@@ -223,6 +274,8 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
           </Button>
         </div>
       )}
+
+      {formDoIzzy}
 
       {erroDaPrevia && (
         <p role="alert" className="text-[11px] text-destructive">{frase(erroDaPrevia)}</p>

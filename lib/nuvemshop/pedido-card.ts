@@ -66,6 +66,8 @@ async function sincronizar(
     totalCents: number | null;
     rastreio: string | null;
     contactId: string | null;
+    /** Origem do card (default 'nuvemshop'); o PDV MercadoPhone passa 'mercadophone'. */
+    source?: string;
   },
 ): Promise<ResultadoDoCard> {
   // Funil escolhido na integração (se ainda vale); senão o padrão pelo nome (a Fiorotto depende disso).
@@ -128,7 +130,7 @@ async function sincronizar(
         .from("crm_leads")
         .select("id, stage_id")
         .eq("organization_id", organizationId)
-        .eq("source", "nuvemshop")
+        .eq("source", pedido.source ?? "nuvemshop")
         .eq("external_id", pedido.externalId)
         .maybeSingle()
     ).data as { id: string; stage_id: string } | null) ?? null;
@@ -148,7 +150,7 @@ async function sincronizar(
         title: `Pedido #${pedido.numero ?? pedido.externalId}`,
         contact_id: pedido.contactId,
         value_cents: pedido.totalCents ?? undefined,
-        source: "nuvemshop",
+        source: pedido.source ?? "nuvemshop",
         external_id: pedido.externalId,
         source_metadata: { evento: motivo },
         // Sem isto o gatilho de follow-up "Lead criado" (que ignora `rule:`) inscreveria o comprador.
