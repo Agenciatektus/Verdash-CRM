@@ -30,6 +30,8 @@ import type { Logger } from '@/lib/agent-engine/obs/logger';
 
 /** 22h57 em São Paulo (UTC-3) — fora da janela de disparo 7h-22h. */
 const NOITE = new Date('2026-10-04T01:57:58Z');
+/** 12h em São Paulo — dentro das duas janelas. */
+const DIA = new Date('2026-10-04T15:00:00Z');
 
 const ORG = 'org-do-teste';
 const SESSAO = 'sessao-do-teste';
