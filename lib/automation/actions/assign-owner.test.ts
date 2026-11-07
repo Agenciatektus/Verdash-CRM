@@ -1,47 +1,110 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { ActionCtx } from "@/lib/automation/types";
 
-vi.mock("@/lib/leads/acompanhar-dono-na-conversa", () => ({
-  acompanharDonoNaConversa: vi.fn(async () => 0),
-}));
-vi.mock("@/lib/automation/actions", () => ({ registerAction: vi.fn() }));
+import { getAction } from "@/lib/automation/actions";
+import "@/lib/automation/actions/assign-owner";
+import { sufixoDoMembro } from "@/lib/users/rotulo-do-atendente";
 
-import { acompanharDonoNaConversa } from "@/lib/leads/acompanhar-dono-na-conversa";
-import * as acoes from "@/lib/automation/actions";
+const PESSOA = "11111111-1111-4111-8111-111111111111";
 
-import "./assign-owner";
-
-function admin() {
-  const q: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "is", "update"]) q[m] = () => q;
-  q.maybeSingle = async () => ({ data: { user_id: "u", role: "agent" }, error: null });
-  q.then = (r: (v: unknown) => unknown) => r({ error: null });
-  return { from: () => q };
+/**
+ * O admin que a ação recebe. Só `rpc` e `auth.admin.getUserById` existem: o modo
+ * rodízio não pode tocar `from(...)` — escolher, registrar e gravar o dono é da
+ * função SQL, numa transação só (#2041). Se a ação voltar a gravar o dono por
+ * conta própria, `from` não existe e o teste quebra.
+ */
+function adminFalso(rpc: { data: unknown; error: { message: string } | null }, nome: string | null = "Ana") {
+  return {
+    rpc: vi.fn().mockResolvedValue(rpc),
+    auth: {
+      admin: {
+        getUserById: vi.fn().mockResolvedValue({
+          data: { user: nome ? { user_metadata: { full_name: nome } } : { user_metadata: {} } },
+          error: null,
+        }),
+      },
+    },
+  };
 }
 
-const executar = (lead: Record<string, unknown>) => {
-  const { execute } = vi.mocked(acoes.registerAction).mock.calls[0]![0] as never as {
-    execute: (c: unknown, cfg: unknown) => Promise<{ status: string }>;
+function ctx(admin: ReturnType<typeof adminFalso>, lead: { id: string } | null = { id: "lead-1" }): ActionCtx {
+  return {
+    admin: admin as unknown as ActionCtx["admin"],
+    organizationId: "org-1",
+    ruleId: "rule-1",
+    ruleName: "Regra",
+    requestId: "evt-1",
+    event: {
+      id: "evt-1",
+      organization_id: "org-1",
+      event_type: "lead.created",
+      entity_kind: "crm_lead",
+      entity_id: "lead-1",
+      payload: {},
+      metadata: {},
+      consumed_by: [],
+      attempts: 0,
+    },
+    context: lead ? { lead } : {},
   };
-  return execute({ admin: admin(), organizationId: "o1", context: { lead } }, { user_id: "u" });
-};
+}
 
-beforeEach(() => vi.mocked(acompanharDonoNaConversa).mockClear());
+const RODIZIO = { modo: "rodizio", fila: [{ user_id: PESSOA, pausado: false }] };
 
-describe("assign_owner e a conversa do contato", () => {
-  it("lead sem contact_id: sucesso, e o helper recebe contato vazio (no-op)", async () => {
-    const r = await executar({ id: "l1" });
-    expect(r.status).toBe("success");
-    expect(acompanharDonoNaConversa).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ contactIds: [undefined] }),
-    );
+describe("assign_owner em rodízio", () => {
+  it("chama a função pela regra, pelo lead e pelo evento, e escreve a frase da vez", async () => {
+    const admin = adminFalso({ data: { user_id: PESSOA, posicao: 2 }, error: null });
+    const r = await getAction("assign_owner")!.execute(ctx(admin), RODIZIO);
+    // A fila NÃO vai na chamada: a função lê a da regra gravada.
+    expect(admin.rpc).toHaveBeenCalledWith("fn_automation_rodizio_atribuir", {
+      p_org: "org-1",
+      p_rule: "rule-1",
+      p_lead: "lead-1",
+      // O id do evento vai junto: é a chave que impede o reprocessamento de andar a fila.
+      p_event: "evt-1",
+    });
+    expect(r).toEqual({
+      type: "assign_owner",
+      status: "success",
+      detail: { user_id: PESSOA, posicao: 2, nome: "Ana", explicacao: "Vez de Ana, posição 2 da fila do rodízio." },
+    });
   });
 
-  it("lead com contact_id: passa o contato e o novo dono", async () => {
-    await executar({ id: "l1", contact_id: "k1" });
-    expect(acompanharDonoNaConversa).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ contactIds: ["k1"], novoDonoUserId: "u" }),
-    );
+  it("sem nome no perfil, a frase usa o rótulo da régua em vez de falhar — e sem uuid (#3023)", async () => {
+    const admin = adminFalso({ data: { user_id: PESSOA, posicao: 1 }, error: null }, null);
+    const r = await getAction("assign_owner")!.execute(ctx(admin), RODIZIO);
+    expect(r.status).toBe("success");
+    // A régua de `lib/users/rotulo-do-atendente.ts`: nome → e-mail →
+    // `Atendente <sufixo do hash do id>`. A frase é informação de uma atribuição
+    // que ACONTECEU — falhar aqui esconderia o fato —, mas não vaza o id.
+    expect(r.detail?.explicacao).toBe(`Vez de Atendente ${sufixoDoMembro(PESSOA)}, posição 1 da fila do rodízio.`);
+    expect(r.detail?.explicacao).not.toContain("11111111");
+  });
+
+  it("ninguém disponível (todos pausados ou fora da equipe) é skipped com o motivo", async () => {
+    const admin = adminFalso({ data: { motivo: "ninguem_disponivel" }, error: null });
+    const r = await getAction("assign_owner")!.execute(ctx(admin), RODIZIO);
+    expect(r).toEqual({ type: "assign_owner", status: "skipped", detail: { reason: "ninguem_disponivel" } });
+  });
+
+  it("regra que perdeu o rodízio e lead de fora viram failed com o código", async () => {
+    const semRodizio = await getAction("assign_owner")!.execute(ctx(adminFalso({ data: { motivo: "sem_rodizio" }, error: null })), RODIZIO);
+    expect(semRodizio).toEqual({ type: "assign_owner", status: "failed", error: "sem_rodizio" });
+    const semLead = await getAction("assign_owner")!.execute(ctx(adminFalso({ data: { motivo: "lead_nao_encontrado" }, error: null })), RODIZIO);
+    expect(semLead).toEqual({ type: "assign_owner", status: "failed", error: "lead_nao_encontrado" });
+  });
+
+  it("erro da RPC é failed com a mensagem, sem inventar dono", async () => {
+    const admin = adminFalso({ data: null, error: { message: "connection reset" } });
+    const r = await getAction("assign_owner")!.execute(ctx(admin), RODIZIO);
+    expect(r).toEqual({ type: "assign_owner", status: "failed", error: "connection reset" });
+    expect(admin.auth.admin.getUserById).not.toHaveBeenCalled();
+  });
+
+  it("sem lead no contexto não chama a função", async () => {
+    const admin = adminFalso({ data: null, error: null });
+    const r = await getAction("assign_owner")!.execute(ctx(admin, null), RODIZIO);
+    expect(r).toEqual({ type: "assign_owner", status: "skipped", detail: { reason: "missing_input" } });
+    expect(admin.rpc).not.toHaveBeenCalled();
   });
 });

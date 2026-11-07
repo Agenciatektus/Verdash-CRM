@@ -188,6 +188,10 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // o handler. A chave é a de antes: `{org}/templates/{uuid}.{jpg|png}`, com a
   // extensão vinda da ASSINATURA dos bytes.
   { arquivo: "lib/channels/templates-midia.ts", fronteira: "storage.chave-de-objeto" },
+  // A nota de voz do agente (`uploadDeVoz`): `{org}/{conversa}/voz-agente-{jobId}-{seq}.mp3`
+  // — org e conversa do turno, jobId uuid da fila, seq inteiro do turno. Nada de
+  // texto do cliente nem do modelo entra na chave.
+  { arquivo: "lib/agent-engine/agent/inbound-turn.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/settings/sons/route.ts", fronteira: "storage.chave-de-objeto" },
   { arquivo: "app/api/v1/marca/logo/route.ts", fronteira: "storage.chave-de-objeto" },
   // A foto da pessoa e a da organização (migration 9061): a chave é
@@ -208,6 +212,12 @@ const SITES: { arquivo: string; fronteira: string; papel?: "gerador" | "validado
   // worker (`caminhoDaMiniatura`): `{org}/miniaturas/{conversa}/{mensagem}.webp`,
   // três uuids e uma palavra fixa.
   { arquivo: "scripts/miniaturas-retroativas.ts", fronteira: "storage.chave-de-objeto" },
+  // A foto do produto por URL na planilha (#3587, fatia 1): a chave é
+  // `<org>/<produto>/<uuid>.<ext>` — os mesmos pedaços que a tela grava. O uuid
+  // nasce aqui (`randomUUID`), a extensão vem do tipo farejado nos BYTES (não
+  // do nome nem da URL) e o `org`/`produto` são uuids já resolvidos. Nenhum
+  // texto da planilha entra na chave — a URL do cliente só escolhe o conteúdo.
+  { arquivo: "lib/catalogo/fotos-por-url.ts", fronteira: "storage.chave-de-objeto" },
   // Chave de idempotência: os geradores (manda UUID) e os validadores (exige UUID).
   { arquivo: "app/onboarding/connect-whatsapp/_client.tsx", fronteira: "api.idempotency-key", papel: "gerador" },
   { arquivo: "components/extensions/ExtensionsManager.tsx", fronteira: "api.idempotency-key", papel: "gerador" },

@@ -30,6 +30,7 @@ import type {
   SituacaoDaTarefa,
   Tarefa,
 } from "@/lib/tarefas/tipos";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 interface Props {
   aberto: boolean;
@@ -259,7 +260,7 @@ export function FormularioDeTarefa({
                   <SelectItem key={membro.user_id} value={membro.user_id}>
                     {membro.user_id === usuario.id
                       ? t("Eu")
-                      : (membro.full_name ?? t("Membro sem nome"))}
+                      : rotuloDoMembro(membro, t)}
                   </SelectItem>
                 ))}
                 {/* O responsável de hoje pode não estar mais na lista (saiu da

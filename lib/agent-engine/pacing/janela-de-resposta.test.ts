@@ -133,12 +133,20 @@ describe('janela de resposta separada da janela de disparo (0495)', () => {
     }
   });
 
-  it('resposta dispensa o cap diário; janela 24h passa', () => {
-    // Cap e aquecimento protegem o número de DISPARO; quem escreveu primeiro é respondido.
+  it('RESPOSTA não é barrada pelo teto do dia; o espaçamento continua (9061)', () => {
+    // O teto mede quantas pessoas o número ABORDA. Segurar a resposta a quem
+    // escreveu até amanhã perde o lead e não protege o número — medido em
+    // produção. O throttle (espaçamento entre mensagens) não abre junto.
     const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     const d = decidePacing({
-      now: AS_3H, knobs: k, state: { ...estado, sentToday: 999 }, crmDailyLimit: null, resposta: true,
+      now: AS_3H,
+      knobs: k,
+      state: { ...estado, sentToday: 999, lastSentAt: new Date(AS_3H.getTime() - 100) },
+      crmDailyLimit: null,
+      resposta: true,
+      rng: () => 0,
     });
+    expect(d).toEqual({ allow: true, waitMs: k.throttleMs - 100 });
     expect(d.allow).toBe(true);
   });
 

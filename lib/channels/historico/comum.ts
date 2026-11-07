@@ -1,5 +1,6 @@
 import type { WahaPayload } from "@/lib/waha/ingest";
 import type { CursorDaImportacao } from "@/lib/channels/historico/rodada";
+import type { EscopoDaImportacao } from "@/lib/channels/historico/fichas-do-crm";
 
 /** Tipos e utilidades que as peças da rodada do histórico (#999) dividem. */
 
@@ -16,7 +17,13 @@ export interface Importacao {
   organization_id: string;
   channel_session_id: string;
   status: string;
-  dias: number;
+  /** `null` quando a janela é `desde`/`ate` (importação da queda). */
+  dias: number | null;
+  /** Ausentes nas linhas antigas (e nos dublês de teste): valem os padrões. */
+  escopo?: EscopoDaImportacao | null;
+  origem?: "manual" | "queda" | null;
+  desde?: string | null;
+  ate?: string | null;
   cursor: Partial<CursorDaImportacao> | null;
   conversas_feitas: number | null;
   mensagens_gravadas: number | null;

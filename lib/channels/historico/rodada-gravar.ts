@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 import { buscaEmLotes } from "@/lib/supabase/em-lotes";
-import { notifyNameOf, type WahaPayload } from "@/lib/waha/ingest";
+import { bodyOf, notifyNameOf, resolveMessageType, type WahaPayload } from "@/lib/waha/ingest";
+import { previaDaMensagem } from "@/lib/messaging/previa-da-mensagem";
 import {
   candidatosDeExternalId,
   identidadeDoChat,
@@ -10,6 +11,16 @@ import {
   type LinhaDeMensagemImportada,
 } from "@/lib/channels/historico/mapear";
 import { BYTES_DE_CANDIDATOS_POR_CONSULTA, mensagemDeErro, type Importacao } from "@/lib/channels/historico/comum";
+
+/** Uma mensagem que esta rodada acabou de gravar (não as que já existiam). */
+export interface MensagemGravadaDaRodada {
+  linha: LinhaDeMensagemImportada;
+  texto: string | null;
+  /** A prévia que a conversa mostra na caixa (mesma regra do ao vivo). */
+  previa: string;
+  /** O nome que o canal deu ao remetente, só de mensagem recebida. */
+  nome: string | null;
+}
 
 /**
  * Contato pela MESMA RPC e com o MESMO telefone canônico do ingest ao vivo, e
@@ -45,6 +56,21 @@ export async function garantirContatoEConversa(
   if (erroDoContato) throw new Error(`fn_upsert_wa_contact: ${mensagemDeErro(erroDoContato)}`);
   if (!contactId) return null;
 
+  const conversationId = await garantirConversaDoContato(admin, imp, contactId as string, ultimaEm);
+  return { contactId: contactId as string, conversationId };
+}
+
+/**
+ * A conversa do contato, pela irmã que não reabre nem distribui (a mesma do `todos`).
+ * Usada sozinha no escopo `so_crm`: lá a ficha já existe e não é tocada (nem nome,
+ * nem `source_metadata`); só a conversa é achada ou criada.
+ */
+export async function garantirConversaDoContato(
+  admin: SupabaseClient,
+  imp: Importacao,
+  contactId: string,
+  ultimaEm: number | null,
+): Promise<string> {
   const { data: conversationId, error: erroDaConversa } = await admin.rpc(
     "fn_upsert_wa_conversation_importada" as never,
     {
@@ -56,7 +82,7 @@ export async function garantirContatoEConversa(
   );
   if (erroDaConversa) throw new Error(`fn_upsert_wa_conversation_importada: ${mensagemDeErro(erroDaConversa)}`);
   if (!conversationId) throw new Error("fn_upsert_wa_conversation_importada: sem id");
-  return { contactId: contactId as string, conversationId: conversationId as string };
+  return conversationId as string;
 }
 
 /**
@@ -73,7 +99,7 @@ export async function gravarMensagens(
   alvo: { contactId: string; conversationId: string },
   mensagens: WahaPayload[],
   conta: { gravadas: number; existentes: number },
-): Promise<void> {
+): Promise<MensagemGravadaDaRodada[]> {
   const candidatos = mensagens.map(candidatosDeExternalId);
   const { data: achadas, error: erroDaConsulta } = await buscaEmLotes(
     [...new Set(candidatos.flat())],
@@ -93,7 +119,7 @@ export async function gravarMensagens(
     linhasAchadas.filter((m) => m.metadata?.importacao_id === imp.id).map((m) => m.external_id),
   );
 
-  const novas: LinhaDeMensagemImportada[] = [];
+  const novas: Array<{ linha: LinhaDeMensagemImportada; p: WahaPayload }> = [];
   const vistos = new Set<string>();
   mensagens.forEach((p, i) => {
     const mapeada = mapearMensagemDoAcervo(p, {
@@ -111,25 +137,43 @@ export async function gravarMensagens(
       return;
     }
     vistos.add(linha.external_id);
-    novas.push(linha);
+    novas.push({ linha, p });
   });
-  if (novas.length === 0) return;
+  if (novas.length === 0) return [];
 
-  const { error: erroDoLote } = await admin.from("messages").insert(novas as never);
+  const { error: erroDoLote } = await admin
+    .from("messages")
+    .insert(novas.map((n) => n.linha) as never);
   if (!erroDoLote) {
     conta.gravadas += novas.length;
-    return;
+    return novas.map(comoGravada);
   }
   if ((erroDoLote as { code?: string }).code !== "23505") {
     throw new Error(`messages_insert: ${mensagemDeErro(erroDoLote)}`);
   }
 
-  for (const linha of novas) {
-    const { error } = await admin.from("messages").insert(linha as never);
-    if (!error) conta.gravadas += 1;
-    else if ((error as { code?: string }).code === "23505") conta.existentes += 1;
+  // Só o que entrou de fato volta: o efeito da queda é por mensagem nova.
+  const gravadas: Array<{ linha: LinhaDeMensagemImportada; p: WahaPayload }> = [];
+  for (const n of novas) {
+    const { error } = await admin.from("messages").insert(n.linha as never);
+    if (!error) {
+      conta.gravadas += 1;
+      gravadas.push(n);
+    } else if ((error as { code?: string }).code === "23505") conta.existentes += 1;
     else throw new Error(`messages_insert: ${mensagemDeErro(error)}`);
   }
+  return gravadas.map(comoGravada);
+}
+
+/** Texto, prévia e nome de uma mensagem que entrou: o que o efeito da queda e o resumo leem. */
+function comoGravada(n: { linha: LinhaDeMensagemImportada; p: WahaPayload }): MensagemGravadaDaRodada {
+  const texto = bodyOf(n.p);
+  return {
+    linha: n.linha,
+    texto,
+    previa: previaDaMensagem(texto, resolveMessageType(n.p)),
+    nome: n.p.fromMe === true ? null : (notifyNameOf(n.p)?.trim().slice(0, 200) || null),
+  };
 }
 
 export async function atualizarMensagem(

@@ -13,6 +13,7 @@ import type { Logger } from '../../obs/logger';
 import { claimOfJob } from '../../queue/claim';
 import { rescheduleJob, type JobRow } from '../../queue/queue';
 import { janelaDeEnvioAberta, proximaAberturaDaJanela } from '../../pacing/engine';
+import { adiadoPorJanela } from '../../pacing/adiados-da-janela';
 import { loadChannelKnobs } from '../../pacing/store';
 import { avisarJanelaFechada, resolverAvisoDeJanela } from '../../pacing/aviso-de-janela';
 import { lerCamadasDaOrg } from '../../guardrails/camadas-da-org';
@@ -178,6 +179,13 @@ export async function avaliarPortoesDeEntrada(
         acquiredAt: claimOfJob(liveJob())?.acquired_at,
         delayMs: Math.max(abertura.getTime() - agora.getTime(), 1_000),
         reason: 'fora da janela anti-ban de envio — turno adiado para a abertura',
+        // #3383: o rastro no payload diz a quem vem depois que este job espera uma
+        // ABERTURA (horas), não um debounce de rajada — sem ele o drain dava carona.
+        payloadPatch: adiadoPorJanela({
+          tipo: resposta ? 'resposta' : 'disparo',
+          abertura: abertura.toISOString(),
+          janela: `${resposta ? knobs.respostaStartHour : knobs.windowStartHour}h-${resposta ? knobs.respostaEndHour : knobs.windowEndHour}h`,
+        }),
       });
       runLog.info('turno adiado — fora da janela anti-ban de envio', {
         janela: `${resposta ? knobs.respostaStartHour : knobs.windowStartHour}h-${resposta ? knobs.respostaEndHour : knobs.windowEndHour}h`,

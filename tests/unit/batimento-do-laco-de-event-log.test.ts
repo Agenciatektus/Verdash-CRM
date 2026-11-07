@@ -99,18 +99,18 @@ describe('a ida ao Redis falha aberta', () => {
 
 describe('o laço do worker bate', () => {
   const log: Logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-  const knobs = { intervalMs: 2_000, idleIntervalMs: 2_000, batchSize: 50 };
+  const knobs = { intervalMs: 2_000, idleIntervalMs: 2_000, idleMaxMs: 2_000, staleSweepMs: 60_000, batchSize: 50 };
   const resumoVazio = { scanned: 0, done: 0, retried: 0, failed: 0, dead: 0 };
 
   it('no máximo 1 escrita por intervalo, ao longo de muitos ticks', async () => {
     vi.useFakeTimers();
     const set = vi.fn(async () => 'OK');
     const controller = new AbortController();
-    const loop = runEventLogDrainLoop(knobs, log, controller.signal, {
+    const loop = runEventLogDrainLoop(knobs, log, controller.signal, { deps: {
       drainEventLog: vi.fn(async () => resumoVazio),
       admin: {} as never,
       batimento: { get: vi.fn(), set },
-    });
+    } });
     // 60 s a 2 s por tick = 30 ticks; batidas em 0, 15, 30, 45 e 60 s.
     await vi.advanceTimersByTimeAsync(60_000);
     controller.abort();
@@ -123,13 +123,13 @@ describe('o laço do worker bate', () => {
     vi.useFakeTimers();
     const set = vi.fn(async () => 'OK');
     const controller = new AbortController();
-    const loop = runEventLogDrainLoop(knobs, log, controller.signal, {
+    const loop = runEventLogDrainLoop(knobs, log, controller.signal, { deps: {
       drainEventLog: vi.fn(async () => {
         throw new Error('banco fora');
       }),
       admin: {} as never,
       batimento: { get: vi.fn(), set },
-    });
+    } });
     await vi.advanceTimersByTimeAsync(30_000);
     controller.abort();
     await loop;

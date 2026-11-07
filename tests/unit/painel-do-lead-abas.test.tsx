@@ -232,7 +232,7 @@ describe("painel do lead — modo leitura", () => {
     await screen.findByTestId("demanda-sem-proximo-passo");
     await userEvent.click(aba("Negócios"));
 
-    expect(screen.getByRole("button", { name: "Novo Lead" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Novo negócio" })).toBeDisabled();
     const acoes = screen.getByTestId("inbox-acoes-do-negocio");
     expect(within(acoes).queryByRole("button")).toBeNull();
     expect(screen.getByTestId("inbox-responsavel-somente-leitura")).toBeTruthy();

@@ -29,13 +29,25 @@ import type { SaidaDoRoteamento } from './roteamento';
 export async function avaliarEntradaDoAgente(
   c: ContextoDoTurno,
   e: {
+    routed: SaidaDoRoteamento['routed'];
     agentConfig: SaidaDoRoteamento['agentConfig'];
     inboundsPendentes: readonly string[];
     mensagemDoJob: string;
   },
 ): Promise<Passo<null>> {
   const { deps, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob } = c;
-  const { agentConfig, inboundsPendentes, mensagemDoJob } = e;
+  const { routed, agentConfig, inboundsPendentes, mensagemDoJob } = e;
+
+  // O PÚBLICO DO AGENTE (#3722): nenhum agente publicado neste número atende o
+  // público deste contato. SILÊNCIO, e o genérico não assume (venderia ao cliente
+  // com contrato). Vale em todo turno; a mensagem segue na Central para o humano.
+  if (!preview && 'silencioPeloPublico' in routed && routed.silencioPeloPublico === true) {
+    runLog.info('turno pulado — nenhum agente publicado neste número atende ao público deste contato (#3722)', {
+      kind: liveJob().kind,
+      conversation_id: input.conversationId,
+    });
+    return { seguir: false, motivo: 'silencio_pelo_publico' };
+  }
 
   // O FILTRO DE PALAVRA-CHAVE da versão publicada (#2679). O filtro decide se o
   // MODELO entra, nunca se a pessoa é ouvida (as detecções vieram antes).

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useT } from "@/hooks/i18n/useT";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight, CaretDown, Gear } from "@/lib/ui/icons";
+import { ArrowRight, BookOpen, CaretDown, Gear } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { ConnectionHealthDot } from "@/components/connections/ConnectionHealthDot";
@@ -69,7 +69,21 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
   // Configurações sai da área que rola e vai para o rodapé fixo: medido em
   // 1280x768, ele caía fora da dobra mesmo em telas de 1080px.
   const grupos = todos.filter((g) => g.group.id !== GRUPO_NO_RODAPE);
-  const rodape = todos.find((g) => g.group.id === GRUPO_NO_RODAPE)?.group.hub;
+  const grupoDoRodape = todos.find((g) => g.group.id === GRUPO_NO_RODAPE);
+  const rodape = grupoDoRodape?.group.hub;
+  /**
+   * "Ajuda" é o ÚLTIMO item do rodapé fixo (issue #3567), e chega por `href` em
+   * vez de uma segunda lista escrita aqui: a entrada vive no `NAV_CATALOG` com
+   * `sidebar: true`, então atravessa o mesmo filtro de papel, de módulo e de
+   * área personalizada que todo o resto do menu. Um `Link` de Ajuda escrito à
+   * mão aqui faria o link sobreviver a uma empresa que tirou a tela das áreas
+   * dela — e a pessoa cairia num 403 saindo do socorro.
+   *
+   * O comentário NÃO pode citar a tag com os sinais: a cerca
+   * `menu-prefetch-so-por-intencao` lê o TEXTO do arquivo, comentário incluído,
+   * e uma tag de exemplo aqui é indistinguível de um link de verdade para ela.
+   */
+  const ajuda = grupoDoRodape?.items.find((d) => d.href === "/app/ajuda");
 
   /**
    * Grupo fechado é preferência POR NAVEGADOR, não por conta: começa vazio (tudo
@@ -114,7 +128,10 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
         32px (28px + 4px de `space-y-1`); trocar N destinos por um link de hub
         devolve (N-1)×32px. CRM, IA, Análise e Organização já têm hub.
       */}
-      <nav className="flex-1 space-y-2 overflow-y-auto p-2" aria-label={t("Navegação principal")}>
+      <nav
+        className="flex-1 space-y-2 overflow-y-auto px-2 py-1"
+        aria-label={t("Navegação principal")}
+      >
         {grupos.map(({ group, items }) => {
           const tituloId = `nav-grupo-${group.id}`;
           const aberto = !gruposFechados.has(group.id);
@@ -198,7 +215,7 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
           );
         })}
       </nav>
-      <div className="border-t p-2">
+      <div className="border-t px-2 py-1">
         {rodape && (
           <Link
             href={rodape.href}
@@ -212,6 +229,23 @@ export function SidebarContent({ onNavigate, funis = [] }: SidebarContentProps) 
           >
             <Gear size={18} aria-hidden />
             <span className="truncate">{t(rodape.label)}</span>
+          </Link>
+        )}
+        {ajuda && (
+          // Último link do rodapé (#3567): é o que se procura quando o resto não
+          // respondeu. Mesmas classes do link de Configurações acima.
+          <Link
+            href={ajuda.href}
+            {...intencao(ajuda.href)}
+            aria-current={pathname.startsWith(ajuda.href) ? "page" : undefined}
+            onClick={onNavigate}
+            className={cn(
+              "mb-1 flex items-center gap-3 rounded-md px-3 py-1 text-sm transition-colors",
+              pathname.startsWith(ajuda.href) ? ITEM_ATIVO : ITEM_INATIVO,
+            )}
+          >
+            <BookOpen size={18} aria-hidden />
+            <span className="truncate">{t(ajuda.label)}</span>
           </Link>
         )}
       </div>

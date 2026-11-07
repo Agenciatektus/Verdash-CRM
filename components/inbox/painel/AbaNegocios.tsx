@@ -31,7 +31,7 @@ interface Props {
 /**
  * A aba Negócios: o que se vende para este contato.
  *
- * "Novo Lead" mora aqui, e não no cabeçalho, porque é ao lado dos negócios que
+ * "Novo negócio" mora aqui, e não no cabeçalho, porque é ao lado dos negócios que
  * existem que a pessoa decide se precisa de outro. O Acervo também: é a consulta
  * que responde "quanto custa", "tem pronta entrega", a conversa de venda.
  */
@@ -55,7 +55,7 @@ export function AbaNegocios({
     <div className="flex flex-col gap-4">
       <section data-testid="inbox-campos-lead">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold text-text">{t("Leads recentes")}</h3>
+          <h3 className="text-xs font-semibold text-text">{t("Negócios recentes")}</h3>
           <Button
             size="sm"
             variant="outline"
@@ -64,7 +64,7 @@ export function AbaNegocios({
             onClick={() => setLeadDialogOpen(true)}
           >
             <Users size={12} className="mr-1" weight="regular" aria-hidden />
-            {carregandoFunil ? t("Carregando…") : t("Novo Lead")}
+            {carregandoFunil ? t("Carregando…") : t("Novo negócio")}
           </Button>
         </div>
         {carregando ? (
@@ -79,7 +79,7 @@ export function AbaNegocios({
             leitura={leitura}
           />
         ) : (
-          <SemLista vazio={t("Sem leads.")} erro={erro} onTentarDeNovo={recarregar} />
+          <SemLista vazio={t("Sem negócios.")} erro={erro} onTentarDeNovo={recarregar} />
         )}
       </section>
 
