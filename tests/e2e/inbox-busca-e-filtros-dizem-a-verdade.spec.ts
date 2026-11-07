@@ -28,6 +28,7 @@
  * uma letra só, espaço duplo, termo inexistente, filtro que zera a lista.
  */
 import { expect, test } from "./helpers/test";
+import { seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 
 import { esperarCacheCurtoVencer, esperarEscritaDeFora } from "./helpers/cache-curto";
 import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
@@ -201,14 +202,44 @@ test("número e Não lidos sobrevivem à recarga e permanecem na sua organizaç�
     return data!.id as string;
   };
   const trocar = async (id: string) => {
-    const seletor = page.getByTestId("tenant-switcher");
+    const seletor = seletorDeOrganizacao(page);
     await seletor.click();
     await page.getByTestId(`tenant-switcher-item-${id}`).click();
     await expect(seletor).toBeEnabled();
     await expect.poll(async () => (await page.context().cookies()).find((cookie) => cookie.name === "active_org")?.value).toBe(id);
   };
   const numero = page.getByRole("combobox", { name: "Filtrar por número de WhatsApp" });
-  const naoLidos = page.getByRole("button", { name: "Não lidos", exact: true });
+  // "Não lidos" virou o interruptor "Só não lidas", também dentro de "Filtros".
+  const naoLidos = page.getByRole("switch", { name: "Só não lidas" });
+  // O seletor de número mora dentro do popover "Filtros" (antes ficava na barra
+  // da lista). Sem abri-lo, `numero.click()` esperava o teto de 240 s inteiro.
+  // Cada leitura abre, mede e fecha, para o popover não cobrir o "Não lidos".
+  const abrirFiltros = async () => {
+    if (!(await numero.isVisible())) await page.getByRole("button", { name: /^Filtros/ }).click();
+    await expect(numero).toBeVisible();
+  };
+  const numeroMostra = async (texto: string) => {
+    await abrirFiltros();
+    await expect(numero).toHaveText(texto);
+    await page.keyboard.press("Escape");
+  };
+  const naoLidosEsta = async (ligado: boolean) => {
+    await abrirFiltros();
+    await expect(naoLidos).toHaveAttribute("aria-checked", String(ligado));
+    await page.keyboard.press("Escape");
+  };
+  const ligarNaoLidos = async () => {
+    await abrirFiltros();
+    await naoLidos.click();
+    await expect(naoLidos).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+  };
+  const escolherNumero = async (nome: string) => {
+    await abrirFiltros();
+    await numero.click();
+    await page.getByRole("option", { name: nome, exact: true }).click();
+    await numeroMostra(nome);
+  };
   try {
     const canais: { org: string; id: string; nome: string }[] = [];
     for (const letra of ["A", "B"]) {
@@ -238,43 +269,40 @@ test("número e Não lidos sobrevivem à recarga e permanecem na sua organizaç�
     // organizações novas aparecem no seletor quando a entrada vence.
     await esperarEscritaDeFora(async () => {
       await page.reload();
-      await page.getByTestId("tenant-switcher").click({ timeout: 3_000 });
+      await seletorDeOrganizacao(page).click({ timeout: 3_000 });
       await expect(page.getByTestId(`tenant-switcher-item-${canais[1]!.org}`)).toBeVisible({ timeout: 3_000 });
       await page.keyboard.press("Escape");
     });
     await trocar(canais[0]!.org);
-    await numero.click();
-    await page.getByRole("option", { name: canais[0]!.nome, exact: true }).click();
-    await naoLidos.click();
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "true");
+    await escolherNumero(canais[0]!.nome);
+    await ligarNaoLidos();
     await page.reload();
-    await expect(numero).toHaveText(canais[0]!.nome);
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "true");
+    await numeroMostra(canais[0]!.nome);
+    await naoLidosEsta(true);
 
     await trocar(canais[1]!.org);
-    await expect(numero).toHaveText("Todos os números");
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "false");
-    await numero.click();
-    await page.getByRole("option", { name: canais[1]!.nome, exact: true }).click();
+    await numeroMostra("Todos os números");
+    await naoLidosEsta(false);
+    await escolherNumero(canais[1]!.nome);
     await trocar(canais[0]!.org);
-    await expect(numero).toHaveText(canais[0]!.nome);
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "true");
+    await numeroMostra(canais[0]!.nome);
+    await naoLidosEsta(true);
     await trocar(canais[1]!.org);
-    await expect(numero).toHaveText(canais[1]!.nome);
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "false");
+    await numeroMostra(canais[1]!.nome);
+    await naoLidosEsta(false);
 
     const removido = await db.from("channel_sessions").delete().eq("organization_id", canais[1]!.org).eq("id", canais[1]!.id);
     expect(removido.error).toBeNull();
     await page.reload();
-    await expect(numero).toHaveText("Número removido");
+    await numeroMostra("Número removido");
     mkdirSync("evidence/antigos-core-3402", { recursive: true });
     await page.screenshot({ path: "evidence/antigos-core-3402/numero-removido.png" });
     await page.getByRole("button", { name: "Limpar filtros", exact: true }).click();
     await page.reload();
-    await expect(numero).toHaveText("Todos os números");
+    await numeroMostra("Todos os números");
     await trocar(canais[0]!.org);
-    await expect(numero).toHaveText(canais[0]!.nome);
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "true");
+    await numeroMostra(canais[0]!.nome);
+    await naoLidosEsta(true);
     await page.screenshot({ path: "evidence/antigos-core-3402/filtros-restaurados.png" });
 
     // Restrição do navegador declarada: bloqueia só o armazenamento, sem
@@ -283,12 +311,10 @@ test("número e Não lidos sobrevivem à recarga e permanecem na sua organizaç�
       Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new DOMException("Bloqueado", "SecurityError"); } });
     });
     await page.reload();
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "false");
-    await naoLidos.click();
-    await expect(naoLidos).toHaveAttribute("aria-pressed", "true");
-    await numero.click();
-    await page.getByRole("option", { name: canais[0]!.nome, exact: true }).click();
-    await expect(numero).toHaveText(canais[0]!.nome);
+    await naoLidosEsta(false);
+    await ligarNaoLidos();
+    await escolherNumero(canais[0]!.nome);
+    await numeroMostra(canais[0]!.nome);
   } finally {
     const limpezas = await Promise.allSettled(orgs.map((id) => db.from("organizations").delete().eq("id", id)));
     expect(limpezas.every((r) => r.status === "fulfilled" && r.value.error === null), "limpeza das organizações da própria spec").toBe(true);

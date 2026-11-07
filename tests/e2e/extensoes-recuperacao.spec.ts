@@ -1,4 +1,5 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 
 import { expect as expectBase, test, type Page, type TestInfo } from "./helpers/test";
 
@@ -49,7 +50,7 @@ async function trocarOrganizacao(page: Page, organizationId: string): Promise<vo
   // menu aberto: medido, item do seletor em y=-1410 com scrollY=1463. Quem usa sobe a
   // página antes de trocar de organização; a prova faz o mesmo.
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.getByTestId("tenant-switcher").click();
+  await seletorDeOrganizacao(page).click();
   const item = page.getByTestId(`tenant-switcher-item-${organizationId}`);
   if ((await item.getByText("✓", { exact: true }).count()) > 0) {
     await page.keyboard.press("Escape");

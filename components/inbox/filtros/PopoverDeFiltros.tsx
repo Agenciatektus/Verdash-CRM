@@ -152,7 +152,7 @@ export function PopoverDeFiltros({
           </Secao>
         )}
 
-        {seletorDeEtiqueta && <Secao titulo={t("Tags")}>{seletorDeEtiqueta}</Secao>}
+        {seletorDeEtiqueta && <Secao titulo={t("Etiquetas")}>{seletorDeEtiqueta}</Secao>}
 
         {atendimento}
 
