@@ -1202,7 +1202,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       (codigoDaFalha === 'modelo_inexistente' || statusDaFalha === 403) &&
       !(err instanceof LlmBudgetExceededError) &&
       input.abortSignal?.aborted !== true &&
-      (config.enabledModels.length === 0 || config.enabledModels.includes(reservaDoModelo.modelId));
+      (config.enabledModels.length === 0 || config.enabledModels.includes(modeloNaReserva(config.provider, reservaDoModelo.modelId)));
     const origemDaFalha = vaiParaAReservaDoModelo ? 'economico_coberto_pela_reserva' : origem;
     await registrarFalha(db, {
       input,
@@ -1256,7 +1256,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       modelo_economico: model,
       modelo_de_reserva: reservaDoModelo.modelId,
     });
-    model = reservaDoModelo.modelId;
+    model = modeloNaReserva(config.provider, reservaDoModelo.modelId);
     origem = reservaDoModelo.origem;
     startedAt = Date.now();
     try {
