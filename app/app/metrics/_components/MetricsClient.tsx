@@ -202,7 +202,9 @@ export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: 
           inteiro, ao qual as métricas de área se subordinam (doutrina §3.6).
           Não filtra por atendente — atrito é propriedade do sistema, e quebrá-lo
           por pessoa convida a otimização local que degrada o todo. */}
-      <AtritoPanel podeEditarRegua={canCompare} />
+      <div className="lg:col-span-2">
+        <AtritoPanel podeEditarRegua={canCompare} />
+      </div>
 
       {/* Relatório "Perdas" (#1537): manager+, porque é o funil inteiro — o
           mesmo critério do /metrics para quem compara. */}
