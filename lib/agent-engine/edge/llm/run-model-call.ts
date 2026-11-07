@@ -1247,7 +1247,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       modelo_economico: model,
       modelo_de_reserva: reservaDoModelo.modelId,
     });
-    model = reservaDoModelo.modelId;
+    model = modeloNaReserva(config.provider, reservaDoModelo.modelId);
     origem = reservaDoModelo.origem;
     startedAt = Date.now();
     try {
