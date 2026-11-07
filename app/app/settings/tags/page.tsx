@@ -27,6 +27,7 @@ import { CabecalhoDaPagina, Pagina, SecaoDaPagina } from "@/components/pagina";
  * atendimento.
  */
 import Link from "next/link";
+import { Aviso } from "@/components/ui/aviso";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { tagsPageQuerySchema, tagsPageResultSchema } from "@/lib/schemas/tags";
@@ -40,6 +41,7 @@ import { tagsInternasDaOrg } from "@/lib/schemas/settings";
 import { createClient } from "@/lib/supabase/server";
 
 import { PainelDeTags } from "./_painel";
+import { NovaEtiqueta } from "./_sugestoes";
 import { TagsInternasForm } from "./_tags-internas-form";
 
 export const metadata = { title: "Etiquetas" };
@@ -111,6 +113,7 @@ export default async function TagsPage({ searchParams }: { searchParams: Promise
     <Pagina>
       <CabecalhoDaPagina
         titulo={t("Etiquetas")}
+        acoes={<NovaEtiqueta idioma={idioma} />}
         descricao={t(
             "As etiquetas que os agentes, o Inbox e o funil usam nesta organização. Acrescente novas, escolha quais são sugeridas para quem atende em conversas e contatos, e arrume as que existem: renomear ou juntar corrige também as regras de agente e as sugestões, na mesma operação.",
           )}
@@ -125,9 +128,9 @@ export default async function TagsPage({ searchParams }: { searchParams: Promise
       {error || !result.success ? (
           // A falha NÃO vira lista vazia: "nenhuma etiqueta" e "não consegui ler"
           // levam o operador a decisões opostas (uma convida a criar tudo de novo).
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <Aviso tom="crit">
             {t("Não foi possível carregar as etiquetas agora. Recarregue a página.")}
-          </div>
+          </Aviso>
         ) : (
         <>
           <div className="flex flex-wrap items-center gap-3 text-sm">

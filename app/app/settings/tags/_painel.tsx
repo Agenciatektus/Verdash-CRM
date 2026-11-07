@@ -42,7 +42,7 @@ import { TABELA_EMPILHADA } from "@/components/pagina";
  */
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -54,8 +54,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Chip } from "@/components/ui/chip";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChipDeEtiqueta } from "@/components/tags/ChipDeEtiqueta";
@@ -67,8 +85,9 @@ import type { Idioma } from "@/lib/i18n/idiomas";
 import type { AcaoDeVocabulario, InventarioDeTags, LinhaDeVocabulario } from "@/lib/schemas/tags";
 // ─── DIVERGÊNCIA TEKTUS (9038) — as sugestões da curadoria do fork ──────────
 // O comportamento mora em `_sugestoes.tsx` (arquivo do fork); aqui ficam só a
-// coluna, o bloco de acrescentar e a trava da etiqueta `cliente`.
-import { AcrescentarEtiqueta, BotoesDeSugestao, unirComSugestoes } from "./_sugestoes";
+// coluna e a trava da etiqueta `cliente` (o "Nova etiqueta" mora no cabeçalho).
+import { MenuDaLinha } from "./_menu-da-linha";
+import { BotoesDeSugestao, estadoNoEscopo, unirComSugestoes } from "./_sugestoes";
 import { BarraDeEtiquetasEmLote, ERRO_EM_PORTUGUES, FileiraDeTons } from "./_lote";
 
 /**
@@ -135,7 +154,10 @@ export function PainelDeTags({
 }) {
   const t = (texto: string) => traduzir(texto, idioma);
   // 9038: as sugestões sem uso entram na lista (ver `unirComSugestoes`).
-  const tags = useMemo(() => unirComSugestoes(tagsDoVocabulario, sugestoes), [tagsDoVocabulario, sugestoes]);
+  const tags = useMemo(
+    () => unirComSugestoes(tagsDoVocabulario, sugestoes),
+    [tagsDoVocabulario, sugestoes],
+  );
   // 9038: `cliente` reservada pela regra da agenda não oferece renomear, juntar
   // nem excluir — o servidor recusaria (`fn_tags_reserva`), e botão que só
   // devolve erro é promessa falsa. Cor e sugestão continuam valendo.
@@ -151,6 +173,7 @@ export function PainelDeTags({
   // A SELEÇÃO do lote, por nome canônico (a mesma régua do banco): "VIP" e
   // "vip" são a mesma etiqueta.
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
+  const [filtro, setFiltro] = useState<"todas" | "fora" | "sugeridas">("todas");
 
   const destinos = useMemo(
     () =>
@@ -203,7 +226,11 @@ export function PainelDeTags({
   // Só acusa depois que o servidor respondeu: enquanto a busca corre, não há
   // como saber, e o servidor recusa de novo no POST (`destino_inexistente`).
   const destinoDaJuncaoInexistente =
-    paginado && acao === "juntar" && achadasNoServidor !== undefined && nomeDigitado.length > 0 && !nomeJaExiste;
+    paginado &&
+    acao === "juntar" &&
+    achadasNoServidor !== undefined &&
+    nomeDigitado.length > 0 &&
+    !nomeJaExiste;
 
   /**
    * O que a tela relê depois de QUALQUER mudança no vocabulário: o mapa de
@@ -221,9 +248,24 @@ export function PainelDeTags({
 
   const chave = (tag: string) => tag.trim().toLowerCase();
   const selecionaveis = tags.filter((linha) => !reservada(linha.tag));
+  // A barra de lote conta a seleção inteira; a caixa do cabeçalho, só o que o filtro mostra.
   const selecionadas = selecionaveis.filter((linha) => marcadas.has(chave(linha.tag)));
-  const todasMarcadas = selecionaveis.length > 0 && selecionadas.length === selecionaveis.length;
-  const algumaMarcada = selecionadas.length > 0;
+  const visiveis = tags.filter((linha) => {
+    if (filtro === "fora") return !linha.no_vocabulario;
+    if (filtro === "sugeridas")
+      return (
+        !!sugestoes &&
+        (["conversa", "contato"] as const).some(
+          (e) => estadoNoEscopo(sugestoes, e, linha.tag) === "sugerida",
+        )
+      );
+    return true;
+  });
+  const visiveisSelecionaveis = visiveis.filter((linha) => !reservada(linha.tag));
+  const marcadasVisiveis = visiveisSelecionaveis.filter((linha) => marcadas.has(chave(linha.tag)));
+  const todasMarcadas =
+    visiveisSelecionaveis.length > 0 && marcadasVisiveis.length === visiveisSelecionaveis.length;
+  const algumaMarcada = marcadasVisiveis.length > 0;
 
   function alternar(tag: string) {
     setMarcadas((antes) => {
@@ -235,13 +277,15 @@ export function PainelDeTags({
   }
 
   function alternarTodas() {
-    setMarcadas(todasMarcadas ? new Set() : new Set(selecionaveis.map((linha) => chave(linha.tag))));
+    setMarcadas((antes) => {
+      const depois = new Set(antes);
+      for (const linha of visiveisSelecionaveis) {
+        if (todasMarcadas) depois.delete(chave(linha.tag));
+        else depois.add(chave(linha.tag));
+      }
+      return depois;
+    });
   }
-
-  // `?.` porque o jsdom não implementa `scrollIntoView`.
-  const rolarAteOCartao = useCallback((elemento: HTMLDivElement | null) => {
-    elemento?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-  }, []);
 
   function abrir(linha: LinhaDeVocabulario, qual: AcaoDeVocabulario) {
     setAlvo(linha);
@@ -272,12 +316,15 @@ export function PainelDeTags({
           ...(acao === "definir_cor" ? { cor } : {}),
         }),
       });
-      const corpo = (await resposta.json().catch(() => null)) as
-        | { data?: Record<string, number | string | boolean | null>; error?: { code?: string } }
-        | null;
+      const corpo = (await resposta.json().catch(() => null)) as {
+        data?: Record<string, number | string | boolean | null>;
+        error?: { code?: string };
+      } | null;
       if (!resposta.ok) {
         const codigo = corpo?.error?.code ?? "internal_error";
-        toast.error(t(ERRO_EM_PORTUGUES[codigo] ?? "Não foi possível concluir agora. Tente de novo."));
+        toast.error(
+          t(ERRO_EM_PORTUGUES[codigo] ?? "Não foi possível concluir agora. Tente de novo."),
+        );
         // O diálogo de excluir fecha com o erro: ele é modal, e deixá-lo aberto
         // prenderia a tela num "Confirmar" que vai recusar de novo. O cartão das
         // outras ações fica, para corrigir o nome e tentar outra vez.
@@ -343,7 +390,9 @@ export function PainelDeTags({
       // como "nada aconteceu" — enquanto a operação pode ter sido aplicada no
       // servidor. O caminho de erro do SERVIDOR já era tratado acima.
       toast.error(
-        t("Não foi possível falar com o servidor. Recarregue a página e confira antes de tentar de novo."),
+        t(
+          "Não foi possível falar com o servidor. Recarregue a página e confira antes de tentar de novo.",
+        ),
       );
     } finally {
       setOcupado(false);
@@ -352,36 +401,43 @@ export function PainelDeTags({
 
   if (tags.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
-        <AcrescentarEtiqueta idioma={idioma} />
-        <Card className="p-6 text-sm text-muted-foreground">
-          {t(
-            "Nenhuma etiqueta nesta organização ainda. Elas aparecem aqui conforme os agentes, o Inbox e o funil usarem.",
-          )}
-        </Card>
-      </div>
+      <Card className="p-6 text-sm text-muted-foreground">
+        {t(
+          "Nenhuma etiqueta nesta organização ainda. Elas aparecem aqui conforme os agentes, o Inbox e o funil usarem.",
+        )}
+      </Card>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <AcrescentarEtiqueta idioma={idioma} />
-      <Card className="overflow-x-auto">
+      <div role="group" aria-label={t("Filtrar etiquetas")} className="flex flex-wrap gap-2">
+        <Chip ligado={filtro === "todas"} onClick={() => setFiltro("todas")}>
+          {t("Todas")}
+        </Chip>
+        <Chip ligado={filtro === "fora"} onClick={() => setFiltro("fora")}>
+          {t("Fora do vocabulário")}
+        </Chip>
+        {sugestoes && (
+          <Chip ligado={filtro === "sugeridas"} onClick={() => setFiltro("sugeridas")}>
+            {t("Sugeridas")}
+          </Chip>
+        )}
+      </div>
+      <Card className="overflow-hidden">
         {/* No celular o `thead` some (tabela empilhada) e leva junto a caixa de
             "selecionar todas"; esta linha é a mesma caixa para essa largura. */}
         <label className="hidden items-center gap-2 border-b border-border/60 p-3 text-sm mb:flex">
-          <input
-            type="checkbox"
-            checked={todasMarcadas}
-            onChange={alternarTodas}
-          />
+          <input type="checkbox" checked={todasMarcadas} onChange={alternarTodas} />
           {t("Selecionar todas")}
         </label>
-        <table className={`w-full text-sm ${TABELA_EMPILHADA}`}>
-          <caption className="sr-only">{t("Etiquetas da organização e onde são usadas")}</caption>
-          <thead className="bg-muted/50 text-left">
-            <tr>
-              <th className="p-3 font-medium">
+        <Table className={TABELA_EMPILHADA}>
+          <TableCaption className="sr-only">
+            {t("Etiquetas da organização e onde são usadas")}
+          </TableCaption>
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              <TableHead className="p-3">
                 <span className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -393,23 +449,27 @@ export function PainelDeTags({
                       if (caixa) caixa.indeterminate = algumaMarcada && !todasMarcadas;
                     }}
                     onChange={alternarTodas}
-                    disabled={selecionaveis.length === 0}
+                    disabled={visiveisSelecionaveis.length === 0}
                   />
                   {t("Etiqueta")}
                 </span>
-              </th>
-              <th className="p-3 font-medium">{t("Contatos")}</th>
-              <th className="p-3 font-medium">{t("Leads")}</th>
-              <th className="p-3 font-medium">{t("Conversas")}</th>
-              <th className="p-3 font-medium">{t("Regras de agente")}</th>
-              {sugestoes && <th className="p-3 font-medium">{t("Sugestão")}</th>}
-              <th className="p-3 font-medium">{t("Ações")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tags.map((linha) => (
-              <tr key={linha.tag} className="border-t border-border/60">
-                <td className="p-3">
+              </TableHead>
+              {/* Tablet: as três contagens viram uma coluna "Em uso". */}
+              <TableHead className="hidden p-3 lg:table-cell">{t("Contatos")}</TableHead>
+              <TableHead className="hidden p-3 lg:table-cell">{t("Leads")}</TableHead>
+              <TableHead className="hidden p-3 lg:table-cell">{t("Conversas")}</TableHead>
+              <TableHead className="p-3 lg:hidden">{t("Em uso")}</TableHead>
+              <TableHead className="p-3">{t("Regras de agente")}</TableHead>
+              {sugestoes && <TableHead className="p-3">{t("Sugestão")}</TableHead>}
+              <TableHead className="p-3">
+                <span className="sr-only">{t("Ações")}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visiveis.map((linha) => (
+              <TableRow key={linha.tag} className="border-border/60">
+                <TableCell className="p-3">
                   {/* 9038: a `cliente` reservada não entra no lote, pelo mesmo
                       motivo de não ter Renomear/Juntar/Excluir na linha. */}
                   {!reservada(linha.tag) && (
@@ -429,59 +489,79 @@ export function PainelDeTags({
                   {!linha.no_vocabulario && (
                     // Em uso e fora do vocabulário curado: existe em algum
                     // registro sem passar por nenhuma tela de cadastro. Dar cor
-                    // (o botão ao lado) traz a etiqueta para o vocabulário —
+                    // (o menu ao lado) traz a etiqueta para o vocabulário —
                     // escolher como ela aparece É curá-la.
                     <span className="ml-2 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                       {t("em uso, fora do vocabulário")}
                     </span>
                   )}
-                </td>
-                <td data-rotulo={t("Contatos")} className="p-3 tabular-nums">{linha.uso_em_contatos}</td>
-                <td data-rotulo={t("Leads")} className="p-3 tabular-nums">{linha.uso_em_leads}</td>
-                <td data-rotulo={t("Conversas")} className="p-3 tabular-nums">{linha.uso_em_conversas}</td>
-                <td data-rotulo={t("Regras de agente")} className="p-3 tabular-nums">
+                </TableCell>
+                <TableCell
+                  data-rotulo={t("Contatos")}
+                  className="hidden p-3 tabular-nums lg:table-cell"
+                >
+                  {linha.uso_em_contatos}
+                </TableCell>
+                <TableCell
+                  data-rotulo={t("Leads")}
+                  className="hidden p-3 tabular-nums lg:table-cell"
+                >
+                  {linha.uso_em_leads}
+                </TableCell>
+                <TableCell
+                  data-rotulo={t("Conversas")}
+                  className="hidden p-3 tabular-nums lg:table-cell"
+                >
+                  {linha.uso_em_conversas}
+                </TableCell>
+                <TableCell
+                  data-rotulo={t("Em uso")}
+                  className="p-3 tabular-nums lg:hidden"
+                  title={`${t("Contatos")} / ${t("Leads")} / ${t("Conversas")}`}
+                >
+                  {linha.uso_em_contatos} / {linha.uso_em_leads} / {linha.uso_em_conversas}
+                </TableCell>
+                <TableCell data-rotulo={t("Regras de agente")} className="p-3 tabular-nums">
                   {linha.em_regras > 0 ? (
                     <span className="font-medium">{linha.em_regras}</span>
                   ) : (
                     <span className="text-muted-foreground">0</span>
                   )}
-                </td>
+                </TableCell>
                 {sugestoes && (
-                  <td className="p-3">
+                  <TableCell className="p-3">
                     <BotoesDeSugestao tag={linha.tag} inventario={sugestoes} idioma={idioma} />
-                  </td>
+                  </TableCell>
                 )}
-                <td className="flex flex-wrap gap-2 p-3">
-                  <Button size="sm" variant="outline" onClick={() => abrir(linha, "definir_cor")}>
-                    {t("Cor")}
-                  </Button>
-                  {reservada(linha.tag) ? (
-                    <span
-                      className="self-center rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
-                      title={t(
-                        "A etiqueta cliente é posta pelo sistema enquanto a regra Clientes pela agenda estiver ligada. Desligue-a em Tipos de agendamento para editá-la aqui.",
-                      )}
-                    >
-                      {t("do sistema")}
-                    </span>
-                  ) : (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => abrir(linha, "renomear")}>
-                        {t("Renomear")}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => abrir(linha, "juntar")}>
-                        {t("Juntar")}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => abrir(linha, "excluir")}>
-                        {t("Excluir")}
-                      </Button>
-                    </>
-                  )}
-                </td>
-              </tr>
+                <TableCell className="p-3 mb:ml-auto">
+                  <div className="flex items-center justify-end gap-2">
+                    {reservada(linha.tag) && (
+                      <span
+                        className="rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                        title={t(
+                          "A etiqueta cliente é posta pelo sistema enquanto a regra Clientes pela agenda estiver ligada. Desligue-a em Tipos de agendamento para editá-la aqui.",
+                        )}
+                      >
+                        {t("do sistema")}
+                      </span>
+                    )}
+                    <MenuDaLinha
+                      tag={linha.tag}
+                      reservada={reservada(linha.tag)}
+                      t={t}
+                      aoEscolher={(qual) => abrir(linha, qual)}
+                    />
+                  </div>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
+        {visiveis.length === 0 && (
+          <p className="border-t border-border/60 p-3 text-sm text-muted-foreground">
+            {t("Nenhuma etiqueta encontrada.")}
+          </p>
+        )}
         {!paginado && tags.length >= TETO_DA_LISTA && (
           <p className="border-t border-border/60 p-3 text-sm text-muted-foreground">
             {t(
@@ -530,12 +610,12 @@ export function PainelDeTags({
             </p>
           )}
           {alvo && alvo.em_regras > 0 && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <Aviso tom="warn">
               {t("Atenção:")} {alvo.em_regras}{" "}
               {t(
                 "regra(s) de agente continuam escrevendo esta etiqueta. Excluir aqui não apaga a regra — o agente vai recriar a etiqueta no próximo atendimento.",
               )}
-            </p>
+            </Aviso>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={ocupado}>{t("Cancelar")}</AlertDialogCancel>
@@ -548,117 +628,133 @@ export function PainelDeTags({
         </AlertDialogContent>
       </AlertDialog>
 
-      {alvo && acao !== "excluir" && (
-        <Card
-          // O cartão abre DEPOIS da tabela: sem rolar até ele, clicar numa linha
-          // do alto não mudava nada à vista (o mesmo defeito que tirou o
-          // excluir daqui). A `key` remonta o cartão a cada linha/ação, para a
-          // rolagem acontecer de novo; a ref é estável para não rolar a cada
-          // tecla digitada no novo nome.
-          key={`${alvo.tag}:${acao}`}
-          ref={rolarAteOCartao}
-          className="flex flex-col gap-4 p-4"
-        >
-          <p className="text-sm">
-            {/* Mesma regra do toast: o texto estático passa por `t()`, a
+      {/* Renomear, juntar e cor também são diálogo: abrem onde a pessoa está, e
+          o cartão que abria depois da tabela caía fora da tela (o mesmo defeito
+          do excluir). */}
+      <Dialog
+        open={!!alvo && acao !== "excluir"}
+        onOpenChange={(aberto) => !aberto && !ocupado && setAlvo(null)}
+      >
+        <DialogContent aria-describedby={undefined} className="flex flex-col gap-4">
+          {alvo && acao !== "excluir" && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-sm font-normal">
+                  {/* Mesma regra do toast: o texto estático passa por `t()`, a
                 etiqueta entra fora dele. */}
-            {acao === "renomear" && (
-              <>
-                {t("Renomear")} <strong>{alvo.tag}</strong> {t("para:")}
-              </>
-            )}
-            {acao === "juntar" && (
-              <>
-                {t("Juntar")} <strong>{alvo.tag}</strong> {t("em outra etiqueta existente:")}
-              </>
-            )}
-            {acao === "definir_cor" && (
-              <>
-                {t("Cor")} <strong>{alvo.tag}</strong>{" "}
-                {t("nas listas e nos filtros:")}
-              </>
-            )}
-          </p>
-
-          {acao === "juntar" ? (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="destino-da-juncao">{t("Etiqueta de destino")}</Label>
-              {paginado ? <>
-                <Input id="destino-da-juncao" list="destinos-da-juncao" value={destino}
-                  onChange={e=>setDestino(e.target.value)} maxLength={60}
-                  placeholder={t("Digite o nome exato da etiqueta de destino")}/>
-                <datalist id="destinos-da-juncao">{destinos.map(linha=><option key={linha.tag} value={linha.tag}/>)}</datalist>
-                {destinoDaJuncaoInexistente && (
-                  <p role="alert" className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                    {t(DESTINO_INEXISTENTE)}
-                  </p>
-                )}
-              </> :
-              <Escolha
-                id="destino-da-juncao"
-                className="h-9"
-                value={destino}
-                onValueChange={(valorEscolhido) => setDestino(valorEscolhido)}
-              >
-                <option value="">{t("Escolha a etiqueta que fica")}</option>
-                {destinos.map((linha) => (
-                  <option key={linha.tag} value={linha.tag}>
-                    {linha.tag}
-                  </option>
-                ))}
-              </Escolha>}
-            </div>
-          ) : acao === "definir_cor" ? (
-            <div className="flex flex-col gap-3">
-              <Label>{t("Cor da etiqueta")}</Label>
-              <FileiraDeTons cor={cor} aoEscolher={setCor} t={t} />
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{t("Prévia:")}</span>
-                {/* A prévia usa o TOM SELECIONADO antes de salvar: escolher cor
-                    por paleta sem ver o resultado no próprio chip é adivinhação. */}
-                <ChipDeEtiqueta tag={alvo.tag} cor={cor} />
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="novo-nome-da-tag">{t("Novo nome")}</Label>
-              <Input
-                id="novo-nome-da-tag"
-                value={destino}
-                onChange={(evento) => setDestino(evento.target.value)}
-                maxLength={60}
-                placeholder={alvo.tag}
-              />
-              {destinoJaExiste && (
-                // O AVISO ANTES DO CLIQUE (issue #2801). Renomear para um nome
-                // que já existe não renomeia: junta as duas etiquetas numa só,
-                // e a cor/descrição que sobra é decidida pelo vocabulário. O
-                // `juntou` da resposta só chega DEPOIS, quando já não há o que
-                // desfazer — então quem lê este aviso ainda pode escolher
-                // "Juntar" de propósito, ou outro nome. Mesma régua visual do
-                // aviso do diálogo de excluir: a frase diz o que vai acontecer.
-                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                  {t(
-                    "Este nome já existe no vocabulário — confirmar vai juntar as duas etiquetas numa só.",
+                  {acao === "renomear" && (
+                    <>
+                      {t("Renomear")} <strong>{alvo.tag}</strong> {t("para:")}
+                    </>
                   )}
-                </p>
-              )}
-            </div>
-          )}
+                  {acao === "juntar" && (
+                    <>
+                      {t("Juntar")} <strong>{alvo.tag}</strong> {t("em outra etiqueta existente:")}
+                    </>
+                  )}
+                  {acao === "definir_cor" && (
+                    <>
+                      {t("Cor")} <strong>{alvo.tag}</strong> {t("nas listas e nos filtros:")}
+                    </>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={enviar}
-              disabled={ocupado || destinoDaJuncaoInexistente || (acao !== "definir_cor" && destino.trim().length === 0)}
-            >
-              {ocupado ? t("Aplicando...") : t("Confirmar")}
-            </Button>
-            <Button variant="ghost" onClick={() => setAlvo(null)} disabled={ocupado}>
-              {t("Cancelar")}
-            </Button>
-          </div>
-        </Card>
-      )}
+              {acao === "juntar" ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="destino-da-juncao">{t("Etiqueta de destino")}</Label>
+                  {paginado ? (
+                    <>
+                      <Input
+                        id="destino-da-juncao"
+                        list="destinos-da-juncao"
+                        value={destino}
+                        onChange={(e) => setDestino(e.target.value)}
+                        maxLength={60}
+                        placeholder={t("Digite o nome exato da etiqueta de destino")}
+                      />
+                      <datalist id="destinos-da-juncao">
+                        {destinos.map((linha) => (
+                          <option key={linha.tag} value={linha.tag} />
+                        ))}
+                      </datalist>
+                      {destinoDaJuncaoInexistente && (
+                        <Aviso tom="warn">{t(DESTINO_INEXISTENTE)}</Aviso>
+                      )}
+                    </>
+                  ) : (
+                    <Escolha
+                      id="destino-da-juncao"
+                      className="h-9"
+                      value={destino}
+                      onValueChange={(valorEscolhido) => setDestino(valorEscolhido)}
+                    >
+                      <option value="">{t("Escolha a etiqueta que fica")}</option>
+                      {destinos.map((linha) => (
+                        <option key={linha.tag} value={linha.tag}>
+                          {linha.tag}
+                        </option>
+                      ))}
+                    </Escolha>
+                  )}
+                </div>
+              ) : acao === "definir_cor" ? (
+                <div className="flex flex-col gap-3">
+                  <Label>{t("Cor da etiqueta")}</Label>
+                  <FileiraDeTons cor={cor} aoEscolher={setCor} t={t} />
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{t("Prévia:")}</span>
+                    {/* A prévia usa o TOM SELECIONADO antes de salvar: escolher cor
+                    por paleta sem ver o resultado no próprio chip é adivinhação. */}
+                    <ChipDeEtiqueta tag={alvo.tag} cor={cor} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="novo-nome-da-tag">{t("Novo nome")}</Label>
+                  <Input
+                    id="novo-nome-da-tag"
+                    value={destino}
+                    onChange={(evento) => setDestino(evento.target.value)}
+                    maxLength={60}
+                    placeholder={alvo.tag}
+                  />
+                  {destinoJaExiste && (
+                    // O AVISO ANTES DO CLIQUE (issue #2801). Renomear para um nome
+                    // que já existe não renomeia: junta as duas etiquetas numa só,
+                    // e a cor/descrição que sobra é decidida pelo vocabulário. O
+                    // `juntou` da resposta só chega DEPOIS, quando já não há o que
+                    // desfazer — então quem lê este aviso ainda pode escolher
+                    // "Juntar" de propósito, ou outro nome. Mesma régua visual do
+                    // aviso do diálogo de excluir: a frase diz o que vai acontecer.
+                    <Aviso tom="warn">
+                      {t(
+                        "Este nome já existe no vocabulário — confirmar vai juntar as duas etiquetas numa só.",
+                      )}
+                    </Aviso>
+                  )}
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setAlvo(null)} disabled={ocupado}>
+                  {t("Cancelar")}
+                </Button>
+                <Button
+                  onClick={enviar}
+                  disabled={
+                    ocupado ||
+                    destinoDaJuncaoInexistente ||
+                    (acao !== "definir_cor" && destino.trim().length === 0)
+                  }
+                >
+                  {ocupado ? t("Aplicando...") : t("Confirmar")}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

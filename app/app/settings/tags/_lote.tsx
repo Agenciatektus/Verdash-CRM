@@ -25,6 +25,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -248,7 +249,7 @@ export function BarraDeEtiquetasEmLote({
     <>
       <div
         data-lote-de-etiquetas={n}
-        className="sticky bottom-4 z-30 mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 shadow-md"
+        className="sticky bottom-4 z-30 mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 shadow-md"
       >
         <span className="text-sm font-medium">
           {n} {t("etiqueta(s) selecionada(s)")}
@@ -280,12 +281,12 @@ export function BarraDeEtiquetasEmLote({
             </AlertDialogDescription>
           </AlertDialogHeader>
           {regras > 0 && (
-            <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+            <Aviso tom="warn">
               {t("Atenção:")} {regras}{" "}
               {t(
                 "regra(s) de agente continuam escrevendo estas etiquetas. Excluir aqui não apaga as regras: o agente vai recriar a etiqueta no próximo atendimento.",
               )}
-            </p>
+            </Aviso>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={ocupado}>{t("Cancelar")}</AlertDialogCancel>
