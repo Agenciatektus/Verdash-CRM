@@ -138,8 +138,11 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
       )}
       <BarraDeFiltros ativos={Number(agentId !== ALL_AGENTS) + Number(kind !== "all")}>
         <Select value={agentId} onValueChange={setAgentId}>
-          <SelectTrigger aria-label={t("Agente")} className="sm:w-52">
-            <SelectValue />
+          <SelectTrigger aria-label={t("Agente")} className="sm:w-60">
+            <span>
+              <span className="text-subtle" aria-hidden="true">{t("Agente")}:</span>{" "}
+              <SelectValue />
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_AGENTS}>{t("Todos")}</SelectItem>
@@ -151,8 +154,11 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
           </SelectContent>
         </Select>
         <Select value={kind} onValueChange={setKind}>
-          <SelectTrigger aria-label={t("Tipo de uso")} className="sm:w-60">
-            <SelectValue />
+          <SelectTrigger aria-label={t("Tipo de uso")} className="sm:w-72">
+            <span>
+              <span className="text-subtle" aria-hidden="true">{t("Tipo de uso")}:</span>{" "}
+              <SelectValue />
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("Todas")}</SelectItem>
