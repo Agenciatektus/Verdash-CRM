@@ -49,6 +49,7 @@ import { audit } from "@/lib/audit";
 import {
   LlmNotConfiguredError,
   resolveOrgLlmConfig,
+  resolverReservaDaAssinatura,
   temChaveDeReserva,
 } from "@/lib/agent-engine/edge/llm/credentials";
 import {
@@ -298,6 +299,18 @@ describe("2. resolveOrgLlmConfig: assinatura → reserva → erro antigo", () =>
     // a reserva é a escada INTEIRA, não só a linha da empresa.
     expect(await temChaveDeReserva(semChave.pool, cfgComReserva, ORG)).toBe(true);
   });
+
+  it("sem chave OpenAI, o OpenRouter da instalação é a reserva (e sem ele, humano)", async () => {
+    const semChave = poolDaOrg({ credenciais: [] });
+    const cfgSoOpenRouter = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA } as never;
+    const reserva = await resolverReservaDaAssinatura(semChave.pool, cfgSoOpenRouter, ORG);
+    expect(reserva?.provider).toBe("openrouter");
+    expect(await temChaveDeReserva(semChave.pool, cfgSoOpenRouter, ORG)).toBe(true);
+    expect(await resolverReservaDaAssinatura(semChave.pool, cfg, ORG)).toBeNull();
+    // Chave OpenAI continua na frente do roteador quando existe.
+    const comAmbas = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA, ["openai" + "ApiKey"]: CHAVE_SENTINELA } as never;
+    expect((await resolverReservaDaAssinatura(semChave.pool, comAmbas, ORG))?.provider).toBe("openai");
+  });
 });
 
 describe("3. a renovação automática do caminho do agente", () => {
@@ -416,6 +429,32 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     expect(r.provider, "o 400 de cota estourada não caiu na reserva — o turno ficaria calado").toBe(
       "openai",
     );
+  });
+
+  it("sem chave OpenAI, a assinatura falha (429) e a reserva é o OpenRouter com id prefixado", async () => {
+    (estado.fake as FakeSupabase).linha = linhaDoLogin();
+    const { pool } = poolDoSeam(PROVEDOR_POR_ASSINATURA);
+    const idsRecebidos: string[] = [];
+    const registro = {
+      [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeLimite()),
+      openrouter: (apiKey: string, modelId: string, baseUrl?: string) => {
+        idsRecebidos.push(modelId);
+        return (registroOk as never as (k: string, m: string, b?: string) => unknown)(apiKey, modelId, baseUrl);
+      },
+      anthropic: registroOk,
+      fake: registroOk,
+    } as never;
+    const cfgSoOpenRouter = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA } as never;
+
+    const r = await runModelCall(
+      pool,
+      cfgSoOpenRouter,
+      { tenantId: ORG, purpose: "agent_turn", messages: [{ role: "user", content: "oi" }] },
+      { registry: registro },
+    );
+
+    expect(r.provider).toBe("openrouter");
+    expect(idsRecebidos).toEqual(["openai/gpt-5-teste"]);
   });
 
   it("provedor SEM reserva continua falhando como sempre (o freio é por provedor)", async () => {
