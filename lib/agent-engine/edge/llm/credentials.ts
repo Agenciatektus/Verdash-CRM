@@ -19,7 +19,10 @@ import type pg from 'pg';
 
 import { lerLoginCodexRenovandoSeProxima } from '@/lib/ai/credenciais/login-codex';
 import { PROVEDOR_POR_ASSINATURA } from '@/lib/ai/pontos/provedores';
-import { PROVEDOR_DE_RESERVA_DA_ASSINATURA } from '@/lib/ai/pontos/reserva-da-assinatura';
+import {
+  PROVEDOR_DE_RESERVA_DA_ASSINATURA,
+  PROVEDOR_DE_RESERVA_NO_ROTEADOR,
+} from '@/lib/ai/pontos/reserva-da-assinatura';
 import type { TokensDoCodex } from '@/lib/ai/pontos/pkce-da-assinatura';
 import { z } from 'zod';
 
@@ -513,15 +516,28 @@ export async function temChaveDeReserva(
   cfg: LlmEdgeConfig,
   organizationId: string,
 ): Promise<boolean> {
-  try {
-    const reserva = await resolveOrgLlmConfig(db, cfg, organizationId, {
-      provider: PROVEDOR_DE_RESERVA_DA_ASSINATURA,
-      credentialId: null,
-    });
-    return reserva.apiKey.length > 0;
-  } catch {
-    return false;
+  return (await resolverReservaDaAssinatura(db, cfg, organizationId)) !== null;
+}
+
+/**
+ * A reserva, de fato: chave `openai` da empresa ou da instalação; na falta dela,
+ * o OpenRouter (credencial da empresa, senão a chave da instalação). `null`
+ * quando nenhum degrau resolve — aí a conversa passa para um humano.
+ */
+export async function resolverReservaDaAssinatura(
+  db: pg.Pool,
+  cfg: LlmEdgeConfig,
+  organizationId: string,
+): Promise<OrgLlmConfig | null> {
+  for (const provider of [PROVEDOR_DE_RESERVA_DA_ASSINATURA, PROVEDOR_DE_RESERVA_NO_ROTEADOR]) {
+    try {
+      const reserva = await resolveOrgLlmConfig(db, cfg, organizationId, { provider, credentialId: null });
+      if (reserva.apiKey.length > 0) return reserva;
+    } catch {
+      // Degrau sem chave utilizável: tenta o próximo.
+    }
   }
+  return null;
 }
 
 /**
