@@ -94,9 +94,9 @@ describe("MetaDoMesPanel", () => {
 
   it("a barra desenha o percentual — o mesmo desenho do card de funil", () => {
     const { container } = renderizar();
-    const barra = container.querySelector('[data-meta="barra"]') as HTMLElement | null;
+    const barra = container.querySelector('[role="progressbar"]');
     expect(barra).not.toBeNull();
-    expect(barra!.style.width).toBe("30%");
+    expect(barra!.getAttribute("aria-valuenow")).toBe("30");
   });
 
   it("meta atingida: percentual acima de 100, falta zero e a barra não passa de 100%", () => {
@@ -106,8 +106,8 @@ describe("MetaDoMesPanel", () => {
     expect(container.querySelector('[data-meta="percentual"]')?.textContent).toBe("150%");
     expect(container.querySelector('[data-meta="falta"]')).toBeNull();
     expect(container.textContent).toContain("Meta atingida.");
-    const barra = container.querySelector('[data-meta="barra"]') as HTMLElement | null;
-    expect(barra!.style.width).toBe("100%");
+    const barra = container.querySelector('[role="progressbar"]');
+    expect(barra!.getAttribute("aria-valuenow")).toBe("100");
   });
 
   it("sem meta: explica e oferece a porta do cadastro (nunca um zero mudo)", () => {
