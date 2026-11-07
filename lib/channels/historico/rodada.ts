@@ -68,17 +68,36 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
-import { buscaEmLotes } from "@/lib/supabase/em-lotes";
 import { getWahaClient } from "@/lib/waha/client";
-import { ehReacao, notifyNameOf, parseChatId, type WahaPayload } from "@/lib/waha/ingest";
-import { MARGEM_PARA_CHAMADA_MS, TETO_DO_DOWNLOAD_MS } from "@/lib/channels/historico/prazo";
+import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { criarFonteIzzy } from "@/lib/channels/historico/fonte-izzy";
+import { ehReacao, parseChatId, type WahaPayload } from "@/lib/waha/ingest";
+import { resumirErroDaImportacao } from "@/lib/channels/historico/resumo-do-erro";
+import { MARGEM_PARA_CHAMADA_MS } from "@/lib/channels/historico/prazo";
+import { FonteAdiada, mensagemDeErro, type FonteDeHistorico, type Importacao } from "@/lib/channels/historico/comum";
 import {
-  candidatosDeExternalId,
-  identidadeDoChat,
-  mapearMensagemDoAcervo,
-  type LinhaDeMensagemImportada,
-} from "@/lib/channels/historico/mapear";
+  garantirContatoEConversa,
+  garantirConversaDoContato,
+  gravarMensagens,
+  type MensagemGravadaDaRodada,
+} from "@/lib/channels/historico/rodada-gravar";
+import {
+  fichaDoCrmParaOChat,
+  telefonesDoChatParaFicha,
+  type EscopoDaImportacao,
+  type FichaDoCrm,
+} from "@/lib/channels/historico/fichas-do-crm";
+import {
+  avisarClienteSemResposta,
+  avisarResumoDaRecuperacao,
+  fecharResumoDaRecuperacao,
+} from "@/lib/channels/historico/avisos-da-queda";
+import {
+  aplicarEfeitosDaRecuperacao,
+  type EntradaDaRecuperacao,
+} from "@/lib/channels/pos-entrada";
+import { resolverMidias } from "@/lib/channels/historico/rodada-midia";
+import { titularApagadoNaPagina } from "@/lib/channels/historico/rodada-titular";
 
 export interface TetoDaRodada {
   conversas: number;
@@ -105,7 +124,48 @@ export interface CursorDaImportacao {
    * é da passada de conferência, que não grava.
    */
   conferida?: boolean;
+  /** Fonte adiou a MESMA posição `n` vezes seguidas (lista vazia sob carga); no limite, a conversa é pulada. */
+  adiamentos?: { chave: string; n: number };
+  /** Conversas sem telefone (Instagram do Izzy), contadas uma vez: `ate` é a maior posição já contada. */
+  semTelefone?: { n: number; ate: number };
+  /**
+   * Escopo `so_crm`: a ficha que a conversa de `indiceConversa` já casou. A
+   * decisão sai da 1ª página (telefones do chat e `remoteJidAlt` das mensagens);
+   * uma rodada que retoma a conversa no meio lê outra página, que pode não ter o
+   * `remoteJidAlt` — reconsultar ali faria o resto da conversa virar "sem ficha".
+   * `null` = ainda não decidida nesta conversa. Vale SÓ para o chat gravado em
+   * `fichaChatId`: o cursor guarda a conversa pela posição na lista, e se a lista
+   * mudar de ordem entre rodadas a posição aponta outro chat — reaproveitar a
+   * ficha ali gravaria as mensagens de um cliente na ficha de outro.
+   */
+  fichaContactId?: string | null;
+  fichaChatId?: string | null;
+  /**
+   * Só da importação da queda (Spec 32 §2): por conversa que recebeu mensagem
+   * recuperada, quem é o contato e de quem foi a última mensagem gravada. É o
+   * que o fim da importação lê para avisar a equipe. Vive fora do cursor de
+   * posição (ver `tocadas` em `rodarUmaRodada`): não volta atrás quando a página
+   * é refeita, porque a mensagem que ele descreve já foi gravada.
+   */
+  tocadas?: Record<string, TocadaDaRecuperacao>;
 }
+
+export interface TocadaDaRecuperacao {
+  contactId: string;
+  /** Lado da mensagem mais nova recuperada nessa conversa. */
+  ultima: "in" | "out";
+  /** ISO da mensagem de `ultima` (a mais nova vence). */
+  em: string;
+}
+
+/** O cursor de posição: o que a rodada firma e refaz. `tocadas` tem vida própria. */
+type CursorDePosicao = Omit<CursorDaImportacao, "tocadas"> &
+  Required<Omit<CursorDaImportacao, "adiamentos" | "semTelefone" | "tocadas">>;
+
+export type { MensagemGravadaDaRodada };
+
+/** Adiamentos seguidos na mesma posição antes de desistir da conversa (senão a importação não conclui nunca). */
+const ADIAMENTOS_MAXIMOS = 5;
 
 export interface OpcoesDaRodada {
   /**
@@ -117,7 +177,8 @@ export interface OpcoesDaRodada {
   relogio?: () => number;
 }
 
-export type StatusDaImportacao = "previa" | "rodando" | "concluida" | "erro" | "cancelada";
+/** `aguardando`: a importação da queda espera o número voltar a ler (Spec 32 §2); a rodada não a roda. */
+export type StatusDaImportacao = "previa" | "aguardando" | "rodando" | "concluida" | "erro" | "cancelada";
 
 export interface ResultadoDaRodada {
   /**
@@ -136,37 +197,29 @@ const PAGINA_DE_MENSAGENS = 100;
  * antiga são pulados sem nova chamada). */
 const PAGINA_DE_CONVERSAS = 50;
 const SEGUNDOS_POR_DIA = 86_400;
-/** Falhas de transporte do canal na mesma mídia antes de marcá-la indisponível. */
-const LIMITE_DE_TENTATIVAS_DE_MIDIA = 3;
-/**
- * Orçamento, em bytes codificados, dos `external_id` de UMA consulta de
- * deduplicação. Uma página de 100 mensagens de chat `@s.whatsapp.net` dá 300
- * candidatos de até ~70 B cada (13 a 19 KB de URL), e o Kong 2.8.1 devolve 414
- * acima de 8.192 B. Com 4 KB de valores, a URL inteira fica perto de 4,3 KB.
- */
-const BYTES_DE_CANDIDATOS_POR_CONSULTA = 4096;
 
-interface Importacao {
-  id: string;
-  organization_id: string;
-  channel_session_id: string;
-  status: string;
-  dias: number;
-  cursor: Partial<CursorDaImportacao> | null;
-  conversas_feitas: number | null;
-  mensagens_gravadas: number | null;
-  mensagens_existentes: number | null;
-  mensagens_ignoradas: number | null;
-  midias_baixadas: number | null;
-  midias_indisponiveis: number | null;
-}
-
-function mensagemDeErro(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
-    return (err as { message: string }).message;
+/** A fonte da importação: o canal WAHA da conexão, ou o Izzy com o token guardado cifrado na linha. */
+async function abrirFonte(
+  admin: SupabaseClient,
+  imp: Importacao,
+): Promise<{ canal: FonteDeHistorico; nomeNoCanal: string }> {
+  if (imp.fonte === "izzy") {
+    const token = imp.credencial_cifrada ? await decryptWebhookSecret(admin, imp.credencial_cifrada) : null;
+    if (!token) throw new Error("credencial_ausente");
+    return { canal: criarFonteIzzy(token), nomeNoCanal: "izzy" };
   }
-  return String(err);
+  const canal = getWahaClient();
+  if (!canal) throw new Error("canal_nao_configurado");
+  const { data: sessao, error: erroDaSessao } = await admin
+    .from("channel_sessions")
+    .select("waha_session_name")
+    .eq("id", imp.channel_session_id)
+    .eq("organization_id", imp.organization_id)
+    .maybeSingle();
+  if (erroDaSessao) throw new Error(`sessao_leitura: ${mensagemDeErro(erroDaSessao)}`);
+  const nomeNoCanal = (sessao as { waha_session_name?: string } | null)?.waha_session_name;
+  if (!nomeNoCanal) throw new Error("sessao_nao_encontrada");
+  return { canal, nomeNoCanal };
 }
 
 export async function rodarUmaRodada(
@@ -187,16 +240,46 @@ export async function rodarUmaRodada(
   if (imp.status !== "rodando") throw new Error("importacao_nao_esta_rodando");
 
   const cursorSalvo = imp.cursor ?? {};
-  const cursor: Required<CursorDaImportacao> = {
+  const escopo: EscopoDaImportacao = imp.escopo ?? "todos";
+  const origemDaQueda = imp.origem === "queda";
+  // Janela com fim (Spec 32 §1): `desde` manda sobre `dias`; `ate` é exclusivo e
+  // filtra LOCAL, na rodada (o canal só filtra o início).
+  const desdeDaLinha = imp.desde ? Math.floor(Date.parse(imp.desde) / 1000) : null;
+  const ateSegundos = imp.ate ? Math.floor(Date.parse(imp.ate) / 1000) : null;
+  const dentroDoFim = (p: WahaPayload) =>
+    // Sem instante numérico não há como provar que está antes do fim: com `ate`
+    // definido fica fora (o mapeador gravaria 1970 e ela viraria a "última" da conversa).
+    ateSegundos === null || (typeof p.timestamp === "number" && p.timestamp < ateSegundos);
+  const cursor: CursorDePosicao = {
     indiceConversa: cursorSalvo.indiceConversa ?? 0,
     offsetMensagens: cursorSalvo.offsetMensagens ?? 0,
-    desde: cursorSalvo.desde ?? Math.floor(Date.now() / 1000) - imp.dias * SEGUNDOS_POR_DIA,
+    desde:
+      cursorSalvo.desde ??
+      desdeDaLinha ??
+      Math.floor(Date.now() / 1000) - (imp.dias ?? 0) * SEGUNDOS_POR_DIA,
     conferida: cursorSalvo.conferida ?? false,
+    adiamentos: cursorSalvo.adiamentos,
+    semTelefone: cursorSalvo.semTelefone,
+    fichaContactId: cursorSalvo.fichaContactId ?? null,
+    fichaChatId: cursorSalvo.fichaChatId ?? null,
+  };
+  // Só da queda; mudar `tocadas` não mexe no cursor de posição (não é refeito).
+  let tocadas: Record<string, TocadaDaRecuperacao> = origemDaQueda ? { ...(cursorSalvo.tocadas ?? {}) } : {};
+  /** Manual grava o cursor como sempre; a queda leva também as conversas tocadas. */
+  const cursorParaGravar = (): CursorDaImportacao => {
+    // `fichaContactId` só vai ao banco quando há ficha decidida: o cursor da
+    // importação manual (`todos`) fica exatamente como sempre foi.
+    const { fichaContactId, fichaChatId, ...posicao } = cursor;
+    const base: CursorDaImportacao =
+      fichaContactId && fichaChatId ? { ...posicao, fichaContactId, fichaChatId } : posicao;
+    return origemDaQueda ? { ...base, tocadas } : base;
   };
   const irParaConversa = (posicao: number) => {
     cursor.indiceConversa = posicao;
     cursor.offsetMensagens = 0;
     cursor.conferida = false;
+    cursor.fichaContactId = null;
+    cursor.fichaChatId = null;
   };
   const desta = { conversas: 0, gravadas: 0, existentes: 0, ignoradas: 0 };
   // Fora de `desta` de propósito: mídia resolvida não volta a `pendente` quando a
@@ -215,7 +298,7 @@ export async function rodarUmaRodada(
     const { data, error } = await admin
       .from("importacoes_de_historico")
       .update({
-        cursor,
+        cursor: cursorParaGravar(),
         conversas_feitas: (imp.conversas_feitas ?? 0) + desta.conversas,
         mensagens_gravadas: (imp.mensagens_gravadas ?? 0) + desta.gravadas,
         mensagens_existentes: (imp.mensagens_existentes ?? 0) + desta.existentes,
@@ -224,6 +307,8 @@ export async function rodarUmaRodada(
         midias_indisponiveis: (imp.midias_indisponiveis ?? 0) + midias.indisponiveis,
         updated_at: new Date().toISOString(),
         ...extra,
+        // O token do Izzy não sobrevive ao fim da importação.
+        ...(extra.status === "concluida" || extra.status === "erro" ? { credencial_cifrada: null } : {}),
       } as never)
       .eq("id", importacaoId)
       .eq("status", "rodando")
@@ -239,17 +324,118 @@ export async function rodarUmaRodada(
     return (atual as { status?: StatusDaImportacao } | null)?.status ?? "cancelada";
   };
 
+  /**
+   * Por mensagem NOVA da queda (Spec 32 §3): a recebida chama só os efeitos de "o
+   * cliente respondeu"; a enviada pelo aparelho não tem efeito. Nas duas, a conversa
+   * guarda a mais nova, para o aviso do fim (§2). Só o que esta rodada gravou chega
+   * aqui: a página refeita não reaplica nada (a mensagem já é "própria" e fica de fora).
+   */
+  const registrarRecuperadas = async (
+    alvo: { contactId: string; conversationId: string },
+    gravadas: MensagemGravadaDaRodada[],
+  ) => {
+    for (const g of gravadas) {
+      const recebida = g.linha.direction === "inbound";
+      if (recebida) {
+        const entrada: EntradaDaRecuperacao = {
+          organizationId: imp.organization_id,
+          contactId: alvo.contactId,
+          conversationId: alvo.conversationId,
+          // Sem id de linha: a rodada não o devolve, e nenhum efeito desta trilha o usa.
+          messageId: null,
+          // A queda é do número de WhatsApp: a rede é sempre ela.
+          rede: "whatsapp",
+          channelSessionId: imp.channel_session_id,
+          texto: g.texto,
+          nomeDoContato: g.nome,
+          // Identifica a mensagem: é o id do evento em memória do follow-up (idempotência).
+          requestId: `recuperacao:${imp.id}:${g.linha.external_id}`,
+          origem: "historico_queda",
+          enviadaEm: g.linha.sent_at,
+          previa: g.previa,
+        };
+        await aplicarEfeitosDaRecuperacao(admin, entrada);
+      }
+      const atual = tocadas[alvo.conversationId];
+      if (!atual || g.linha.sent_at >= atual.em) {
+        tocadas = {
+          ...tocadas,
+          [alvo.conversationId]: {
+            contactId: alvo.contactId,
+            ultima: recebida ? "in" : "out",
+            em: g.linha.sent_at,
+          },
+        };
+      }
+    }
+  };
+
+  /**
+   * Fim da importação da queda (Spec 32 §2). Só roda quando ESTA rodada de fato
+   * trocou o status (`salvar` devolveu `null`): um cancelamento no meio não avisa.
+   * Concluída: quem ficou sem resposta (a última mensagem é do cliente) entra na
+   * Central, e o resumo sai se algo foi gravado; sem nada gravado, só fecha o resumo
+   * aberto. Erro: só o resumo, com o motivo. Importação manual não avisa nada.
+   */
+  const avisarFimDaQueda = async (status: "concluida" | "erro", erro?: string) => {
+    if (!origemDaQueda) return;
+    const organizationId = imp.organization_id;
+    const channelSessionId = imp.channel_session_id;
+    if (status === "erro") {
+      await avisarResumoDaRecuperacao(admin, {
+        organizationId,
+        channelSessionId,
+        motivo: "erro",
+        erro: resumirErroDaImportacao(erro ?? ""),
+      });
+      return;
+    }
+    for (const [conversationId, tocada] of Object.entries(tocadas)) {
+      if (tocada.ultima !== "in") continue;
+      // A importação termina minutos depois da volta: a equipe pode já ter
+      // respondido AO VIVO. Esse "já respondeu" é anterior ao aviso, e o fechador
+      // só olha saída depois dele — então se confere aqui, antes de abrir.
+      const { data: conversa, error: erroDaConversa } = await admin
+        .from("conversations")
+        .select("last_outbound_at")
+        .eq("organization_id", organizationId)
+        .eq("id", conversationId)
+        .maybeSingle();
+      if (erroDaConversa) continue;
+      const ultimaSaida = (conversa as { last_outbound_at: string | null } | null)?.last_outbound_at ?? null;
+      if (ultimaSaida && Date.parse(ultimaSaida) >= Date.parse(tocada.em)) continue;
+      await avisarClienteSemResposta(admin, { organizationId, conversationId, contactId: tocada.contactId });
+    }
+    const mensagens = (imp.mensagens_gravadas ?? 0) + desta.gravadas;
+    if (mensagens > 0) {
+      await avisarResumoDaRecuperacao(admin, {
+        organizationId,
+        channelSessionId,
+        motivo: "concluida",
+        mensagens,
+        conversas: Object.keys(tocadas).length,
+        desde: imp.desde ?? undefined,
+        ate: imp.ate ?? undefined,
+      });
+    } else {
+      await fecharResumoDaRecuperacao(admin, { organizationId, channelSessionId });
+    }
+  };
+
   const encerrar = async (
     status: "rodando" | "concluida" | "erro",
     extra: Record<string, unknown> = {},
   ): Promise<ResultadoDaRodada> => {
     const outro = await salvar(status === "rodando" ? extra : { status, ...extra });
+    if (outro === null && status !== "rodando") {
+      await avisarFimDaQueda(status, typeof extra.erro === "string" ? extra.erro : undefined);
+    }
     return { status: outro ?? status, gravadas: desta.gravadas, existentes: desta.existentes };
   };
 
   // O cursor que vale ao parar por erro é o do último ponto inteiro: o pedaço em
   // andamento é refeito na próxima (a deduplicação absorve a repetição).
-  let cursorFirme = { ...cursor };
+  let cursorFirme: CursorDePosicao = { ...cursor };
   let firmes = { ...desta };
   const firmar = () => {
     cursorFirme = { ...cursor };
@@ -269,17 +455,7 @@ export async function rodarUmaRodada(
     semTempo();
 
   try {
-    const canal = getWahaClient();
-    if (!canal) throw new Error("canal_nao_configurado");
-    const { data: sessao, error: erroDaSessao } = await admin
-      .from("channel_sessions")
-      .select("waha_session_name")
-      .eq("id", imp.channel_session_id)
-      .eq("organization_id", imp.organization_id)
-      .maybeSingle();
-    if (erroDaSessao) throw new Error(`sessao_leitura: ${mensagemDeErro(erroDaSessao)}`);
-    const nomeNoCanal = (sessao as { waha_session_name?: string } | null)?.waha_session_name;
-    if (!nomeNoCanal) throw new Error("sessao_nao_encontrada");
+    const { canal, nomeNoCanal } = await abrirFonte(admin, imp);
 
     for (;;) {
       if (noTeto()) return await encerrar("rodando");
@@ -291,6 +467,10 @@ export async function rodarUmaRodada(
         offset: offsetDaPagina,
       });
       if (pagina.lidas === 0) return await encerrar("concluida", { erro: null });
+      for (const pos of pagina.semTelefone ?? []) {
+        const c = cursor.semTelefone ?? { n: 0, ate: -1 };
+        if (pos > c.ate) cursor.semTelefone = { n: c.n + 1, ate: pos };
+      }
 
       for (const conversa of pagina.conversas) {
         if (conversa.posicao < cursor.indiceConversa) continue;
@@ -305,6 +485,10 @@ export async function rodarUmaRodada(
         }
 
         let alvo: { contactId: string; conversationId: string } | null = null;
+        // Escopo `so_crm`: a ficha do chat, decidida na 1ª página lida (`undefined` = ainda não).
+        // `null` = o chat não tem ficha viva: sai da importação e não gasta o teto de conversas.
+        let fichaDaConversa: FichaDoCrm | null | undefined;
+        let ignorada = false;
         // Identidades desta conversa já conferidas na trava de apagamento (por rodada).
         const conferidas = new Set<string>();
         // Chat @lid: o telefone pode não vir em mensagem nenhuma do acervo, e quem
@@ -332,6 +516,35 @@ export async function rodarUmaRodada(
             offset: cursor.offsetMensagens,
             desde: cursor.desde,
           });
+          // Escopo `so_crm` (Spec 32 §1): a ficha é decidida na 1ª página, antes de
+          // qualquer gravação. Erro na consulta LANÇA (falha fechada) e a rodada para em erro.
+          if (
+            escopo === "so_crm" &&
+            fichaDaConversa === undefined &&
+            cursor.fichaContactId &&
+            cursor.fichaChatId === conversa.chatId
+          ) {
+            // Retomada no meio da MESMA conversa: a ficha já foi decidida numa rodada anterior.
+            fichaDaConversa = { contactId: cursor.fichaContactId };
+          }
+          if (escopo === "so_crm" && fichaDaConversa === undefined) {
+            fichaDaConversa = await fichaDoCrmParaOChat(admin, {
+              organizationId: imp.organization_id,
+              telefones: telefonesDoChatParaFicha(conversa.chatId, telefoneDoChat ?? null, mensagens),
+              lid: parseChatId(conversa.chatId).lid,
+            });
+            if (fichaDaConversa) {
+              cursor.fichaContactId = fichaDaConversa.contactId;
+              cursor.fichaChatId = conversa.chatId;
+            }
+            if (fichaDaConversa === null) {
+              // Sem ficha: a página lida conta em `ignoradas` (só a 1ª página; o resto do
+              // chat não é lido) e o chat não entra no teto de conversas.
+              desta.ignoradas += lidas;
+              ignorada = true;
+              break;
+            }
+          }
           // Só `lidas === 0` é fim: página inteira recusada pelo schema não é.
           if (lidas === 0) {
             if (cursor.conferida || cursor.offsetMensagens === 0) break;
@@ -363,6 +576,9 @@ export async function rodarUmaRodada(
           const validas: WahaPayload[] = [];
           for (const p of mensagens) {
             if (!p.id || ehReacao(p)) desta.ignoradas += 1;
+            // Janela com fim: `ate` é exclusivo. A mensagem cortada não é gravada, mas
+            // conta no offset (o `lidas` abaixo), senão a próxima página repetiria.
+            else if (!dentroDoFim(p)) desta.ignoradas += 1;
             else validas.push(p);
           }
           if (validas.length > 0 && (await titularApagadoNaPagina(admin, imp, conversa.chatId, telefoneDoChat, validas, conferidas))) {
@@ -371,14 +587,25 @@ export async function rodarUmaRodada(
             break;
           }
           if (validas.length > 0) {
-            alvo ??= await garantirContatoEConversa(admin, imp, conversa.chatId, conversa.ultimaEm, validas);
+            // `so_crm` nunca cria ficha (quem cria é `fn_upsert_wa_contact`, no `todos`):
+            // acha só a conversa do contato que já tem ficha.
+            const ficha = fichaDaConversa;
+            alvo ??=
+              escopo === "so_crm"
+                ? ficha
+                  ? { contactId: ficha.contactId, conversationId: await garantirConversaDoContato(admin, imp, ficha.contactId, conversa.ultimaEm) }
+                  : null
+                : await garantirContatoEConversa(admin, imp, conversa.chatId, conversa.ultimaEm, validas);
             if (!alvo) {
               // Chat que não é endereçável (nem telefone nem @lid): nada a gravar nele.
               desta.ignoradas += validas.length;
             } else {
               // Soma direto em `desta`: um erro no meio do linha a linha não perde
               // do contador as linhas que já entraram.
-              await gravarMensagens(admin, imp, alvo, validas, desta);
+              const gravadasAgora = await gravarMensagens(admin, imp, alvo, validas, desta);
+              if (origemDaQueda) {
+                await registrarRecuperadas(alvo, gravadasAgora);
+              }
               const completa = await resolverMidias(admin, imp, canal, nomeNoCanal, conversa.chatId, alvo.conversationId, validas, {
                 noTeto,
                 contarChamada: () => {
@@ -402,6 +629,12 @@ export async function rodarUmaRodada(
           firmar();
         }
 
+        if (ignorada) {
+          // Chat fora do escopo: não conta como conversa feita, e não gasta o teto.
+          irParaConversa(cursor.indiceConversa + 1);
+          firmar();
+          continue;
+        }
         desta.conversas += 1;
         irParaConversa(cursor.indiceConversa + 1);
         firmar();
@@ -414,353 +647,23 @@ export async function rodarUmaRodada(
     }
   } catch (err) {
     Object.assign(cursor, cursorFirme);
+    // Fonte pediu espera (limite de chamadas, servidor sob carga): não é erro, a próxima rodada retoma.
+    if (err instanceof FonteAdiada) {
+      Object.assign(desta, { ...firmes, gravadas: desta.gravadas });
+      // Só o "vazio sob carga" conta (429 é espera legítima): na 5ª vez na mesma posição, larga a conversa.
+      if (err.message === "izzy_vazio_sob_carga") {
+        const chave = `${cursor.indiceConversa}:${cursor.offsetMensagens}:${cursor.conferida}`;
+        const n = cursor.adiamentos?.chave === chave ? cursor.adiamentos.n + 1 : 1;
+        if (n >= ADIAMENTOS_MAXIMOS) {
+          desta.ignoradas += 1;
+          irParaConversa(cursor.indiceConversa + 1);
+        } else cursor.adiamentos = { chave, n };
+      }
+      return await encerrar("rodando");
+    }
     // `gravadas` fica: o insert aconteceu, e a refeita não o conta de novo.
     Object.assign(desta, { ...firmes, gravadas: desta.gravadas });
     return await encerrar("erro", { erro: mensagemDeErro(err).slice(0, 500) });
   }
 }
 
-/**
- * QUEM FOI APAGADO A PEDIDO NÃO VOLTA PELO HISTÓRICO (LGPD; doc 186, B). O
- * celular ainda guarda as conversas de quem pediu para ser apagado; sem esta
- * pergunta, a importação recriaria o contato e as mensagens.
- *
- * Pergunta por TODAS as identidades da página e do chat (cada telefone
- * canônico, cada lid, os alternativos do `_data.key`, o telefone que o canal
- * resolveu para o lid do chat), uma chamada por
- * identidade ainda não conferida nesta conversa: qualquer uma marcada basta.
- * Roda em cada página da passada de conferência, que lê a conversa inteira
- * antes de a primeira linha ser gravada, e de novo na de gravação. Erro na pergunta para a rodada (falha fechada):
- * importar na dúvida desfaria o apagamento.
- */
-async function titularApagadoNaPagina(
-  admin: SupabaseClient,
-  imp: Importacao,
-  chatId: string,
-  telefoneDoChat: string | null,
-  mensagens: WahaPayload[],
-  conferidas: Set<string>,
-): Promise<boolean> {
-  const telefones = new Set<string>();
-  const lids = new Set<string>();
-  const anotar = (phone: string | null, lid: string | null) => {
-    if (phone) telefones.add(canonicalPhoneBR(phone));
-    if (lid) lids.add(lid);
-  };
-  const anotarJid = (jid: string | null | undefined) => {
-    if (!jid) return;
-    const p = parseChatId(jid);
-    anotar(p.phone, p.lid);
-  };
-  anotarJid(chatId);
-  anotar(telefoneDoChat, null);
-  for (const p of mensagens) {
-    const id = identidadeDoChat(p);
-    anotar(id.phone, id.lid);
-    anotarJid(id.chatId);
-    anotarJid(p._data?.key?.remoteJidAlt);
-    anotarJid(p._data?.key?.participantAlt);
-  }
-  const perguntas = [
-    ...[...telefones].map((t) => ({ chave: `t:${t}`, p_telefone: t, p_lid: null })),
-    ...[...lids].map((l) => ({ chave: `l:${l}`, p_telefone: null, p_lid: l })),
-  ].filter((q) => !conferidas.has(q.chave));
-  for (const { chave, p_telefone, p_lid } of perguntas) {
-    const { data: apagado, error } = await admin.rpc("fn_titular_apagado_a_pedido" as never, {
-      p_org: imp.organization_id,
-      p_telefone,
-      p_lid,
-    } as never);
-    if (error) throw new Error(`fn_titular_apagado_a_pedido: ${mensagemDeErro(error)}`);
-    // Resposta que não é sim/não também para a rodada: na dúvida, não importa.
-    if (typeof apagado !== "boolean") throw new Error("fn_titular_apagado_a_pedido: resposta sem booleano");
-    if (apagado) return true;
-    conferidas.add(chave);
-  }
-  return false;
-}
-
-/**
- * Contato pela MESMA RPC e com o MESMO telefone canônico do ingest ao vivo, e
- * conversa pela irmã que não reabre nem distribui. O nome só vem de mensagem
- * RECEBIDA: na enviada, o `pushName` é o do operador.
- * `ultimaEm` (epoch em segundos, da lista do canal) vira o `last_message_at` da
- * conversa SÓ quando ela nasce aqui: a inbox ordena por essa coluna, e sem ela
- * a conversa importada iria para o fim da lista. Conversa existente fica como está.
- */
-async function garantirContatoEConversa(
-  admin: SupabaseClient,
-  imp: Importacao,
-  chatId: string,
-  ultimaEm: number | null,
-  mensagens: WahaPayload[],
-): Promise<{ contactId: string; conversationId: string } | null> {
-  const identidades = mensagens.map(identidadeDoChat);
-  const id = identidades.find((x) => x.phone) ?? identidades[0];
-  if (!id || (id.kind !== "phone" && id.kind !== "lid")) return null;
-  const nome = mensagens
-    .filter((p) => p.fromMe !== true)
-    .map((p) => notifyNameOf(p)?.trim().slice(0, 200) || null)
-    .find((n) => n) ?? null;
-
-  const { data: contactId, error: erroDoContato } = await admin.rpc("fn_upsert_wa_contact" as never, {
-    p_org: imp.organization_id,
-    p_kind: id.kind,
-    p_phone: id.phone ? canonicalPhoneBR(id.phone) : null,
-    p_lid: id.kind === "lid" ? id.lid : null,
-    p_chat_id: chatId,
-    p_notify: nome,
-  } as never);
-  if (erroDoContato) throw new Error(`fn_upsert_wa_contact: ${mensagemDeErro(erroDoContato)}`);
-  if (!contactId) return null;
-
-  const { data: conversationId, error: erroDaConversa } = await admin.rpc(
-    "fn_upsert_wa_conversation_importada" as never,
-    {
-      p_org: imp.organization_id,
-      p_contact: contactId,
-      p_session: imp.channel_session_id,
-      p_last_message_at: ultimaEm !== null ? new Date(ultimaEm * 1000).toISOString() : null,
-    } as never,
-  );
-  if (erroDaConversa) throw new Error(`fn_upsert_wa_conversation_importada: ${mensagemDeErro(erroDaConversa)}`);
-  if (!conversationId) throw new Error("fn_upsert_wa_conversation_importada: sem id");
-  return { contactId: contactId as string, conversationId: conversationId as string };
-}
-
-/**
- * Consulta antes (por TODOS os candidatos de `external_id`, porque o sufixo do
- * chat muda entre o acervo e o webhook) e insere o resto em lote. O unique
- * `(organization_id, external_id)` é DEFERRABLE e não serve para `on conflict`:
- * um 23505 no lote (corrida com o webhook entre a consulta e o insert) recusa
- * o lote inteiro, e aí cada linha vai sozinha, com o 23505 contado como
- * existente.
- */
-async function gravarMensagens(
-  admin: SupabaseClient,
-  imp: Importacao,
-  alvo: { contactId: string; conversationId: string },
-  mensagens: WahaPayload[],
-  conta: { gravadas: number; existentes: number },
-): Promise<void> {
-  const candidatos = mensagens.map(candidatosDeExternalId);
-  const { data: achadas, error: erroDaConsulta } = await buscaEmLotes(
-    [...new Set(candidatos.flat())],
-    (lote) =>
-      admin
-        .from("messages")
-        .select("external_id, metadata")
-        .eq("organization_id", imp.organization_id)
-        .in("external_id", lote),
-    { bytesPorLote: BYTES_DE_CANDIDATOS_POR_CONSULTA },
-  );
-  if (erroDaConsulta) throw new Error(`messages_consulta: ${mensagemDeErro(erroDaConsulta)}`);
-  const linhasAchadas = (achadas ?? []) as Array<{ external_id: string | null; metadata?: Record<string, unknown> | null }>;
-  const ja = new Set(linhasAchadas.map((m) => m.external_id));
-  // Gravadas por ESTA importação numa rodada anterior (página refeita): não contam.
-  const proprias = new Set(
-    linhasAchadas.filter((m) => m.metadata?.importacao_id === imp.id).map((m) => m.external_id),
-  );
-
-  const novas: LinhaDeMensagemImportada[] = [];
-  const vistos = new Set<string>();
-  mensagens.forEach((p, i) => {
-    const mapeada = mapearMensagemDoAcervo(p, {
-      orgId: imp.organization_id,
-      sessionId: imp.channel_session_id,
-      contactId: alvo.contactId,
-      conversationId: alvo.conversationId,
-    });
-    const linha = { ...mapeada, metadata: { ...mapeada.metadata, importacao_id: imp.id } };
-    const doCandidato = candidatos[i] ?? [];
-    if (doCandidato.some((c) => proprias.has(c))) return;
-    // Repetida na própria página também é existente: o lote não pode colidir consigo.
-    if (doCandidato.some((c) => ja.has(c)) || vistos.has(linha.external_id)) {
-      conta.existentes += 1;
-      return;
-    }
-    vistos.add(linha.external_id);
-    novas.push(linha);
-  });
-  if (novas.length === 0) return;
-
-  const { error: erroDoLote } = await admin.from("messages").insert(novas as never);
-  if (!erroDoLote) {
-    conta.gravadas += novas.length;
-    return;
-  }
-  if ((erroDoLote as { code?: string }).code !== "23505") {
-    throw new Error(`messages_insert: ${mensagemDeErro(erroDoLote)}`);
-  }
-
-  for (const linha of novas) {
-    const { error } = await admin.from("messages").insert(linha as never);
-    if (!error) conta.gravadas += 1;
-    else if ((error as { code?: string }).code === "23505") conta.existentes += 1;
-    else throw new Error(`messages_insert: ${mensagemDeErro(error)}`);
-  }
-}
-
-/** Cliente do canal, só com o que `resolverMidias` usa. */
-type CanalDeMidia = {
-  baixarMidiaDaMensagem(
-    session: string,
-    chatId: string,
-    messageId: string,
-    opts?: { tetoMs?: number },
-  ): Promise<{ url: string | null; erro: boolean }>;
-};
-
-/**
- * Resolve a mídia (imagem e áudio) das mensagens DESTA página, as recém-gravadas
- * e as que já existiam como `pendente` (página refeita). Devolve `false` quando o
- * teto de chamadas ou o prazo acabou antes de resolver todas, ou quando alguma
- * ficou `pendente` para tentar de novo: quem chama não firma o cursor e a
- * página é refeita. Cada download leva `TETO_DO_DOWNLOAD_MS` no próprio pedido.
- *
- * Tentativa que não é veredito (sem URL e sem erro, ou tempo esgotado no
- * download) conta `tentativas_midia` e a rodada segue para a próxima mídia; na
- * 3ª a mídia vira `indisponivel`. Sem esse limite, K mídias assim, com K maior
- * que os downloads que cabem numa rodada, deixariam a página aberta para sempre.
- * Outro erro de transporte (o canal fora do ar) sobe para a rodada, que para em
- * `erro` com o cursor firme anterior. Só `erro: true` (o canal diz que a mídia
- * não existe mais) vira `indisponivel` de uma vez.
- */
-async function resolverMidias(
-  admin: SupabaseClient,
-  imp: Importacao,
-  canal: CanalDeMidia,
-  nomeNoCanal: string,
-  chatId: string,
-  conversationId: string,
-  mensagens: WahaPayload[],
-  ctl: {
-    noTeto: () => boolean;
-    contarChamada: () => void;
-    midias: { baixadas: number; indisponiveis: number };
-  },
-): Promise<boolean> {
-  // external_id candidato -> id da mensagem no canal, só das que o mapeador marca `pendente`.
-  const idNoCanal = new Map<string, string>();
-  for (const p of mensagens) {
-    const linha = mapearMensagemDoAcervo(p, {
-      orgId: imp.organization_id,
-      sessionId: imp.channel_session_id,
-      contactId: "",
-      conversationId,
-    });
-    if (linha.metadata.media_status !== "pendente" || !p.id) continue;
-    for (const c of candidatosDeExternalId(p)) idNoCanal.set(c, p.id);
-  }
-  if (idNoCanal.size === 0) return true;
-
-  const { data, error } = await buscaEmLotes(
-    [...idNoCanal.keys()],
-    (lote) =>
-      admin
-        .from("messages")
-        .select("id, external_id, metadata")
-        .eq("organization_id", imp.organization_id)
-        .in("external_id", lote),
-    { bytesPorLote: BYTES_DE_CANDIDATOS_POR_CONSULTA },
-  );
-  if (error) throw new Error(`messages_consulta_midia: ${mensagemDeErro(error)}`);
-
-  const linhas = (data ?? []) as Array<{ id: string; external_id: string; metadata: Record<string, unknown> | null }>;
-  let restouPendente = false;
-  /** Tentativa sem veredito: conta e, na 3ª, desiste da mídia. */
-  const contarTentativa = async (id: string, meta: Record<string, unknown>) => {
-    const tentativas = (typeof meta.tentativas_midia === "number" ? meta.tentativas_midia : 0) + 1;
-    if (tentativas < LIMITE_DE_TENTATIVAS_DE_MIDIA) {
-      await atualizarMensagem(admin, imp, id, { metadata: { ...meta, tentativas_midia: tentativas } });
-      restouPendente = true;
-      return { tentativas, desistiu: false };
-    }
-    await atualizarMensagem(admin, imp, id, {
-      metadata: { ...meta, tentativas_midia: tentativas, media_status: "indisponivel" },
-    });
-    ctl.midias.indisponiveis += 1;
-    return { tentativas, desistiu: true };
-  };
-  for (const linha of linhas) {
-    const meta = linha.metadata ?? {};
-    // Só o que o importador marcou e ainda ninguém resolveu.
-    if (meta.historico_importado !== "true" || meta.media_status !== "pendente") continue;
-    const messageIdNoCanal = idNoCanal.get(linha.external_id);
-    if (!messageIdNoCanal) continue;
-
-    if (ctl.noTeto()) return false;
-    ctl.contarChamada();
-    let resposta: { url: string | null; erro: boolean };
-    try {
-      resposta = await canal.baixarMidiaDaMensagem(nomeNoCanal, chatId, messageIdNoCanal, {
-        tetoMs: TETO_DO_DOWNLOAD_MS,
-      });
-    } catch (err) {
-      // Limite de 3 tentativas por mensagem: sem ele, uma mídia que o canal
-      // recusa SEMPRE (ex.: 500) derrubaria toda rodada na mesma página, e as
-      // mídias seguintes nunca seriam alcançadas. Tempo esgotado em UM download
-      // não é o canal fora do ar: conta e segue, sem levar a importação a `erro`.
-      // Outro erro de transporte: nas duas primeiras a rodada para em erro
-      // (cursor firme anterior); na terceira desiste e segue.
-      const { desistiu } = await contarTentativa(linha.id, meta);
-      if (!desistiu && !ehTempoEsgotado(err)) throw err;
-      continue;
-    }
-    const { url, erro } = resposta;
-
-    if (!url) {
-      // `erro: true` é "indisponível, não tente de novo". Sem URL e sem erro o
-      // canal não devolveu o arquivo agora (não é veredito): conta tentativa,
-      // fica `pendente` até a 3ª e a página é refeita para tentar de novo.
-      if (erro) {
-        await atualizarMensagem(admin, imp, linha.id, { metadata: { ...meta, media_status: "indisponivel" } });
-        ctl.midias.indisponiveis += 1;
-      } else {
-        await contarTentativa(linha.id, meta);
-      }
-      continue;
-    }
-
-    // `solicitada` (e não `pendente`) para uma página refeita não pedir de novo; o
-    // worker troca por `stored`. Leia-modifique-escreva: `historico_importado` fica.
-    await atualizarMensagem(admin, imp, linha.id, {
-      media_url: url,
-      metadata: { ...meta, media_status: "solicitada" },
-    });
-    const { error: erroDoEmit } = await admin.rpc("emit_event" as never, {
-      p_event_type: "media.persist_requested",
-      p_entity_kind: "message",
-      p_entity_id: linha.id,
-      p_payload: { message_id: linha.id, conversation_id: conversationId },
-      p_metadata: { source: "historico_importado" },
-      p_organization_id: imp.organization_id,
-    } as never);
-    if (erroDoEmit) {
-      // Desfaz para a próxima rodada tentar de novo; o pedido não saiu.
-      await atualizarMensagem(admin, imp, linha.id, { media_url: null, metadata: meta });
-      throw new Error(`emit_event: ${mensagemDeErro(erroDoEmit)}`);
-    }
-    ctl.midias.baixadas += 1;
-  }
-  return !restouPendente;
-}
-
-/** O teto de tempo do pedido estourou (o cliente do WAHA diz `waha_timeout`). */
-function ehTempoEsgotado(err: unknown): boolean {
-  return err instanceof Error && err.message.startsWith("waha_timeout");
-}
-
-async function atualizarMensagem(
-  admin: SupabaseClient,
-  imp: Importacao,
-  id: string,
-  patch: Record<string, unknown>,
-): Promise<void> {
-  const { error } = await admin
-    .from("messages")
-    .update(patch as never)
-    .eq("id", id)
-    .eq("organization_id", imp.organization_id);
-  if (error) throw new Error(`messages_update_midia: ${mensagemDeErro(error)}`);
-}

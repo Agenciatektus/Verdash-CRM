@@ -391,7 +391,7 @@ beforeEach(() => {
 describe("D12 — o clima roda com a chave colada pela tela", () => {
   it("chave da Anthropic cadastrada em Credenciais, .env vazio: o clima é medido", async () => {
     const { resultado, banco } = await rodar({
-      settings: { llm: { provider: "anthropic" } },
+      settings: { llm: { provider: "anthropic", default_model: "claude-haiku-4-5" } },
       credenciais: [credencial(CRED_ANTHROPIC, "anthropic", "sk-ant-da-tela")],
     });
 
@@ -532,7 +532,7 @@ function fornecedor(responder: (init: RequestInit) => Promise<Response>): void {
 
 function jevLigado(modo: "observacao" | "decide", comIaDeSempre = true): Cenario {
   return {
-    settings: { llm: { provider: "anthropic" }, jev: { ligado: true, modo, aceite: ACEITE } },
+    settings: { llm: { provider: "anthropic", default_model: "claude-haiku-4-5" }, jev: { ligado: true, modo, aceite: ACEITE } },
     credenciais: [
       credencial(CRED_JEV, "typesafe", CHAVE_DO_JEV),
       ...(comIaDeSempre ? [credencial(CRED_ANTHROPIC, "anthropic", "sk-ant-da-tela")] : []),
@@ -551,7 +551,7 @@ describe("LGPD: a nota não volta para uma mensagem anonimizada durante a mediç
   // vivo é o primeiro caso do D12, que afirma a nota gravada.
   it("lê → anonimiza → grava: metadata continua `{}`", async () => {
     const banco = montarBanco({
-      settings: { llm: { provider: "anthropic" } },
+      settings: { llm: { provider: "anthropic", default_model: "claude-haiku-4-5" } },
       credenciais: [credencial(CRED_ANTHROPIC, "anthropic", "sk-ant-da-tela")],
     });
     banco.messages[0]!.metadata = { push_name: "Maria Silva" };
@@ -841,7 +841,7 @@ describe("o Jev no worker de clima", () => {
   it("Jev desligado: nenhuma chamada ao fornecedor e nenhuma linha dele, mesmo com a chave cadastrada", async () => {
     fornecedor(async () => respostaDoJev(0));
     const cenario = jevLigado("decide");
-    cenario.settings = { llm: { provider: "anthropic" }, jev: { ligado: false, modo: "decide", aceite: ACEITE } };
+    cenario.settings = { llm: { provider: "anthropic", default_model: "claude-haiku-4-5" }, jev: { ligado: false, modo: "decide", aceite: ACEITE } };
     const { resultado, banco } = await rodar(cenario);
 
     expect(resultado).toEqual({ skipped: false, sentiment_score: 0.2 });
@@ -1587,7 +1587,7 @@ describe("os pedidos do cliente no worker de clima", () => {
 
   it("Jev desligado: com o agente no ar, os pedidos também não saem", async () => {
     fornecedor(respostaPorPergunta({}));
-    const cenario: Cenario = { settings: { llm: { provider: "anthropic" } }, credenciais: jevLigado("decide").credenciais };
+    const cenario: Cenario = { settings: { llm: { provider: "anthropic", default_model: "claude-haiku-4-5" } }, credenciais: jevLigado("decide").credenciais };
     await rodar(cenario, comAgenteNoAr(cenario));
     expect(chamadasAoJev).toHaveLength(0);
   });

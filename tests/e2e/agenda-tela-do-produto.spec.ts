@@ -43,7 +43,15 @@ test.describe("a Agenda como o dono do produto a usa", () => {
     await page.goto("/app");
     // O item vive no grupo "Conversas" (id `atendimento`), junto do Inbox — decisão registrada
     // no `registry.ts`: a Agenda é onde o dia acontece, não onde se configura.
-    const item = page.getByRole("link", { name: "Agenda", exact: true }).first();
+    // Visual v2: a coluna só aparece depois de escolher o grupo no trilho (o
+    // nome do grupo pode levar o contador da fila, daí a âncora no início).
+    await page
+      .getByRole("navigation", { name: "Grupos da navegação" })
+      .getByRole("button", { name: /^Conversas(\s|$)/ })
+      .click();
+    const item = page
+      .getByRole("navigation", { name: "Navegação principal" })
+      .getByRole("link", { name: "Agenda", exact: true });
     await expect(item).toBeVisible({ timeout: ESPERA });
     await item.click();
 
@@ -55,7 +63,7 @@ test.describe("a Agenda como o dono do produto a usa", () => {
     // vermelho. E o estado vazio é justamente o da INSTALAÇÃO FRESCA: esta spec
     // passava só porque outra spec deixava agendamentos no banco antes dela.
     // Medido nas duas direções: com 3 linhas passa, com 0 linhas falha.
-    await expect(page.getByRole("heading", { name: "Agendamentos", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Agenda", exact: true, level: 1 })).toBeVisible();
   });
 
   test("as pessoas da equipe são REAIS — o filtro deixou de ser invisível", async () => {

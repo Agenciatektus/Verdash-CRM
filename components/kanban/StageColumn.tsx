@@ -47,6 +47,12 @@ interface StageColumnProps {
    * coluna de ganho continua contando a venda que foi para o pós-venda.
    */
   passagens?: PassagemDaColuna[];
+  /**
+   * Quadro de um funil ARQUIVADO (#1298): abre para OLHAR, e nada aqui grava.
+   * Sem arraste, sem menu de ações de card, sem seleção (a barra em lote é
+   * escrita) e sem abrir o dossiê, que tem ações próprias.
+   */
+  somenteLeitura?: boolean;
 }
 
 export function StageColumn({
@@ -67,6 +73,7 @@ export function StageColumn({
   onRenomear,
   compacto = false,
   passagens = [],
+  somenteLeitura = false,
 }: StageColumnProps) {
   const t = useT();
   const totaisLevados = somaPorMoeda(passagens, (p) => p.value_cents, (p) => p.currency ?? MOEDA_PADRAO);
@@ -166,7 +173,7 @@ export function StageColumn({
         coluna de etapa não vira painel. De `md` para cima volta o `w-80` de
         sempre, onde a graça é justamente ver várias etapas ao mesmo tempo.
       */
-      className="bg-surface-muted/40 flex min-h-full w-[85vw] max-w-80 shrink-0 snap-center flex-col rounded-lg border border-border md:w-80"
+      className="bg-surface-elevated/40 flex min-h-full w-[85vw] max-w-80 shrink-0 snap-center flex-col rounded-lg border border-border md:w-80"
       data-etapa-do-quadro={stage.id}
     >
       {/* Cabeçalho e total PRESOS no alto do quadro enquanto os cards rolam: com
@@ -184,7 +191,7 @@ export function StageColumn({
         className="sticky top-0 z-10 -mx-px -mt-px rounded-t-lg border-x border-t border-border bg-background"
         data-cabecalho-da-etapa
       >
-        <div className="bg-surface-muted/40 rounded-t-lg">
+        <div className="bg-surface-elevated/40 rounded-t-lg">
           <div className="group/etapa flex items-center gap-2 border-b border-border px-3 py-2.5">
             {/* "Selecionar a etapa inteira" é o gesto que faz a ação em lote valer a
             pena: sem ele, mover trinta cards deixa de ser trinta arrastes e vira
@@ -193,32 +200,34 @@ export function StageColumn({
             Indeterminado quando a seleção é parcial: "alguns" e "nenhum" não
             podem ter a mesma aparência num controle que o próximo clique
             inverte. */}
-            <input
-              type="checkbox"
-              checked={todosSelecionados}
-              ref={(el) => {
-                if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
-              }}
-              disabled={idsVisiveis.length === 0}
-              onChange={alternarEtapa}
-              aria-label={
-                todosSelecionados
-                  ? `${t("Desmarcar todos em")} ${stage.name}`
-                  : `${t("Selecionar todos em")} ${stage.name}`
-              }
-              className={cn(
-                "h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
-                "focus:opacity-100 disabled:cursor-default",
-                // `pointer-coarse:opacity-100` pelo mesmo motivo da caixa do
-                // card (ver `components/kanban/KanbanCard.tsx`): no toque o
-                // hover nunca acontece, e "selecionar a etapa inteira" é o gesto
-                // que faz a ação em lote valer a pena. Sem ele, mover trinta
-                // cards no celular eram trinta arrastes.
-                selecionadosAqui > 0
-                  ? "opacity-100"
-                  : "opacity-0 group-hover/etapa:opacity-100 pointer-coarse:opacity-100",
-              )}
-            />
+            {!somenteLeitura && (
+              <input
+                type="checkbox"
+                checked={todosSelecionados}
+                ref={(el) => {
+                  if (el) el.indeterminate = selecionadosAqui > 0 && !todosSelecionados;
+                }}
+                disabled={idsVisiveis.length === 0}
+                onChange={alternarEtapa}
+                aria-label={
+                  todosSelecionados
+                    ? `${t("Desmarcar todos em")} ${stage.name}`
+                    : `${t("Selecionar todos em")} ${stage.name}`
+                }
+                className={cn(
+                  "h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
+                  "focus:opacity-100 disabled:cursor-default",
+                  // `pointer-coarse:opacity-100` pelo mesmo motivo da caixa do
+                  // card (ver `components/kanban/KanbanCard.tsx`): no toque o
+                  // hover nunca acontece, e "selecionar a etapa inteira" é o gesto
+                  // que faz a ação em lote valer a pena. Sem ele, mover trinta
+                  // cards no celular eram trinta arrastes.
+                  selecionadosAqui > 0
+                    ? "opacity-100"
+                    : "opacity-0 group-hover/etapa:opacity-100 pointer-coarse:opacity-100",
+                )}
+              />
+            )}
             <span
               className={cn("h-2 w-2 rounded-full", !stage.color && "bg-text-muted/40")}
               style={accentStyle}
@@ -293,12 +302,13 @@ export function StageColumn({
                 isSelected={selectedLeadIds?.has(lead.id)}
                 isSelecting={(selectedLeadIds?.size ?? 0) > 0}
                 pulseCount={pulses?.get(lead.id) ?? 0}
-                onSelect={aoSelecionar}
-                onOpen={onOpen}
+                onSelect={somenteLeitura ? undefined : aoSelecionar}
+                onOpen={somenteLeitura ? undefined : onOpen}
                 compacto={compacto}
                 limiteDaEtapa={stage.expected_duration_hours}
                 etapas={etapas}
                 onMoverPara={onMoverPara}
+                somenteLeitura={somenteLeitura}
               />
             ))}
             {provided.placeholder}

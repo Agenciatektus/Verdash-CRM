@@ -47,6 +47,7 @@ const STATUS: Record<GrupoError["code"], number> = {
   // é do DOMÍNIO (o grupo está fora da fila), não do transporte — por isso 409
   // e não 502.
   grupo_desligado: 409,
+  grupo_nao_encontrado: 404,
 };
 
 function falhaDeGrupo(err: unknown, requestId: string): Response {

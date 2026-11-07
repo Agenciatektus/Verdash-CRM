@@ -58,4 +58,3 @@ VARREDURA anon, depois de todas as redefinições do upstream.
 ## Pendências
 - Telas do upstream que entraram inteiras (respostas rápidas, modelos do canal oficial): conferir no padrão do DS.
 - O typecheck a frio estoura 6 GB no Windows; no CI (Linux) vale o resultado do job.
-- Sem teste do degrau A0 (OpenRouter) da escada de transcrição.

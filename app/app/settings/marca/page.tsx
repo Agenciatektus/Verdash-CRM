@@ -87,11 +87,12 @@ export default async function MarcaDaOrganizacaoPage() {
             app_name: gravada?.app_name ?? null,
             accent_hex: gravada?.accent_hex ?? null,
           accent_dark_hex: gravada?.accent_dark_hex ?? null,
-            // O CAMINHO no bucket, não a URL: quem converte é `logoDaCamada`, do
-            // lado do navegador, com a base do Storage injetada em runtime. Mandar
-            // a URL pronta do servidor faria a tela ter uma segunda regra de
-            // montagem, e a que divergisse seria a que ninguém abre.
-            logo_path: gravada?.logo_path ?? null,
+          // O CAMINHO no bucket, não a URL: quem converte é `logoDaCamada`, do
+          // lado do navegador, com a base do Storage injetada em runtime. Mandar
+          // a URL pronta do servidor faria a tela ter uma segunda regra de
+          // montagem, e a que divergisse seria a que ninguém abre.
+          logo_path: gravada?.logo_path ?? null,
+          logo_dark_path: gravada?.logo_dark_path ?? null,
           // O remetente da AUTOMAÇÃO (#3287, fatia 1): os dois campos que a tela
           // grava junto da marca e lê de volta para preencher os inputs.
           email_from_name: gravada?.email_from_name ?? null,

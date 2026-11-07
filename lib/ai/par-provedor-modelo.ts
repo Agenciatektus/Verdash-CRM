@@ -187,11 +187,7 @@ function parErrado(modelo: string, provedorDoModelo: string, provedorDaChamada: 
  *     O par que não se sustenta (`{provider: 'openai', default_model:
  *     'claude-sonnet-5'}`, das instalações em que o instalador antigo trocou só
  *     o provedor) NÃO é usado — ele É o defeito que a issue descreve.
- *  3. **A compatibilidade explícita do provedor**
- *     (`MODELOS_DE_COMPATIBILIDADE`: hoje só a Anthropic, o padrão histórico do
- *     produto). O legado continua valendo, mas POR PROVEDOR — e nunca
- *     atravessando para o endereço de outro.
- *  4. **O catálogo do provedor efetivo** (`ai_models`, pela mesma régua da
+ *  3. **O catálogo do provedor efetivo** (`ai_models`, pela mesma régua da
  *     publicação do primeiro atendente), que quem chama lê e entrega.
  *
  * Nenhum degrau inventa id: sem par sustentável, a resposta é `ok: false` com o
@@ -199,27 +195,16 @@ function parErrado(modelo: string, provedorDoModelo: string, provedorDaChamada: 
  * modelo que o endereço configurado não executa (issue #2377, critério 2).
  */
 
-/** O provedor do produto quando nem a organização nem o legado disseram nada. */
-export const PROVEDOR_DE_COMPATIBILIDADE = "anthropic";
-
-/**
- * A lista EXPLÍCITA do legado, por provedor — não um default solto.
- *
- * `claude-sonnet-5` foi o default do "Modo A" da API (`route.ts`), escrito à
- * mão no corpo legado. Ele continua valendo para uma instalação em Anthropic
- * (é o que a coluna do agente sempre recebeu), mas passa a valer POR PROVEDOR:
- * quem não é a Anthropic não o executa, e não há como isto atravessar para o
- * endereço de outro fabricante sem cair no degrau 4 ou na recusa.
- */
-export const MODELOS_DE_COMPATIBILIDADE: Readonly<Record<string, string>> = {
-  anthropic: "claude-sonnet-5",
-};
+// `PROVEDOR_DE_COMPATIBILIDADE` ("anthropic") e `MODELOS_DE_COMPATIBILIDADE`
+// (`claude-sonnet-5`) SAÍRAM em 06/11/2026: eram o Claude que um agente criado
+// sem modelo ganhava quando a organização não tinha padrão. Sem padrão, vale o
+// catálogo do provedor DA organização; sem provedor, a criação é recusada.
+// Trava: `tests/unit/padroes-de-ia-sem-anthropic.test.ts`.
 
 /** De onde saiu o par efetivo — vai para o log estruturado. */
 export type OrigemDoParEfetivo =
   | "informado"
   | "padrao_da_organizacao"
-  | "compatibilidade_do_provedor"
   | "catalogo_do_provedor";
 
 /** `organizations.settings.llm`, como o painel e o onboarding o gravam. */
@@ -290,7 +275,10 @@ export async function resolverParEfetivo(
     .trim()
     .toLowerCase();
   const gravado = String(pedido.llmDaOrganizacao?.default_model ?? "").trim();
-  const provedorDoEndereco = daOrganizacao === "" ? PROVEDOR_DE_COMPATIBILIDADE : daOrganizacao;
+  // Sem provedor na organização, o endereço de um id BARE informado é o do
+  // próprio nome (`claude-…` → anthropic); nada é presumido além disso.
+  const provedorDoEndereco =
+    daOrganizacao !== "" ? daOrganizacao : (provedorNaturalDoModelo(informado) ?? "");
 
   // 1 · O que veio no corpo é ESCOLHA: vale a rota do id, e o par é conferido.
   if (informado !== "") {
@@ -310,21 +298,18 @@ export async function resolverParEfetivo(
     }
   }
 
-  // 3 · A compatibilidade explícita DESTE provedor (o legado Anthropic).
-  const compatibilidade = MODELOS_DE_COMPATIBILIDADE[provedorDoEndereco];
-  if (
-    compatibilidade !== undefined &&
-    validarParProvedorModelo(provedorDoEndereco, compatibilidade).valido
-  ) {
+  if (provedorDoEndereco === "") {
     return {
-      ok: true,
-      provider: provedorDoEndereco,
-      model: compatibilidade,
-      origem: "compatibilidade_do_provedor",
+      ok: false,
+      provider: "",
+      model: "",
+      motivo:
+        "a organização não tem provedor de IA configurado — escolha o provedor e o modelo em " +
+        "Agente de IA › Provedores, ou informe o modelo do agente",
     };
   }
 
-  // 4 · O catálogo do provedor efetivo — a régua da publicação do atendente.
+  // 3 · O catálogo do provedor efetivo — a régua da publicação do atendente.
   const doCatalogo = (await pedido.lerModeloDoCatalogo?.(provedorDoEndereco)) ?? "";
   if (String(doCatalogo).trim() !== "") {
     const par = parDoPadrao(provedorDoEndereco, String(doCatalogo).trim());

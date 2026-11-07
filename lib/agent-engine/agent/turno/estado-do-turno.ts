@@ -15,6 +15,10 @@ import { criarTravaDeDuplicata } from '../near-dup';
 import { criarEfeitoDasEscrituras } from '@/lib/ai/runtime/efeito-das-escritas';
 import { ferramentasDeRegistroDoAgente } from '../../guardrails/registro-sem-efeito';
 import type { GateContext } from '../../guardrails/before-send';
+import type pg from 'pg';
+import type { Logger } from '../../obs/logger';
+// Valor lido só dentro da função (nunca na carga do módulo): o ciclo de import é seguro.
+import { temFerramentaDeAgenda } from '../inbound-turn';
 
 export interface EstadoDoTurno {
   // Estado do RUN — vive só neste closure (isolamento por construção, acc 3).
@@ -94,6 +98,18 @@ export interface EstadoDoTurno {
   // as tools do modelo rodam em passos anteriores do mesmo loop, o valor já está certo
   // quando o modelo decide mandar a resposta.
   agendaToolCalledThisTurn: boolean;
+  // Arma o `horarioDaAgendaGate` (#3596): o texto precisa citar o que as tools de agenda
+  // DEVOLVERAM. Colhido no wrapper das tools MCP; lido no momento do envio.
+  agendaDoTurno: {
+    livres: Set<string>;
+    marcados: Set<string>;
+    marcou: boolean;
+    fuso: string | null;
+    vetos: number;
+    // Compromissos que o contato JÁ tem: lembrar a consulta dele não é horário inventado.
+    compromissosDoContato: string[];
+    leituraDosCompromissos: Promise<void>;
+  };
   // Lido pelo `casePromiseGate` (#1873): true só depois de `schedule_followup` AGENDAR com
   // sucesso neste turno. Libera apenas a promessa de retorno do próprio assistente.
   followupAgendadoNesteTurno: boolean;
@@ -122,6 +138,15 @@ export function criarEstadoDoTurno(): EstadoDoTurno {
     jaEsperouComoHumano: false,
     pacingCapVeto: null,
     agendaToolCalledThisTurn: false,
+    agendaDoTurno: {
+      livres: new Set(),
+      marcados: new Set(),
+      marcou: false,
+      fuso: null,
+      vetos: 0,
+      compromissosDoContato: [],
+      leituraDosCompromissos: Promise.resolve(),
+    },
     followupAgendadoNesteTurno: false,
     outcomes: [],
     pendingCitations: [],
@@ -139,4 +164,51 @@ export function registroDoTurno(
 ): NonNullable<GateContext['registro']> {
   const ferramentas = agentConfig === null ? [] : ferramentasDeRegistroDoAgente([...agentConfig.toolIds]);
   return { active: ferramentas.length > 0, ferramentas, efeitos: estado.efeitos };
+}
+
+/**
+ * Inicia a leitura dos compromissos do contato (#3596), uma por turno. Falha de
+ * leitura = lista vazia: o gate de horário fica mais rígido, nunca mais frouxo.
+ */
+export function iniciarLeituraDosCompromissos(
+  pool: pg.Pool,
+  alvo: { tenantId: string; leadId: string },
+  estado: EstadoDoTurno,
+  log: Logger,
+): void {
+  const agenda = estado.agendaDoTurno;
+  if (!alvo.leadId) return;
+  agenda.leituraDosCompromissos = pool
+    .query<{ starts_at: Date; time_zone: string | null }>(
+      `select starts_at, time_zone from public.calendar_appointments
+        where organization_id = $1 and contact_id = $2 and status <> 'cancelled'
+          and starts_at > now() - interval '1 day'
+        order by starts_at limit 50`,
+      [alvo.tenantId, alvo.leadId],
+    )
+    .then((r) => {
+      agenda.compromissosDoContato = r.rows.map((x) => new Date(x.starts_at).toISOString());
+      agenda.fuso ??= r.rows.find((x) => x.time_zone)?.time_zone ?? null;
+    })
+    .catch((err: unknown) => {
+      log.warn('compromissos do contato não lidos (gate de horário fica mais rígido)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
+
+/** O `horariosDaAgenda` do contexto do gate (#3596), no molde de `registroDoTurno`. */
+export function horariosDaAgendaDoTurno(
+  agentConfig: { toolIds: readonly string[] } | null,
+  estado: EstadoDoTurno,
+): NonNullable<GateContext['horariosDaAgenda']> {
+  const agenda = estado.agendaDoTurno;
+  return {
+    ativo: agentConfig !== null && temFerramentaDeAgenda(agentConfig.toolIds),
+    fuso: agenda.fuso ?? 'America/Sao_Paulo',
+    livres: [...agenda.livres],
+    doContato: [...agenda.compromissosDoContato, ...agenda.marcados],
+    marcouNesteTurno: agenda.marcou,
+    vetosAnteriores: agenda.vetos,
+  };
 }

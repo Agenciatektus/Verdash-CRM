@@ -24,7 +24,7 @@ import { logger } from "@/lib/logger";
 
 export class GrupoError extends Error {
   constructor(
-    public readonly code: "sessao_nao_encontrada" | "canal_sem_grupos" | "filtro_nao_confirmado" | "grupo_desligado",
+    public readonly code: "sessao_nao_encontrada" | "canal_sem_grupos" | "filtro_nao_confirmado" | "grupo_desligado" | "grupo_nao_encontrado",
   ) {
     super(code);
     this.name = "GrupoError";

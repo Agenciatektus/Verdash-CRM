@@ -19,6 +19,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 vi.mock("@/lib/ai/gateway", () => ({
   DEFAULT_CLASSIFIER_MODEL: "anthropic/claude-haiku-4-5",
   OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
+  provedorDaChaveDaInstalacao: () => "",
   resolveLanguageModel: state.resolve,
 }));
 

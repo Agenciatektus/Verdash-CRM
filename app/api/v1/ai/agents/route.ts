@@ -107,7 +107,7 @@ const AGENT_COLUMNS_COM_VERSAO =
   ", versao_publicada:ai_agent_versions!ai_agents_published_version_id_fkey(provider, model)";
 
 const VERSION_COLUMNS =
-  "id, organization_id, agent_id, version_number, system_prompt, provider, model, credential_id, tool_ids, trigger_config, channel_session_id, max_steps, token_budget, cost_budget_cents, history_message_window, history_token_window, handoff_keywords, handoff_tool_enabled, handoff_legal_enabled, proposal_ai_draft_enabled, cases_enabled, split_messages, split_max_chars, followup, operator_enabled, operator_model, operator_tool_ids, status, published_at, superseded_at, created_at, created_by,pipeline_ids,knowledge_source_ids,provisioning_origin,inbound_debounce_ms";
+  "id, organization_id, agent_id, version_number, system_prompt, provider, model, credential_id, tool_ids, trigger_config, channel_session_id, max_steps, token_budget, cost_budget_cents, history_message_window, history_token_window, handoff_keywords, handoff_tool_enabled, handoff_legal_enabled, proposal_ai_draft_enabled, cases_enabled, split_messages, split_max_chars, followup, voz_enabled, voz_quando, operator_enabled, operator_model, operator_tool_ids, status, published_at, superseded_at, created_at, created_by,pipeline_ids,knowledge_source_ids,provisioning_origin,inbound_debounce_ms";
 
 // ---------------------------------------------------------------------------
 // GET — list
@@ -211,9 +211,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     // `ai_agent_versions` e só aparecia no turno, longe da tela que mostra o
     // provedor geral. Agora o par sai do MESMO ponto único que confere a
     // execução (`lib/ai/par-provedor-modelo.ts`): o padrão da organização
-    // quando ele se sustenta, a compatibilidade EXPLÍCITA do provedor depois
-    // (a Anthropic do legado, e só ela), o catálogo do provedor efetivo em
-    // seguida — e, sem par sustentável, a criação é RECUSADA aqui, antes de
+    // quando ele se sustenta, o catálogo do provedor efetivo em seguida (sem
+    // Claude de compatibilidade desde 06/11/2026) — e, sem par sustentável, a criação é RECUSADA aqui, antes de
     // qualquer insert.
     const par = await resolverParEfetivo({
       modeloInformado: parseLegado.data.model,

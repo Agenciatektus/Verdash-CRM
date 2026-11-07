@@ -127,6 +127,7 @@ import {
   tipoDeEnvio,
 } from '../guardrails/before-send';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
+import { resolverVozDoTurno } from './voz-do-turno';
 import { manterDigitando } from './atraso-humano';
 import type { DisclosureMode } from '../guardrails/disclosure/template';
 import { loadPromiseTable } from '../guardrails/promise/table';
@@ -147,7 +148,7 @@ import {
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada } from '../guardrails/camadas-da-org';
 import { avaliarPortoesDeEntrada } from './turno/portoes-de-entrada';
-import { criarEstadoDoTurno } from './turno/estado-do-turno';
+import { criarEstadoDoTurno, iniciarLeituraDosCompromissos } from './turno/estado-do-turno';
 import { criarGetLeadContext, criarGetLeadNote, criarReadSkillReference, criarSearchKnowledge } from './turno/ferramentas/leitura';
 import { criarSaveLeadNote, criarScheduleFollowup, criarUpdateLeadState } from './turno/ferramentas/lead';
 import { criarOpenHumanCase, criarProvideCaseUpdate, criarRequestHumanHandoff } from './turno/ferramentas/equipe';
@@ -637,6 +638,52 @@ export async function loadInboundForJob(
 }
 
 /**
+ * O `type` da mesma mensagem que `loadInboundForJob` lê — função IRMÃ para não
+ * mudar o retorno de quem já existe. `resolverVozDoTurno` (voz, Fase 6b) usa isto
+ * para `voz_quando='espelhar'`: falar só quando o CLIENTE mandou áudio.
+ */
+export async function loadInboundTypeForJob(
+  db: Queryable,
+  input: { tenantId: string; conversationId: string; inboundMessageId: string },
+): Promise<string | null> {
+  const result = await db.query<{ type: string }>(
+    `select type
+       from messages
+      where organization_id = $1
+        and conversation_id = $2
+        and id = $3
+        and direction = 'inbound'
+      limit 1`,
+    [input.tenantId, input.conversationId, input.inboundMessageId],
+  );
+  return result.rows[0]?.type ?? null;
+}
+
+/**
+ * Sobe o áudio sintetizado no MESMO bucket/convenção de path da mídia de sempre:
+ * `isMediaPathOwnedBy` recusa path fora de `${organizationId}/${conversationId}/...`.
+ * Exportada para o teste: é o único ponto da voz que fala com o Storage.
+ */
+export async function uploadDeVoz(input: {
+  tenantId: string;
+  conversationId: string;
+  jobId: string;
+  seq: number;
+  audio: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const path = `${input.tenantId}/${input.conversationId}/voz-agente-${input.jobId}-${input.seq}.mp3`;
+  const admin = createAdminClient();
+  // `upsert: true`: o retry depois de `rotate()` sintetiza de novo no MESMO path; com
+  // `false` o Storage recusaria e a nota de voz daquela mensagem nunca mais sairia.
+  const { error } = await admin.storage
+    .from('whatsapp-media')
+    .upload(path, input.audio, { contentType: input.mimeType, upsert: true });
+  if (error) throw new Error(`voz_upload_failed: ${error.message}`);
+  return path;
+}
+
+/**
  * Recorte 1 do #636: o checkpoint (schema, ROW, instrução do fechamento,
  * gravação e parse) e a abertura (`ritualBlocks` + `buildOpeningMessage`) moram
  * em `./abertura/` desde este PR — este arquivo orquestra.
@@ -1075,6 +1122,27 @@ const AGENDA_CADEIA_SYSTEM_BLOCK =
   'resposta. Se o tipo que o lead pediu não estiver na lista, diga isso a ele nomeando o que existe — ' +
   'não prometa verificar o que você já sabe que não tem.\n' +
   'Nunca invente um `slug`: ele vem da lista, escrito igualzinho.';
+
+/**
+ * O bloco de modo da PRÉVIA, por tipo (#3757). `sandbox` (botão "Testar") é o
+ * agente falando como agente — texto inalterado. `assisted` ("Sugerir resposta")
+ * é o rascunho que o ATENDENTE humano revisa e envia: sem dizer isso, o rascunho
+ * saía na voz do assistente ("vou avisar o atendente") e era descartado.
+ */
+const BLOCO_PREVIA: Record<TurnPreview['kind'], string> = {
+  sandbox:
+    'MODO PRÉVIA: proponha a resposta com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
+  assisted:
+    'MODO ASSISTIDO: você escreve o RASCUNHO da próxima mensagem que o atendente humano desta conversa vai revisar e enviar ao cliente, em nome dele. ' +
+    'Escreva na primeira pessoa, como esse atendente, com base no histórico, nas notas e no conhecimento disponível. ' +
+    'Não fale como assistente nem como IA, não diga que vai avisar, chamar ou transferir para alguém e não proponha passar o atendimento. ' +
+    'Proponha a mensagem com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
+};
+
+/** O bloco do modo de prévia que entra no `system` (chamado em `turno/contexto.ts`). */
+export function blocoDoModoDePrevia(kind: TurnPreview['kind']): string {
+  return BLOCO_PREVIA[kind];
+}
 
 /**
  * Os blocos de agenda que ESTE agente recebe — a decisão num lugar só, testável.
@@ -2200,12 +2268,36 @@ async function executarTurnoDoAgente(
   const { routed, agentConfig, agentOperation } = roteamento.valor;
   // F4 — contexto e system prompt (ADR-0006, S2): leituras da abertura e montagem do `system`.
   const {
-    maxSteps, argsAux, turnContextKnobs, skills, currentInboundText, currentInboundSender, previous, leadState, system,
-    openingContext,
+    maxSteps, argsAux, skills, currentInboundText, currentInboundSender, previous, leadState, system,
+    openingContext, lerContextoDaConversa,
   } = await carregarContextoDoTurno(
     { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
     { agentConfig, contextKnobs, fusoDaOrg },
   );
+  // Voz (Fase 6b): resolvida UMA vez por turno, antes de qualquer `send_message`.
+  // Prévia nunca vira nota de voz de verdade.
+  const vozParaEsteTurno =
+    !preview && agentConfig?.vozEnabled
+      ? await resolverVozDoTurno({
+          pool,
+          tenantId,
+          cfg: deps.llmCfg,
+          leadId,
+          jobId: liveJob().id,
+          agentId: agentConfig.agentId,
+          vozEnabled: agentConfig.vozEnabled,
+          vozQuando: agentConfig.vozQuando,
+          voiceNote: capabilitiesOf(await loadChannelProvider(pool, tenantId, input.channelSessionId)).voiceNote,
+          inboundType:
+            input.inboundMessageId === undefined
+              ? null
+              : await loadInboundTypeForJob(pool, {
+                  tenantId,
+                  conversationId: input.conversationId,
+                  inboundMessageId: input.inboundMessageId,
+                }),
+        })
+      : null;
 
   // F5 — desvios determinísticos (ADR-0006, S5): canal, STOP, LGPD, pedido de humano e opt-out.
   const desvios = await tratarDesviosDeterministicos(
@@ -2221,7 +2313,7 @@ async function executarTurnoDoAgente(
   // F5b — entrada do agente (v1.90): filtro de palavra-chave, horário do agente e condução.
   const entrada = await avaliarEntradaDoAgente(
     { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob },
-    { agentConfig, inboundsPendentes, mensagemDoJob },
+    { routed, agentConfig, inboundsPendentes, mensagemDoJob },
   );
   if (!entrada.seguir) return;
   // Apaga a renovação do "digitando…" (ver `manterDigitando`). Começa como no-op:
@@ -2238,6 +2330,8 @@ async function executarTurnoDoAgente(
   // Estado do turno (ADR-0006, D4): o MESMO objeto para as ferramentas, `send_message`
   // e as fases de depois do modelo. Nasce aqui, uma vez; nenhum módulo de fase cria o seu.
   const estado = criarEstadoDoTurno();
+  // #3596: compromissos do contato para o gate de horário — iniciada já, esperada no envio.
+  iniciarLeituraDosCompromissos(pool, { tenantId, leadId }, estado, runLog);
   // Teto de mensagens físicas por turno (F2-15b) — `seq` JÁ é a contagem certa: ele só
   // avança quando o envio de fato sai pro canal (send_message + send_template, bolhas
   // incluídas), nunca em veto de gate. Checar `seq` antes de tentar o próximo envio
@@ -2460,13 +2554,13 @@ async function executarTurnoDoAgente(
   const contextoDasFerramentas = { deps, job, pool, ctx, input, preview, tenantId, leadId, clock, runLog, liveJob };
 
   const rawTools: ToolSet = {
-    get_lead_context: criarGetLeadContext(contextoDasFerramentas, { fusoDaOrg, turnContextKnobs, mcpToolIdsDoTurno, noteRunError }),
+    get_lead_context: criarGetLeadContext(contextoDasFerramentas, { lerContextoDaConversa, mcpToolIdsDoTurno, noteRunError }),
     send_template: criarSendTemplate(contextoDasFerramentas, { agentOperation, liveChannel, optedOutThisTurn, lgpd, maxSendsPerTurn, pararDigitando: () => pararDigitando(), passarComercialParaEquipe }, estado),
     search_knowledge: criarSearchKnowledge(contextoDasFerramentas, { agentConfig, evidenciasComerciais, mcpToolIdsDoTurno }, estado),
     // Setas: `pararDigitando` é reatribuído depois; `rawTools` e `buildCaseContextSnapshot` são lidos na chamada.
     send_message: criarSendMessage(contextoDasFerramentas, {
       agentConfig, agentOperation, liveChannel, optedOutThisTurn, lgpd, mensagemDoJob, camadas, restricaoComercial,
-      passarComercialParaEquipe, maxSendsPerTurn,
+      passarComercialParaEquipe, maxSendsPerTurn, vozParaEsteTurno,
       promiseTable, semanticClassifier, conferirAfirmacoes, knobsDeAtrasoHumano, pacingDoTurno, inicioDoProcessamento,
       pararDigitando: () => pararDigitando(),
       followupDisponivel: () => rawTools.schedule_followup !== undefined,

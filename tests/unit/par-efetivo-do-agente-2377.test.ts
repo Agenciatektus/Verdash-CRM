@@ -159,17 +159,30 @@ describe("resolverParEfetivo — Anthropic", () => {
     });
   });
 
-  it("o legado Anthropic continua valendo — como compatibilidade EXPLÍCITA do provedor", async () => {
+  it("sem padrão, vale o catálogo DA organização — o Claude de compatibilidade saiu", async () => {
     const semPadrao = await resolverParEfetivo({
       llmDaOrganizacao: { provider: "anthropic" },
-      lerModeloDoCatalogo: leitorProibido,
+      lerModeloDoCatalogo: async (provider) => (provider === "anthropic" ? "claude-haiku-5-5" : null),
     });
     expect(semPadrao).toMatchObject({
       ok: true,
       provider: "anthropic",
-      model: "claude-sonnet-5",
-      origem: "compatibilidade_do_provedor",
+      model: "claude-haiku-5-5",
+      origem: "catalogo_do_provedor",
     });
+  });
+});
+
+describe("resolverParEfetivo — organização sem provedor", () => {
+  it("sem provedor e sem modelo informado, RECUSA em vez de gravar Claude", async () => {
+    const r = await resolverParEfetivo({ llmDaOrganizacao: null, lerModeloDoCatalogo: leitorProibido });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.motivo).toContain("não tem provedor de IA configurado");
+  });
+
+  it("sem provedor, o id bare informado vai para o provedor do próprio nome", async () => {
+    const r = await resolverParEfetivo({ modeloInformado: "gpt-5-mini", lerModeloDoCatalogo: leitorProibido });
+    expect(r).toMatchObject({ ok: true, provider: "openai", model: "gpt-5-mini", origem: "informado" });
   });
 });
 

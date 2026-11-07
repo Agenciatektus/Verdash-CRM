@@ -34,8 +34,15 @@ export function CartaoDoPonto({
 }) {
   const t = useT();
   const oJevAqui = jevNoPonto(jev, ponto.id);
-  const [provider, setProvider] = useState(ponto.efetivo.provider);
-  const [modelId, setModelId] = useState(ponto.efetivo.modelId ?? "");
+  // Ponto com menu fechado (upstream 1.99): o seletor só exibe um valor que seja
+  // uma das opções; sem casar com o efetivo, abre na primeira (a padrão do ponto).
+  const opcaoInicial = ponto.fixo?.opcoes?.length
+    ? (ponto.fixo.opcoes.find(
+        (o) => o.provider === ponto.efetivo.provider && o.modelId === ponto.efetivo.modelId,
+      ) ?? ponto.fixo.opcoes[0])
+    : undefined;
+  const [provider, setProvider] = useState(opcaoInicial?.provider ?? ponto.efetivo.provider);
+  const [modelId, setModelId] = useState(opcaoInicial?.modelId ?? ponto.efetivo.modelId ?? "");
   const [credentialId, setCredentialId] = useState(ponto.efetivo.credentialId ?? "");
   const [baseUrl, setBaseUrl] = useState(ponto.efetivo.baseUrl ?? "");
   const [salvando, setSalvando] = useState(false);
@@ -49,6 +56,9 @@ export function CartaoDoPonto({
     dados.provedores.find((p) => p.id === provider)?.aceitaEndpointProprio === true;
 
   const editavel = dados.podeEditar && ponto.fixo === null && !ponto.mandadoPeloAgente;
+  // Ponto fixo COM menu (`fixo.opcoes`): mesmos estados e mesmo `salvar()`, escolha fechada.
+  const opcoesFixas = ponto.fixo?.opcoes;
+  const editavelComoMenu = dados.podeEditar && (opcoesFixas?.length ?? 0) > 0;
 
   async function salvar() {
     setSalvando(true);
@@ -79,7 +89,10 @@ export function CartaoDoPonto({
       }
       const avisos: string[] = json?.data?.avisos ?? [];
       if (avisos.length > 0) avisos.forEach((a) => toast.warning(t(a)));
-      else toast.success(`"${t(ponto.rotulo)}" ${t("agora usa")} ${modelId}`);
+      else {
+        const escolhida = opcoesFixas?.find((o) => o.provider === provider && o.modelId === modelId);
+        toast.success(`"${t(ponto.rotulo)}" ${t("agora usa")} ${escolhida ? t(escolhida.rotulo) : modelId}`);
+      }
       await aoSalvar();
     } finally {
       setSalvando(false);
@@ -150,6 +163,61 @@ export function CartaoDoPonto({
             {t("Configurar no agente")}
           </Link>
         </p>
+      )}
+
+      {editavelComoMenu && opcoesFixas && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label className="text-xs">{t("Serviço")}</Label>
+            <Select
+              value={`${provider}|${modelId}`}
+              onValueChange={(v) => {
+                const [p, m] = v.split("|");
+                setProvider(p ?? "");
+                setModelId(m ?? "");
+                setCredentialId("");
+              }}
+            >
+              <SelectTrigger data-testid={`servico-${ponto.id}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {opcoesFixas.map((o) => (
+                  <SelectItem key={`${o.provider}|${o.modelId}`} value={`${o.provider}|${o.modelId}`}>
+                    {t(o.rotulo)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-xs">{t("Chave")}</Label>
+            <Select value={credentialId} onValueChange={setCredentialId}>
+              <SelectTrigger data-testid={`chave-${ponto.id}`}>
+                <SelectValue placeholder={t("da instalação")} />
+              </SelectTrigger>
+              <SelectContent>
+                {credsDoProvider.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.label} ••{c.api_key_last4 ?? "??"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <Button
+              size="sm"
+              disabled={salvando || !modelId}
+              onClick={() => void salvar()}
+              data-testid={`salvar-${ponto.id}`}
+            >
+              {salvando ? t("Salvando…") : t("Salvar")}
+            </Button>
+          </div>
+        </div>
       )}
 
       {editavel && (

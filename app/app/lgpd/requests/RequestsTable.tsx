@@ -351,7 +351,7 @@ export function RequestsTable({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs mb:h-11 mb:min-w-11">
                         <Link href={`${baseDoPedido}${r.id}`}>{t("Ver")}</Link>
                       </Button>
                     </TableCell>

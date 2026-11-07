@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { nomeDaOrganizacao, seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 import { mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { createClient } from "@supabase/supabase-js";
@@ -129,10 +130,10 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   const pa=await db.from("platform_admins").insert({user_id:actor,granted_by:actor,scope:"full",mfa_required:false,reason:"E2E local support"});if(pa.error)throw pa.error;
   await login(page,email);await acknowledgeKnownAction(page,"/login");
   const sameTab=await page.context().newPage();await sameTab.goto("/app/inbox");
-  await expect(sameTab.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
+  await expect(seletorDeOrganizacao(sameTab)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte A ${suffix}`));
   second=await browser.newContext();observeRequests(second);const other=await second.newPage();observeAuth(other);await login(other,email);await acknowledgeKnownAction(other,"/login");
   await start(page,orgs[1]!);
-  await expect(sameTab.getByTestId("tenant-switcher")).toContainText(`Suporte B ${suffix}`);
+  await expect(seletorDeOrganizacao(sameTab)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte B ${suffix}`));
   // A lista só aparece depois da recarga + dois GETs em série (a chave muda com o automatico-ativo); 5s do expect não cabem no CI (#2360).
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato B ${suffix}`,{exact:true})).toBeVisible({timeout:20000});
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato A ${suffix}`,{exact:true})).toHaveCount(0);
@@ -140,7 +141,7 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   await expect(page.getByRole("alert").filter({hasText:/edição permitida/i})).toContainText(`Suporte B ${suffix}`);
   await expect(page.locator("[data-conversation-id]").getByText(`Contato B ${suffix}`,{exact:true})).toBeVisible({timeout:20000});
   await expect(page.locator("[data-conversation-id]").getByText(`Contato A ${suffix}`,{exact:true})).toHaveCount(0);
-  await other.reload();await expect(other.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
+  await other.reload();await expect(seletorDeOrganizacao(other)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte A ${suffix}`));
   const members=await db.from("user_organizations").select("id").eq("organization_id",orgs[1]).eq("user_id",actor);expect(members.data).toEqual([]);
   await page.goto(`/app/contacts/${contacts[1]}`);await page.getByRole("button",{name:"Editar",exact:true}).click();
   await page.getByLabel("Nome",{exact:true}).fill(`Editado B ${suffix}`);await page.getByRole("button",{name:"Salvar",exact:true}).click();
@@ -182,8 +183,8 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   // Evita rejeição não observada se end falhar antes do await da resposta.
   void returnedToA.catch(()=>{});
   await end(page);await returnedToA;
-  await expect(page.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
-  await expect(sameTab.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
+  await expect(seletorDeOrganizacao(page)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte A ${suffix}`));
+  await expect(seletorDeOrganizacao(sameTab)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte A ${suffix}`));
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato A ${suffix}`,{exact:true})).toBeVisible({timeout:20000});
   await expect(sameTab.locator("[data-conversation-id]").getByText(`Contato B ${suffix}`,{exact:true})).toHaveCount(0);
   // Readonly prevalece inclusive depois de o ator ser admin FÍSICO em B.
@@ -198,7 +199,7 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   const unexpectedDenials:string[]=[];
   page.on("response",response=>{if(response.status()===403)unexpectedDenials.push(response.url());});
   await start(page,orgs[1]!,true);
-  await expect(sameTab.getByTestId("tenant-switcher")).toContainText(`Suporte B ${suffix}`);
+  await expect(seletorDeOrganizacao(sameTab)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte B ${suffix}`));
   await page.goto("/onboarding");await page.waitForURL("**/app/inbox");
   const writes:string[]=[];page.on("request",request=>{if(request.method()!=="GET"&&/mark-read|availability|messages/.test(request.url()))writes.push(request.url());});
   await page.locator(`[data-conversation-id="${convs[1]}"]`).click();
@@ -231,7 +232,7 @@ test("suporte mantém identidade, opera B e encerra sem misturar A; readonly/exp
   const stale=await page.request.patch(`/api/v1/contacts/${contacts[1]}`,{data:{name:"Forbidden expired"}});expect(stale.status()).toBe(403);
   await page.reload();await page.waitForURL("**/support-ended");await expect(page.getByRole("heading",{name:"Encerre o acompanhamento para continuar"})).toBeVisible();
   const revoke=await db.from("platform_admins").update({revoked_at:new Date().toISOString()}).eq("user_id",actor);if(revoke.error)throw revoke.error;
-  await end(page);await expect(page.getByTestId("tenant-switcher")).toContainText(`Suporte A ${suffix}`);
+  await end(page);await expect(seletorDeOrganizacao(page)).toHaveAccessibleName(nomeDaOrganizacao(`Suporte A ${suffix}`));
   expect((await db.from("contacts").select("name").eq("id",contacts[0]).single()).data?.name).toBe(`Contato A ${suffix}`);
   expect(joins.filter(join=>join.role!=="authenticated")).toEqual([]);
   expect((await db.from("organizations").select("onboarded_at").eq("id",orgs[1]).single()).data?.onboarded_at).toBeNull();

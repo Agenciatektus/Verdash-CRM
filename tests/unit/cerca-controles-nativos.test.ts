@@ -21,6 +21,8 @@ const RAIZ = join(__dirname, "..", "..");
 const PASTAS = ["app", "components", "hooks", "lib"];
 
 const EXCECOES: Record<string, string> = {
+  "app/app/ai/memory/_client.tsx":
+    "chegou na subida 1.99 (validade do aprendizado, #3537) com o campo de data nativo; `memoria-validade-grava-ao-sair` mede a digitação do ano no campo nativo. Trocar por CampoDeData junto com aquele teste",
   "app/design/components/Switcher.tsx":
     "laboratório de variantes (/design) com tokens e CSS próprios (app/design/lib/tokens, .ds-pill-select): o Escolha traria o tema do CRM para dentro da comparação que ele existe para isolar",
 };

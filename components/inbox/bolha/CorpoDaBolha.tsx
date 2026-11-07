@@ -145,7 +145,7 @@ export function CorpoDaBolha({ message, apagada, ocultaNoCrm, localizacao, espac
 
       {mediaExpirada && (
         <div className={cn(message.body && "mb-1.5")}>
-          <MediaUnavailable kind={avisoDeExpiracao} />
+          <MediaUnavailable detalhe={avisoDeExpiracao} />
         </div>
       )}
 
