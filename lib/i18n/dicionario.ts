@@ -16717,6 +16717,13 @@ export const DICIONARIO: Traducoes = {
   "orçamento": { es: "presupuesto" },
   "Etiqueta acrescentada.": { es: "Etiqueta añadida." },
   "Acrescentar": { es: "Añadir" },
+  "Nova etiqueta": { es: "Nueva etiqueta" },
+  "Nenhuma etiqueta deste tipo nesta página.": { es: "Ninguna etiqueta de este tipo en esta página." },
+  "Fora do vocabulário": { es: "Fuera del vocabulario" },
+  "Sugeridas": { es: "Sugeridas" },
+  "Em uso": { es: "En uso" },
+  "Filtrar etiquetas": { es: "Filtrar etiquetas" },
+  "Ações da etiqueta": { es: "Acciones de la etiqueta" },
   "Sugeridas pelo sistema": { es: "Sugeridas por el sistema" },
   "São as que aparecem como sugestão para quem está atendendo.":
     { es: "Son las que aparecen como sugerencia para quien está atendiendo." },

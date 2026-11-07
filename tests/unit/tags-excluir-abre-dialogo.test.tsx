@@ -23,6 +23,7 @@
  *     npx vitest run tests/unit/tags-excluir-abre-dialogo.test.tsx
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { escolherNaLinha } from "./helpers/menu-da-linha-de-tags";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -75,9 +76,9 @@ afterEach(() => {
 });
 
 describe("Excluir na tela de Tags", () => {
-  it("⭐ abre um diálogo modal com quantos registros perdem a etiqueta", () => {
+  it("⭐ abre um diálogo modal com quantos registros perdem a etiqueta", async () => {
     montar();
-    fireEvent.click(screen.getAllByRole("button", { name: "Excluir" })[0]!);
+    await escolherNaLinha(0, "Excluir");
 
     const dialogo = screen.getByRole("alertdialog");
     expect(within(dialogo).getByText("Excluir etiqueta?")).toBeTruthy();
@@ -89,7 +90,7 @@ describe("Excluir na tela de Tags", () => {
 
   it("⭐ confirmar no diálogo manda `excluir` da etiqueta FORA do vocabulário e avisa quantos saíram", async () => {
     montar();
-    fireEvent.click(screen.getAllByRole("button", { name: "Excluir" })[0]!);
+    await escolherNaLinha(0, "Excluir");
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Etiqueta removida de 332 registro(s)."));
@@ -99,9 +100,9 @@ describe("Excluir na tela de Tags", () => {
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
   });
 
-  it("o aviso das regras de agente continua no diálogo", () => {
+  it("o aviso das regras de agente continua no diálogo", async () => {
     montar();
-    fireEvent.click(screen.getAllByRole("button", { name: "Excluir" })[1]!);
+    await escolherNaLinha(1, "Excluir");
     expect(screen.getByRole("alertdialog").textContent).toContain(
       "Atenção: 2 regra(s) de agente continuam escrevendo esta etiqueta.",
     );
@@ -109,7 +110,7 @@ describe("Excluir na tela de Tags", () => {
 
   it("Cancelar fecha sem chamar o servidor", async () => {
     montar();
-    fireEvent.click(screen.getAllByRole("button", { name: "Excluir" })[0]!);
+    await escolherNaLinha(0, "Excluir");
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(fetchMock()).not.toHaveBeenCalled();
@@ -121,7 +122,7 @@ describe("Excluir na tela de Tags", () => {
       vi.fn(async () => new Response(JSON.stringify({ error: { code: "mfa_required" } }), { status: 403 })),
     );
     montar();
-    fireEvent.click(screen.getAllByRole("button", { name: "Excluir" })[0]!);
+    await escolherNaLinha(0, "Excluir");
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Confirmar" }));
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("Confirme o segundo fator para mudar as etiquetas."),

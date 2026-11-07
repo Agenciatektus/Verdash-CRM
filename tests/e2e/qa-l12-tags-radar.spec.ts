@@ -5,6 +5,7 @@
  * botões uma vez (J24 do mapa de jornadas). Aqui ela é clicada.
  */
 import { test } from "./helpers/test";
+import type { Locator } from "@playwright/test";
 import { randomInt } from "node:crypto";
 
 import {
@@ -27,6 +28,12 @@ const TAG_C = `orcamento${SUFIXO}`;
 let c: Creds;
 let regraId = "";
 const contatos: string[] = [];
+
+/** Abre o menu ⋯ da linha e escolhe o item (Cor, Renomear, Juntar, Excluir). */
+async function menuDaLinha(linha: Locator, item: string) {
+  await linha.getByRole("button", { name: /^Ações da etiqueta/ }).click();
+  await linha.page().getByRole("menuitem", { name: item, exact: true }).click();
+}
 
 test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
   test.describe.configure({ timeout: 420_000 });
@@ -94,12 +101,15 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     registra(`#955 J24.3 · linha de ${TAG_A} = ${JSON.stringify(celulas)}`);
     // 2 contatos, 0 leads, 0 conversas, 1 regra de agente.
     expect(celulas[1]!.trim()).toBe("2");
-    expect(celulas[4]!.trim()).toBe("1");
+    expect(celulas[5]!.trim()).toBe("1"); // 4 é a coluna "Em uso", do tablet
     await captura(page, "955-02-lista-com-contagens");
 
-    for (const acao of ["Renomear", "Juntar", "Excluir"]) {
-      await expect(linha.getByRole("button", { name: acao })).toBeVisible();
+    // As ações moram no menu ⋯ da linha.
+    await linha.getByRole("button", { name: /^Ações da etiqueta/ }).click();
+    for (const acao of ["Cor", "Renomear", "Juntar", "Excluir"]) {
+      await expect(page.getByRole("menuitem", { name: acao })).toBeVisible();
     }
+    await page.keyboard.press("Escape");
   });
 
   test("renomear muda contatos E a regra de automação, na mesma operação", async ({ page }) => {
@@ -107,7 +117,7 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     await page.goto("/app/settings/tags");
     const linha = page.getByRole("row", { name: new RegExp(TAG_A) });
     await expect(linha).toBeVisible({ timeout: 60_000 });
-    await linha.getByRole("button", { name: "Renomear" }).click();
+    await menuDaLinha(linha, "Renomear");
 
     await expect(page.getByText(`Renomear ${TAG_A} para:`)).toBeVisible();
     const novo = `${TAG_A}-renomeada`;
@@ -139,7 +149,7 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     const inicioDaConferenciaDeCaixa = performance.now();
     await test.step("renomear só na caixa conserva os contatos no filtro real", async () => {
       const nomeDigitado = novo.toUpperCase();
-      await page.getByRole("row", { name: new RegExp(novo) }).getByRole("button", { name: "Renomear" }).click();
+      await menuDaLinha(page.getByRole("row", { name: new RegExp(novo) }), "Renomear");
       await expect(page.getByText("Renomear " + novo + " para:")).toBeVisible();
       await page.getByLabel("Novo nome").fill(nomeDigitado);
       const [renome] = await Promise.all([
@@ -201,7 +211,7 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     await page.goto("/app/settings/tags");
     const linha = page.getByRole("row", { name: new RegExp(TAG_C) });
     await expect(linha).toBeVisible({ timeout: 60_000 });
-    await linha.getByRole("button", { name: "Juntar" }).click();
+    await menuDaLinha(linha, "Juntar");
     await expect(page.getByText(`Juntar ${TAG_C} em outra etiqueta existente:`)).toBeVisible();
 
     // #2855 — a tela é paginada: o destino é DIGITADO (com sugestões da página
@@ -237,7 +247,7 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     const alvo = `${TAG_A}-renomeada`;
     const linha = page.getByRole("row", { name: new RegExp(alvo) });
     await expect(linha).toBeVisible({ timeout: 60_000 });
-    await linha.getByRole("button", { name: "Excluir" }).click();
+    await menuDaLinha(linha, "Excluir");
 
     const painel = page.locator("form").filter({ hasText: "Excluir" }).first();
     const texto = await page.locator("body").innerText();

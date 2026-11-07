@@ -19,6 +19,7 @@
  * lança — o que é correto — e a tela de Tags é uma tela do app, onde ele existe.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { escolherNaLinha } from "./helpers/menu-da-linha-de-tags";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -79,7 +80,7 @@ describe("painel de Tags — a cor (issue #1271)", () => {
     montar();
 
     // A fileira abre na etiqueta clicada — a PRIMEIRA linha é a sem cor.
-    fireEvent.click(screen.getAllByRole("button", { name: "Cor" })[0]!);
+    await escolherNaLinha(0, "Cor");
     fireEvent.click(screen.getByRole("button", { name: "Âmbar" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 
@@ -97,7 +98,7 @@ describe("painel de Tags — a cor (issue #1271)", () => {
 
     // A segunda linha JÁ tem cor: abrir precisa marcar a cor atual, senão
     // confirmar sem escolher apagaria o que estava lá.
-    fireEvent.click(screen.getAllByRole("button", { name: "Cor" })[1]!);
+    await escolherNaLinha(1, "Cor");
     expect(screen.getByRole("button", { name: "Azul" }).getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.click(screen.getByRole("button", { name: "Sem cor" }));
@@ -115,7 +116,7 @@ describe("painel de Tags — a cor (issue #1271)", () => {
     const chipDaLista = screen.getAllByText("obra")[0]!;
     expect(pintado(chipDaLista)).toContain("background-color");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Cor" })[0]!);
+    await escolherNaLinha(0, "Cor");
     fireEvent.click(screen.getByRole("button", { name: "Roxo" }));
 
     // A prévia é o chip do próprio "vip" com o tom ESCOLHIDO: escolher por
@@ -131,7 +132,7 @@ describe("painel de Tags — a cor (issue #1271)", () => {
     );
     montar();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Cor" })[0]!);
+    await escolherNaLinha(0, "Cor");
     fireEvent.click(screen.getByRole("button", { name: "Âmbar" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 

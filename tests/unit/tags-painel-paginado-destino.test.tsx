@@ -13,6 +13,7 @@
  * A pergunta vai a `GET /api/v1/tags/vocabulario?busca=`, que aqui é o `fetch`.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { escolherNaLinha } from "./helpers/menu-da-linha-de-tags";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -62,8 +63,8 @@ function montar() {
   );
 }
 
-function abrir(acao: "Juntar" | "Renomear") {
-  fireEvent.click(screen.getAllByRole("button", { name: acao })[0]!);
+async function abrir(acao: "Juntar" | "Renomear") {
+  await escolherNaLinha(0, acao);
 }
 
 const AVISO_INEXISTENTE = /Essa etiqueta não existe/;
@@ -72,7 +73,7 @@ const AVISO_JUNTA = /Este nome já existe no vocabulário/;
 describe("juntar na tela paginada", () => {
   it("⭐ destino que não existe em página nenhuma: avisa e trava o Confirmar", async () => {
     montar();
-    abrir("Juntar");
+    await abrir("Juntar");
     fireEvent.change(screen.getByLabelText("Etiqueta de destino"), { target: { value: "nao-existe" } });
     expect(await screen.findByText(AVISO_INEXISTENTE)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Confirmar" })).toHaveProperty("disabled", true);
@@ -80,7 +81,7 @@ describe("juntar na tela paginada", () => {
 
   it("destino que existe em OUTRA página: sem aviso, Confirmar livre", async () => {
     montar();
-    abrir("Juntar");
+    await abrir("Juntar");
     fireEvent.change(screen.getByLabelText("Etiqueta de destino"), {
       target: { value: "Zeta-em-outra-pagina" },
     });
@@ -93,7 +94,7 @@ describe("juntar na tela paginada", () => {
 
   it("destino que está NESTA página: sem aviso", async () => {
     montar();
-    abrir("Juntar");
+    await abrir("Juntar");
     fireEvent.change(screen.getByLabelText("Etiqueta de destino"), { target: { value: "beta" } });
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
@@ -104,14 +105,14 @@ describe("juntar na tela paginada", () => {
 describe("renomear na tela paginada (#2801)", () => {
   it("⭐ o aviso de junção aparece quando o nome existe em OUTRA página", async () => {
     montar();
-    abrir("Renomear");
+    await abrir("Renomear");
     fireEvent.change(screen.getByLabelText("Novo nome"), { target: { value: "zeta-em-outra-pagina" } });
     expect(await screen.findByText(AVISO_JUNTA)).toBeTruthy();
   });
 
   it("nome novo de verdade: sem aviso", async () => {
     montar();
-    abrir("Renomear");
+    await abrir("Renomear");
     fireEvent.change(screen.getByLabelText("Novo nome"), { target: { value: "gama-nova" } });
     await waitFor(() => expect(fetch).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));

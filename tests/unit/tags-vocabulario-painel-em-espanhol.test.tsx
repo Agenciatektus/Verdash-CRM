@@ -22,6 +22,8 @@
  *
  *     npx vitest run tests/unit/tags-vocabulario-painel-em-espanhol.test.tsx
  */
+import userEvent from "@testing-library/user-event";
+import { escolherNaLinha } from "./helpers/menu-da-linha-de-tags";
 import { fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,7 +50,7 @@ const OBRA: LinhaDeVocabulario = { ...VIP, tag: "obra", em_regras: 0 };
 
 /** O `<p>` da confirmação, pelo texto INTEIRO — frase partida não conta. */
 const frase = (texto: string) =>
-  screen.getByText((_, el) => el?.tagName === "P" && el.textContent === texto);
+  screen.getAllByText((_, el) => ["P", "H2", "DIV"].includes(el?.tagName ?? "") && el?.textContent === texto)[0];
 
 function montar() {
   // O painel passou a invalidar o cache das cores ao salvar uma cor (#1271):
@@ -79,16 +81,18 @@ afterEach(() => {
 });
 
 describe("painel de etiquetas com idioma espanhol", () => {
-  it("⭐ renomear, juntar e excluir: a confirmação sai inteira em espanhol", () => {
+  it("⭐ renomear, juntar e excluir: a confirmação sai inteira em espanhol", async () => {
     montar();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Renombrar" })[0]!);
+    await escolherNaLinha(0, "Renombrar");
     expect(frase("Renombrar vip a:")).toBeTruthy();
+    await userEvent.keyboard("{Escape}"); // o diálogo é modal: fecha antes de abrir o próximo
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Juntar" })[0]!);
+    await escolherNaLinha(0, "Juntar");
     expect(frase("Juntar vip en otra etiqueta existente:")).toBeTruthy();
+    await userEvent.keyboard("{Escape}"); // o diálogo é modal: fecha antes de abrir o próximo
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Eliminar" })[0]!);
+    await escolherNaLinha(0, "Eliminar");
     expect(frase("Eliminar vip de 3 contacto(s), 2 lead(s) y 1 conversación(es).")).toBeTruthy();
     expect(
       frase(
@@ -101,7 +105,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
     montar();
 
     responder(200, { data: { contatos: 2, leads: 1, conversas: 0, regras: 1 } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Renombrar" })[0]!);
+    await escolherNaLinha(0, "Renombrar");
     fireEvent.change(screen.getByLabelText("Nombre nuevo"), { target: { value: "VIP" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() =>
@@ -111,7 +115,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
     );
 
     responder(200, { data: { contatos: 1, leads: 0, conversas: 1 } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Eliminar" })[0]!);
+    await escolherNaLinha(0, "Eliminar");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith("Etiqueta eliminada de 2 registro(s)."),
@@ -132,7 +136,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
     for (const [codigo, frase] of Object.entries(esperado)) {
       toast.error.mockReset();
       responder(403, { error: { code: codigo } });
-      fireEvent.click(screen.getAllByRole("button", { name: "Eliminar" })[0]!);
+      await escolherNaLinha(0, "Eliminar");
       fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
       await waitFor(() => expect(toast.error, codigo).toHaveBeenCalledTimes(1));
       expect(toast.error.mock.calls[0]?.[0], codigo).toBe(frase);
@@ -147,7 +151,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
         throw new TypeError("fetch failed");
       }),
     );
-    fireEvent.click(screen.getAllByRole("button", { name: "Eliminar" })[0]!);
+    await escolherNaLinha(0, "Eliminar");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
@@ -161,7 +165,7 @@ describe("painel de etiquetas com idioma espanhol", () => {
     // e um nome que não é traduzido devolve a escolha ao português.
     montar();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Color" })[0]!);
+    await escolherNaLinha(0, "Color");
     expect(frase("Color vip en las listas y en los filtros:")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Ámbar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sin color" })).toBeTruthy();

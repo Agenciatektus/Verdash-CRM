@@ -24,6 +24,7 @@
  * de texto do SQL está em `tests/unit/tags-vocabulario.test.ts`.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { escolherNaLinha } from "./helpers/menu-da-linha-de-tags";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
@@ -116,8 +117,8 @@ function montar(tags: LinhaDeVocabulario[] = [OBRA]) {
   );
 }
 
-function renomearPara(novoNome: string) {
-  fireEvent.click(screen.getByRole("button", { name: "Renomear" }));
+async function renomearPara(novoNome: string) {
+  await escolherNaLinha(0, "Renomear");
   fireEvent.change(screen.getByLabelText("Novo nome"), { target: { value: novoNome } });
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 }
@@ -132,7 +133,7 @@ describe("renomear uma etiqueta colorida (#2771)", () => {
     const chip = screen.getByText("obra-nova");
     expect(pintado(chip)).not.toContain("background-color");
 
-    renomearPara("obra-nova");
+    await renomearPara("obra-nova");
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
 
     // O mapa é invalidado, BUSCADO DE NOVO e o chip volta a exibir o mesmo tom.
@@ -147,7 +148,7 @@ describe("renomear uma etiqueta colorida (#2771)", () => {
     montar();
     await waitFor(() => expect(leiturasDeCores()).toBe(1));
 
-    fireEvent.click(screen.getByRole("button", { name: "Excluir" }));
+    await escolherNaLinha(0, "Excluir");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
 
@@ -167,7 +168,7 @@ describe("renomear/juntar/excluir relê todo cache que guarda o nome da etiqueta
   it.each(["Renomear", "Juntar", "Excluir"])("%s invalida conversas, contatos, vocabulários e funil", async (botao) => {
     // `juntar` precisa de um destino existente na lista.
     montar([OBRA, { ...OBRA, tag: "casa", cor: null }]);
-    fireEvent.click(screen.getAllByRole("button", { name: botao })[0]!);
+    await escolherNaLinha(0, botao);
     if (botao === "Renomear") {
       fireEvent.change(screen.getByLabelText("Novo nome"), { target: { value: "obra-nova" } });
     }
@@ -197,7 +198,7 @@ describe("renomear/juntar/excluir relê todo cache que guarda o nome da etiqueta
 });
 
 describe("gatilho da cor no editor", () => {
-  it("é 28x28 no desktop (o `lg:h-8` do size=sm não sobrevive) e 44x44 abaixo de `lg`, como o toque pede", () => {
+  it("é 28x28 no desktop (o `lg:h-8` do size=sm não sobrevive) e 44x44 abaixo de `lg`, como o toque pede", async () => {
     render(<SeletorDeCorDaEtiqueta cor={null} onChange={() => {}} />);
     const classes = screen.getByRole("button", { name: "Cor da etiqueta" }).className.split(/\s+/);
     expect(classes).toContain("lg:h-7");
@@ -213,9 +214,9 @@ describe("o aviso de junção antes do clique (#2801)", () => {
     "Este nome já existe no vocabulário — confirmar vai juntar as duas etiquetas numa só.";
   const VIP: LinhaDeVocabulario = { ...OBRA, tag: "vip", cor: null };
 
-  it("mudar só a caixa da própria etiqueta NÃO avisa junção; o nome de OUTRA avisa", () => {
+  it("mudar só a caixa da própria etiqueta NÃO avisa junção; o nome de OUTRA avisa", async () => {
     montar([OBRA, VIP]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Renomear" })[0]!);
+    await escolherNaLinha(0, "Renomear");
     const campo = screen.getByLabelText("Novo nome");
 
     // "obra" → "OBRA" é renome: a lista de comparação não inclui a própria etiqueta.

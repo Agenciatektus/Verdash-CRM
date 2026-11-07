@@ -237,11 +237,16 @@ test.describe("cuidar da equipe pelo celular", () => {
     const etiqueta = page.locator("tbody tr").filter({ hasText: ETIQUETA });
     await expect(etiqueta).toBeVisible({ timeout: 30_000 });
     expect(await rolagemDoMain(page), "etiquetas: o <main> rola para o lado").toBeLessThanOrEqual(1);
+    // As quatro ações moram no menu ⋯: o gatilho cabe na tela e tem alvo de toque.
+    const gatilho = etiqueta.getByRole("button", { name: /^Ações da etiqueta/ });
+    const r = await medir(gatilho);
+    expect(r.right, "etiquetas: menu ⋯ cortado pela direita").toBeLessThanOrEqual(LARGURA);
+    expect(r.height, "etiquetas: menu ⋯ altura").toBeGreaterThanOrEqual(PISO_DE_TOQUE);
+    await gatilho.click();
     for (const acao of ["Cor", "Renomear", "Juntar", "Excluir"]) {
-      const r = await medir(etiqueta.getByRole("button", { name: acao, exact: true }));
-      expect(r.right, `etiquetas: «${acao}» cortado pela direita`).toBeLessThanOrEqual(LARGURA);
-      expect(r.height, `etiquetas: «${acao}» altura`).toBeGreaterThanOrEqual(PISO_DE_TOQUE);
+      await expect(page.getByRole("menuitem", { name: acao, exact: true })).toBeVisible();
     }
+    await page.keyboard.press("Escape");
     await page.screenshot({ path: path.join(EVIDENCIA, "05-etiquetas.png"), fullPage: true });
 
     // ── Controle: no computador as colunas de contagem voltam ──────────────

@@ -34,7 +34,6 @@ import { toast } from "sonner";
 
 import { arquivarTag, criarTag } from "@/app/actions/settings/curarTags";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Idioma } from "@/lib/i18n/idiomas";
@@ -157,7 +156,7 @@ function useExecutar(idioma: Idioma) {
 }
 
 /** O bloco de cima: acrescentar uma etiqueta nova e dizer onde ela é sugerida. */
-export function AcrescentarEtiqueta({ idioma }: { idioma: Idioma }) {
+export function AcrescentarEtiqueta({ idioma, aoConcluir }: { idioma: Idioma; aoConcluir?: () => void }) {
   const { t, ocupado, executar } = useExecutar(idioma);
   const [nome, setNome] = useState("");
   const [emConversas, setEmConversas] = useState(true);
@@ -169,11 +168,14 @@ export function AcrescentarEtiqueta({ idioma }: { idioma: Idioma }) {
     const acoes: Array<() => Promise<RespostaDeCuradoria>> = [];
     if (emConversas) acoes.push(() => criarTag("conversa", nome));
     if (emContatos) acoes.push(() => criarTag("contato", nome));
-    executar(acoes, t("Etiqueta acrescentada."), () => setNome(""));
+    executar(acoes, t("Etiqueta acrescentada."), () => {
+      setNome("");
+      aoConcluir?.();
+    });
   }
 
   return (
-    <Card className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-1">
           <Label htmlFor="nova-etiqueta">{t("Acrescentar etiqueta")}</Label>
@@ -191,7 +193,7 @@ export function AcrescentarEtiqueta({ idioma }: { idioma: Idioma }) {
             }}
           />
         </div>
-        <Button type="button" variant="outline" disabled={!pronto} onClick={acrescentar}>
+        <Button type="button" disabled={!pronto} onClick={acrescentar}>
           <Plus size={14} aria-hidden className="mr-1" />
           {t("Acrescentar")}
         </Button>
@@ -218,7 +220,7 @@ export function AcrescentarEtiqueta({ idioma }: { idioma: Idioma }) {
           {t("Escolha onde ela aparece como sugestão para quem atende.")}
         </span>
       </fieldset>
-    </Card>
+    </div>
   );
 }
 
