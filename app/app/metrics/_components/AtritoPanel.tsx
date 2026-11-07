@@ -98,7 +98,7 @@ function ReguaAbandono({ horas, padrao, podeEditar }: { horas: number; padrao: n
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
       <span>{t("Contar como perdida no silêncio após")}</span>
       <Input
-        className="h-7 w-20 text-xs"
+        className="h-7 w-20 text-xs mb:h-11"
         value={valor}
         inputMode="numeric"
         aria-label={t("Horas de silêncio até considerar a conversa perdida")}

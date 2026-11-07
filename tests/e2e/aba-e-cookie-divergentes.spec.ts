@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { nomeDaOrganizacao, seletorDeOrganizacao } from "./helpers/seletor-de-organizacao";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -93,16 +94,16 @@ async function entrar(page: Page, creds: Creds) {
 }
 
 async function trocarPara(page: Page, orgId: string, nome: string) {
-  await page.getByTestId("tenant-switcher").click();
+  await seletorDeOrganizacao(page).click();
   await page.getByTestId(`tenant-switcher-item-${orgId}`).click();
   if (!nome) return;
   // ESPERAR A TRANSIÇÃO TERMINAR ANTES DE SEGUIR (o mesmo aviso da spec irmã):
   // a troca é uma server action e o botão fica `disabled` mostrando o nome
   // ANTIGO enquanto ela roda. Aqui a espera é ainda mais necessária — é ela
   // que separa "a troca aconteceu" de "a troca foi atirada".
-  const seletor = page.getByTestId("tenant-switcher");
+  const seletor = seletorDeOrganizacao(page);
   await expect(seletor, `a troca para "${nome}" não terminou`).toBeEnabled({ timeout: 60_000 });
-  await expect(seletor, `a troca para "${nome}" não pegou`).toContainText(nome, { timeout: 20_000 });
+  await expect(seletor, `a troca para "${nome}" não pegou`).toHaveAccessibleName(nomeDaOrganizacao(nome), { timeout: 20_000 });
 }
 
 /**
@@ -237,9 +238,9 @@ test("duas abas no mesmo cookie: a que ficou em A recebe o aviso no foco e a esc
   ).toBe("viva");
   expect(page.url(), "a URL da aba mudou sozinha").toBe(urlAntes);
   await expect(
-    page.getByTestId("tenant-switcher"),
+    seletorDeOrganizacao(page),
     "a aba recarregou e já mostra a organização da sessão — o aviso teria sido trocado por uma recarga",
-  ).not.toContainText(d.org_b_nome);
+  ).not.toHaveAccessibleName(nomeDaOrganizacao(d.org_b_nome));
 
   // ── (b) ESCRITA — a MESMA aba, ainda com as props de A, sem recarregar ────
   // O `apiClient` carimba o header `X-Org-Da-Aba` (= A) nesta mutação; o cookie
