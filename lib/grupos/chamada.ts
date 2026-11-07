@@ -2,7 +2,7 @@
  * "Chamada" no modo `chamada` da IA em grupo (9224): a mensagem recebida (a) responde
  * (cita) uma mensagem enviada por este número, ou (b) marca este número com @, em
  * `contextInfo.participant`/`mentionedJid` (telefone OU LID, os dois endereçamentos).
- * Função pura: quem consulta o banco (a citada é nossa?) é `lib/channels/verdash/grupo.ts`.
+ * Função pura: quem consulta o banco (a citada é nossa?) é o ingest de grupo do canal (em `lib/channels/`).
  */
 import { canonicalPhoneBR } from "@/lib/channels/phone-variants";
 
