@@ -1,13 +1,12 @@
 "use client";
-import { TABELA_EMPILHADA } from "@/components/pagina";
+import { BarraDeFiltros, TABELA_EMPILHADA } from "@/components/pagina";
 
 import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import * as React from "react";
 
-import { Badge } from "@/components/ui/badge";
+import { Pilula, type TomDaPilula } from "@/components/ui/pilula";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -25,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CampoDeData } from "@/components/ui/campo-de-data";
-import { MagnifyingGlass, Tray } from "@/lib/ui/icons";
+import { Tray } from "@/lib/ui/icons";
 import {
   useLeadCaptures,
   type DesfechoDaCaptacao,
@@ -47,12 +46,12 @@ export const DESFECHO_LABEL: Record<DesfechoDaCaptacao, string> = {
   recusado: "Não entrou",
 };
 
-const DESFECHO_VARIANTE: Record<DesfechoDaCaptacao, "success" | "neutral" | "error"> = {
-  criado: "success",
-  duplicado: "neutral",
+const DESFECHO_TOM: Record<DesfechoDaCaptacao, TomDaPilula> = {
+  criado: "ok",
+  duplicado: "neutro",
   // O card recebeu o dado novo: é o meio-termo — deu certo, mas não é lead novo.
-  atualizado: "neutral",
-  recusado: "error",
+  atualizado: "neutro",
+  recusado: "crit",
 };
 
 /**
@@ -93,6 +92,12 @@ export function CapturasTab() {
   const [ate, setAte] = React.useState("");
   const [aberta, setAberta] = React.useState<LeadCaptureRow | null>(null);
 
+  // A busca vale 400ms depois da última tecla (a barra da página não tem botão "Buscar").
+  React.useEffect(() => {
+    const id = setTimeout(() => setBuscaAplicada(busca.trim()), 400);
+    return () => clearTimeout(id);
+  }, [busca]);
+
   const { data: fontesRes } = useWebhookSources();
   const fontes = fontesRes?.data ?? [];
 
@@ -114,84 +119,45 @@ export function CapturasTab() {
 
   return (
     <div className="space-y-4 pt-4">
-      <Card className="p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground" htmlFor="captura-busca">
-              {t("Nome, telefone ou e-mail")}
-            </label>
-            <div className="flex gap-2">
-              <Input
-                id="captura-busca"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setBuscaAplicada(busca.trim());
-                }}
-                placeholder={t("quem você procura")}
-              />
-              <Button
-                type="button"
-                variant="secondary"
-                size="icon"
-                aria-label={t("Buscar")}
-                onClick={() => setBuscaAplicada(busca.trim())}
-              >
-                <MagnifyingGlass />
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground">{t("Fonte")}</label>
-            <Select value={fonte} onValueChange={setFonte}>
-              <SelectTrigger aria-label={t("Filtrar por fonte")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>{t("Todas as fontes")}</SelectItem>
-                {fontes.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground">{t("Resultado")}</label>
-            <Select value={desfecho} onValueChange={setDesfecho}>
-              <SelectTrigger aria-label={t("Filtrar por resultado")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={TODAS}>{t("Todos")}</SelectItem>
-                <SelectItem value="criado">{t(DESFECHO_LABEL.criado)}</SelectItem>
-                <SelectItem value="duplicado">{t(DESFECHO_LABEL.duplicado)}</SelectItem>
-                <SelectItem value="atualizado">{t(DESFECHO_LABEL.atualizado)}</SelectItem>
-                <SelectItem value="recusado">{t(DESFECHO_LABEL.recusado)}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground" htmlFor="captura-de">
-              {t("De")}
-            </label>
-            <CampoDeData tipo="datetime-local"
-              id="captura-de"
-              value={de}
-              onValorChange={(valorEscolhido) => setDe(valorEscolhido)} />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs text-muted-foreground" htmlFor="captura-ate">
-              {t("Até")}
-            </label>
-            <CampoDeData tipo="datetime-local"
-              id="captura-ate"
-              value={ate}
-              onValorChange={(valorEscolhido) => setAte(valorEscolhido)} />
-          </div>
-        </div>
-      </Card>
+      <BarraDeFiltros
+        busca={{ valor: busca, aoMudar: setBusca, placeholder: t("Nome, telefone ou e-mail") }}
+        ativos={[fonte !== TODAS, desfecho !== TODAS, !!de, !!ate].filter(Boolean).length}
+        aoLimpar={() => {
+          setBusca("");
+          setFonte(TODAS);
+          setDesfecho(TODAS);
+          setDe("");
+          setAte("");
+        }}
+      >
+        <Select value={fonte} onValueChange={setFonte}>
+          <SelectTrigger aria-label={t("Filtrar por fonte")} className="sm:w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODAS}>{t("Todas as fontes")}</SelectItem>
+            {fontes.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                {f.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={desfecho} onValueChange={setDesfecho}>
+          <SelectTrigger aria-label={t("Filtrar por resultado")} className="sm:w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={TODAS}>{t("Todos")}</SelectItem>
+            <SelectItem value="criado">{t(DESFECHO_LABEL.criado)}</SelectItem>
+            <SelectItem value="duplicado">{t(DESFECHO_LABEL.duplicado)}</SelectItem>
+            <SelectItem value="atualizado">{t(DESFECHO_LABEL.atualizado)}</SelectItem>
+            <SelectItem value="recusado">{t(DESFECHO_LABEL.recusado)}</SelectItem>
+          </SelectContent>
+        </Select>
+        <CampoDeData tipo="datetime-local" id="captura-de" aria-label={t("De")} value={de} onValorChange={setDe} />
+        <CampoDeData tipo="datetime-local" id="captura-ate" aria-label={t("Até")} value={ate} onValorChange={setAte} />
+      </BarraDeFiltros>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -205,8 +171,8 @@ export function CapturasTab() {
         // tranquilizadora possível para o estado em que a pessoa mais precisa
         // saber que algo quebrou. Ela iria conferir a landing page em vez de
         // recarregar a tela.
-        <div className="flex justify-center pt-10">
-          <Card className="max-w-md">
+        <div className="pt-4">
+          <Card>
             <CardContent className="space-y-3 pt-6 text-center">
               <p className="text-sm text-text">{t("Não foi possível carregar o histórico.")}</p>
               <p className="text-xs text-muted-foreground">
@@ -219,8 +185,8 @@ export function CapturasTab() {
           </Card>
         </div>
       ) : linhas.length === 0 ? (
-        <div className="flex justify-center pt-10">
-          <Card className="max-w-md">
+        <div className="pt-4">
+          <Card>
             <CardContent className="space-y-3 pt-6 text-center">
               <Tray className="mx-auto h-10 w-10 text-accent" />
               <p className="text-sm text-muted-foreground">
@@ -285,9 +251,9 @@ export function CapturasTab() {
                         {row.origin ?? row.remote_ip ?? "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={DESFECHO_VARIANTE[row.outcome]}>
+                        <Pilula tom={DESFECHO_TOM[row.outcome]}>
                           {t(DESFECHO_LABEL[row.outcome])}
-                        </Badge>
+                        </Pilula>
                       </TableCell>
                     </TableRow>
                   );

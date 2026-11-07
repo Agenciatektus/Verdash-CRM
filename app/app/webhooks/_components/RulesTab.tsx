@@ -4,7 +4,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { Badge } from "@/components/ui/badge";
+import { Pilula } from "@/components/ui/pilula";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -85,8 +85,8 @@ export function RulesTab() {
 
   if (rules.length === 0) {
     return (
-      <div className="flex justify-center pt-10">
-        <Card className="max-w-md">
+      <div className="pt-4">
+        <Card>
           <CardHeader className="items-center text-center">
             <Robot className="mb-2 h-10 w-10 text-accent" />
             <CardTitle>{t("Crie sua primeira automação")}</CardTitle>
@@ -130,9 +130,9 @@ export function RulesTab() {
             <CardHeader className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <CardTitle className="truncate">{r.name}</CardTitle>
-                <Badge variant={r.is_active ? "success" : "neutral"}>
+                <Pilula tom={r.is_active ? "ok" : "neutro"}>
                   {r.is_active ? t("Ativa") : t("Pausada")}
-                </Badge>
+                </Pilula>
               </div>
               <p className="text-xs text-muted-foreground">{triggerLabel(r.trigger_event, t)}</p>
               <p className="text-xs text-muted-foreground">

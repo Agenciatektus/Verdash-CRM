@@ -10,7 +10,7 @@ import * as React from "react";
 import { toast } from "sonner";
 import { formatDistanceToNowStrict } from "date-fns";
 
-import { Badge } from "@/components/ui/badge";
+import { Pilula, type TomDaPilula } from "@/components/ui/pilula";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,13 +40,11 @@ function relativeCreatedAt(iso: string, locale: Locale): string {
   return formatDistanceToNowStrict(new Date(iso), { addSuffix: true, locale: locale });
 }
 
-function statusBadgeVariant(
-  status: AutomationRuleRunRow["status"],
-): "success" | "error" | "warning" | "info" {
-  if (status === "success") return "success";
-  if (status === "failed") return "error";
+function statusBadgeVariant(status: AutomationRuleRunRow["status"]): TomDaPilula {
+  if (status === "success") return "ok";
+  if (status === "failed") return "crit";
   if (status === "adiado") return "info";
-  return "warning";
+  return "warn";
 }
 
 function statusBadgeLabel(status: AutomationRuleRunRow["status"], t: (texto: string) => string): string {
@@ -504,8 +502,8 @@ export function ActivityTab() {
           <Skeleton className="h-24 w-full" />
         </div>
       ) : runs.length === 0 ? (
-        <div className="flex justify-center pt-10">
-          <Card className="max-w-md">
+        <div className="pt-4">
+          <Card>
             <CardContent className="pt-6 text-center text-sm text-muted-foreground">
               {t(
                 "Nenhuma automação rodou ainda. Assim que uma regra ligada disparar, o histórico aparece aqui.",
@@ -522,7 +520,7 @@ export function ActivityTab() {
                   <CardTitle className="truncate text-sm">
                     {run.automation_rules?.name ?? t("Automação removida")}
                   </CardTitle>
-                  <Badge variant={statusBadgeVariant(run.status)}>{statusBadgeLabel(run.status, t)}</Badge>
+                  <Pilula tom={statusBadgeVariant(run.status)}>{statusBadgeLabel(run.status, t)}</Pilula>
                 </div>
                 <p className="text-xs text-muted-foreground">{relativeCreatedAt(run.created_at, localeDaData)}</p>
               </CardHeader>

@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Pilula } from "@/components/ui/pilula";
 import { copyToClipboard } from "@/lib/clipboard";
 import { Copy, Trash, CaretDown, PencilSimple, Check, X } from "@/lib/ui/icons";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-function publicUrl(pathToken: string): string {
+export function publicUrl(pathToken: string): string {
   // window.location.origin > env: NEXT_PUBLIC_APP_URL é inlined no build e num
   // Docker self-host fica congelada no placeholder do Dockerfile — a origem da
   // página é o único valor confiável em runtime.
@@ -89,7 +90,7 @@ function curlSnippet(url: string, comAssinatura: boolean, t: (texto: string) => 
   return `curl -X POST ${url} \\\n  -H 'Content-Type: application/json' ${assinatura}\\\n  -d '{"nome":"...","telefone":"..."}'`;
 }
 
-async function copy(text: string, label: string, t: (texto: string) => string): Promise<void> {
+export async function copy(text: string, label: string, t: (texto: string) => string): Promise<void> {
   const ok = await copyToClipboard(text);
   if (ok) toast.success(label);
   else toast.error(t("Não foi possível copiar — selecione e copie manualmente."));
@@ -358,9 +359,9 @@ export function SourceDetail({ source, open, onOpenChange }: Props) {
                 </Button>
               </div>
             )}
-            <Badge variant={source.is_active ? "success" : "neutral"}>
+            <Pilula tom={source.is_active ? "ok" : "neutro"}>
               {source.is_active ? t("Ativa") : t("Pausada")}
-            </Badge>
+            </Pilula>
           </div>
           <SheetDescription>
             {t("Cada envio para o endereço abaixo vira um lead no seu funil, automaticamente.")}

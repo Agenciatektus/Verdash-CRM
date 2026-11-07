@@ -9140,6 +9140,7 @@ export const DICIONARIO: Traducoes = {
   "Situação desconhecida": { es: "Estado desconocido" },
   "Número sem nome": { es: "Número sin nombre" },
   Etapa: { es: "Etapa" },
+  Destino: { es: "Destino" },
   "Etapa alterada": { es: "Etapa cambiada" },
   "O lead respondeu à cadência de prospecção": { es: "El lead respondió a la cadencia de prospección" },
   "A IA levou o negócio até a etapa definida na cadência": { es: "La IA llevó el negocio hasta la etapa definida en la cadencia" },

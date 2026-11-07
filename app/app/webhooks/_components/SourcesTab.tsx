@@ -6,15 +6,19 @@ import type { Locale } from "date-fns";
 import * as React from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Aviso } from "@/components/ui/aviso";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PlugsConnected, Plus } from "@/lib/ui/icons";
-import { SeloDeAutoria } from "@/components/operacao/SeloDeAutoria";
-import { useWebhookSources, type WebhookSourceRow } from "@/hooks/webhooks/useWebhookSources";
+import { Plus } from "@/lib/ui/icons";
+import {
+  usePipelines,
+  usePipelineStages,
+  useWebhookSources,
+  type WebhookSourceRow,
+} from "@/hooks/webhooks/useWebhookSources";
 import { CreateSourceDialog } from "./CreateSourceDialog";
-import { SourceDetail } from "./SourceDetail";
+import { FonteCard } from "./FonteCard";
+import { SourceDetail, copy, publicUrl } from "./SourceDetail";
 import { useT } from "@/hooks/i18n/useT";
 
 function lastReceivedLabel(iso: string | null, t: (texto: string) => string, locale: Locale): string {
@@ -22,11 +26,37 @@ function lastReceivedLabel(iso: string | null, t: (texto: string) => string, loc
   return `${t("último recebimento")} ${formatDistanceToNowStrict(new Date(iso), { addSuffix: true, locale: locale })}`;
 }
 
-export function SourcesTab() {
+/** Busca o nome do funil e da etapa só do destino desta fonte (o cache do react-query divide por funil). */
+function FonteComDestino({ source, onAbrir }: { source: WebhookSourceRow; onAbrir: () => void }) {
+  const t = useT();
   const localeDaData = useLocaleDeData();
+  const { data: pipelinesRes } = usePipelines();
+  const { data: boardRes } = usePipelineStages(source.default_pipeline_id);
+  const funil = pipelinesRes?.data?.find((p) => p.id === source.default_pipeline_id)?.name;
+  const etapa = boardRes?.data?.stages?.find((s) => s.id === source.default_stage_id)?.name;
+  const url = publicUrl(source.path_token);
+  return (
+    <FonteCard
+      source={source}
+      funil={funil}
+      etapa={etapa}
+      recebimento={lastReceivedLabel(source.last_received_at, t, localeDaData)}
+      url={url}
+      aoAbrir={onAbrir}
+      aoCopiar={() => copy(url, t("Endereço copiado."), t)}
+    />
+  );
+}
+
+export function SourcesTab({
+  createOpen,
+  onCreateOpenChange,
+}: {
+  createOpen: boolean;
+  onCreateOpenChange: (open: boolean) => void;
+}) {
   const t = useT();
   const { data, isLoading } = useWebhookSources();
-  const [createOpen, setCreateOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<WebhookSourceRow | null>(null);
 
   const sources = data?.data ?? [];
@@ -40,70 +70,33 @@ export function SourcesTab() {
     );
   }
 
-  if (sources.length === 0) {
-    return (
-      <div className="flex justify-center pt-10">
-        <Card className="max-w-md">
-          <CardHeader className="items-center text-center">
-            <PlugsConnected className="mb-2 h-10 w-10 text-accent" />
-            <CardTitle>{t("Conecte sua landing page em 2 minutos")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-center">
-            <ol className="space-y-2 text-left text-sm text-muted-foreground">
-              <li>{t("1. Crie uma fonte e diga em qual funil o contato entra.")}</li>
-              <li>{t("2. Copie o endereço ou o formulário pronto.")}</li>
-              <li>{t("3. Cole no seu site — cada envio vira um lead aqui dentro.")}</li>
-            </ol>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus /> {t("Criar primeira fonte")}
-            </Button>
-          </CardContent>
-        </Card>
-        <CreateSourceDialog
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          onCreated={setSelected}
-        />
-        {selected ? (
-          <SourceDetail source={selected} open={!!selected} onOpenChange={() => setSelected(null)} />
-        ) : null}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4 pt-4">
-      <div className="flex sm:justify-end">
-        <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
-          <Plus /> {t("Nova fonte")}
-        </Button>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {sources.map((s) => (
-          <Card
-            key={s.id}
-            className="cursor-pointer transition-colors hover:border-accent"
-            onClick={() => setSelected(s)}
-          >
-            <CardHeader className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="truncate">{s.name}</CardTitle>
-                <Badge variant={s.is_active ? "success" : "neutral"}>
-                  {s.is_active ? t("Ativa") : t("Pausada")}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {lastReceivedLabel(s.last_received_at, t, localeDaData)}
-              </p>
-              {/* Desligada, ela para de receber contatos e ninguém do outro lado
-                  é avisado — então quem a desligou entra na leitura do card. */}
-              <SeloDeAutoria kind={s.last_change_actor_kind} em={s.last_change_at} />
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+      {sources.length === 0 ? (
+        <Aviso
+          tom="info"
+          titulo={t("Conecte sua landing page em 2 minutos")}
+          acao={
+            <Button size="sm" onClick={() => onCreateOpenChange(true)}>
+              <Plus /> {t("Criar primeira fonte")}
+            </Button>
+          }
+        >
+          <ol className="space-y-1">
+            <li>{t("1. Crie uma fonte e diga em qual funil o contato entra.")}</li>
+            <li>{t("2. Copie o endereço ou o formulário pronto.")}</li>
+            <li>{t("3. Cole no seu site — cada envio vira um lead aqui dentro.")}</li>
+          </ol>
+        </Aviso>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {sources.map((s) => (
+            <FonteComDestino key={s.id} source={s} onAbrir={() => setSelected(s)} />
+          ))}
+        </div>
+      )}
 
-      <CreateSourceDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={setSelected} />
+      <CreateSourceDialog open={createOpen} onOpenChange={onCreateOpenChange} onCreated={setSelected} />
       {selected ? (
         <SourceDetail source={selected} open={!!selected} onOpenChange={() => setSelected(null)} />
       ) : null}

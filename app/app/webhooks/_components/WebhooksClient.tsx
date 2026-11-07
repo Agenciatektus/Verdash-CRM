@@ -1,7 +1,10 @@
 "use client";
 import * as React from "react";
+import { CabecalhoDaPagina, SecaoDaPagina } from "@/components/pagina";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Plus } from "@/lib/ui/icons";
 import { SourcesTab } from "./SourcesTab";
 import { RulesTab } from "./RulesTab";
 import { ActivityTab } from "./ActivityTab";
@@ -14,48 +17,63 @@ export type AbaDosWebhooks = keyof typeof ABAS;
 
 export function WebhooksClient({ abaInicial }: { abaInicial?: AbaDosWebhooks }) {
   const t = useT();
+  const [aba, setAba] = React.useState<string>(abaInicial ? ABAS[abaInicial] : "sources");
+  const [novaFonteAberta, setNovaFonteAberta] = React.useState(false);
   // Radix Tabs gera ids via useId; com SSR streamado (Next 15) os ids divergem
   // entre server e client e o React acusa hydration mismatch. Nenhuma outra
-  // página do app SSRa Tabs no primeiro paint (todas montam pós-fetch) —
-  // seguimos o mesmo padrão: skeleton no SSR, Tabs após mount.
+  // página do app SSRa Tabs no primeiro paint (todas montam pós-fetch):
+  // skeleton no SSR, Tabs após mount.
   const mounted = React.useSyncExternalStore(
     React.useCallback(() => () => {}, []),
     () => true,
     () => false,
   );
 
+  const cabecalho = (
+    <CabecalhoDaPagina
+      titulo="Webhooks"
+      descricao={t("Receba contatos de fora (landing pages, formulários) e crie automações que agem sozinhas.")}
+      acoes={
+        mounted && aba === "sources" ? (
+          <Button onClick={() => setNovaFonteAberta(true)}>
+            <Plus /> {t("Nova fonte")}
+          </Button>
+        ) : null
+      }
+    />
+  );
+
   if (!mounted) {
-    // Mesma altura do TabsList (h-9) e largura MEDIDA da tablist — zero layout
-    // shift. 432px é a medida com QUATRO abas (`getBoundingClientRect` em
-    // 1440px, aba "Leads recebidos" incluída); eram 306px com três, e um
-    // skeleton estreito demais faz a página saltar no primeiro paint.
-    // Ao acrescentar ou renomear aba, MEDIR de novo — este número não se
-    // estima a olho.
-    //
-    // Abaixo de `lg` a aba tem 44px (`min-h-11` do trigger) e a lista quebra
-    // linha (`flex-wrap` abaixo): uma fila = 44 + 8 do `p-1` = 52px. Abaixo de
-    // `sm` (a 390px sobram ~310px úteis) as quatro abas viram DUAS filas, 96px.
-    // Contas pelas classes, não medidas; o `max-w-full` impede que os 432px
-    // empurrem o <main> para o lado no celular.
+    // Altura do TabsList sublinhado (h-10); `max-w-full` para a fila não empurrar o <main> no celular.
     return (
-      <div className="flex-1">
-        <Skeleton className="h-24 w-[432px] max-w-full sm:h-[52px] lg:h-9" />
-      </div>
+      <>
+        {cabecalho}
+        <SecaoDaPagina>
+          <Skeleton className="h-10 w-[432px] max-w-full" />
+        </SecaoDaPagina>
+      </>
     );
   }
 
   return (
-    <Tabs defaultValue={abaInicial ? ABAS[abaInicial] : "sources"} className="flex-1">
-      <TabsList className="h-auto flex-wrap justify-start">
-        <TabsTrigger value="sources">{t("Receber dados")}</TabsTrigger>
-        <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>
-        <TabsTrigger value="rules">{t("Automações")}</TabsTrigger>
-        <TabsTrigger value="activity">{t("Atividade")}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="sources"><SourcesTab /></TabsContent>
-      <TabsContent value="capturas"><CapturasTab /></TabsContent>
-      <TabsContent value="rules"><RulesTab /></TabsContent>
-      <TabsContent value="activity"><ActivityTab /></TabsContent>
-    </Tabs>
+    <>
+      {cabecalho}
+      <SecaoDaPagina>
+        <Tabs value={aba} onValueChange={setAba} className="flex-1">
+          <TabsList className="w-full justify-start">
+            <TabsTrigger value="sources">{t("Receber dados")}</TabsTrigger>
+            <TabsTrigger value="capturas">{t("Leads recebidos")}</TabsTrigger>
+            <TabsTrigger value="rules">{t("Automações")}</TabsTrigger>
+            <TabsTrigger value="activity">{t("Atividade")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="sources">
+            <SourcesTab createOpen={novaFonteAberta} onCreateOpenChange={setNovaFonteAberta} />
+          </TabsContent>
+          <TabsContent value="capturas"><CapturasTab /></TabsContent>
+          <TabsContent value="rules"><RulesTab /></TabsContent>
+          <TabsContent value="activity"><ActivityTab /></TabsContent>
+        </Tabs>
+      </SecaoDaPagina>
+    </>
   );
 }
