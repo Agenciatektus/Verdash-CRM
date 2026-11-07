@@ -4,7 +4,8 @@
  *
  * O FZAP não tem rota para LER arquivado/fixado. O filtro do webhook descarta `Archive`/`Pin`
  * (só aceita a categoria `AppState`), então o caminho real é a mutação crua do whatsmeow:
- * `{Index: ["archive"|"pin_v1", jid], SyncActionValue: {archiveChatAction|pinAction}}`.
+ * `{Index: ["archive"|"pin_v1", jid], archiveChatAction|pinAction, timestamp}` (o SyncActionValue vem
+ * embutido no evento, então os campos sobem de nível; payload real lido em 07/11).
  * `Archive`/`Pin` seguem aceitos por tolerância. O que não casar vai para o log com o `type` e as
  * CHAVES (nunca valores).
  */
@@ -52,7 +53,8 @@ function lerAppState(ev: Record<string, unknown>): EstadoDeGrupo | null {
   if (!Array.isArray(indice)) return null;
   const [acao, jid] = indice;
   if (typeof jid !== "string" || !jid.endsWith("@g.us")) return null;
-  const valor = obj(ev.SyncActionValue ?? ev.syncActionValue);
+  // Forma real: promovida. A aninhada fica por tolerância.
+  const valor = obj(ev.SyncActionValue ?? ev.syncActionValue ?? ev);
   const flag = (o: unknown, k: string) => {
     const v = obj(o)[k];
     return typeof v === "boolean" ? v : undefined;

@@ -18,12 +18,18 @@ describe("lerEstadoDeGrupo", () => {
     expect(lerEstadoDeGrupo(evento("Archive", { JID: G }))).toBeNull();
   });
   it("lê a mutação crua do AppState (formato do whatsmeow)", () => {
-    const app = (Index: unknown, SyncActionValue: unknown) => evento("AppState", { Index, SyncActionValue });
-    expect(lerEstadoDeGrupo(app(["archive", G], { archiveChatAction: { archived: true } }))).toEqual({ jid: G, archived: true });
+    // Forma real do FZAP (07/11): o SyncActionValue vem promovido para o nível do evento.
+    const app = (Index: unknown, valor: Record<string, unknown>) => evento("AppState", { Index, timestamp: 1, ...valor });
+    const arquivar = { archiveChatAction: { archived: true, messageRange: { lastMessageTimestamp: 1 } } };
+    expect(lerEstadoDeGrupo(app(["archive", G], arquivar))).toEqual({ jid: G, archived: true });
     expect(lerEstadoDeGrupo(app(["archive", G], { archiveChatAction: { archived: false } }))).toEqual({ jid: G, archived: false });
     expect(lerEstadoDeGrupo(app(["pin_v1", G], { pinAction: { pinned: true } }))).toEqual({ jid: G, pinned: true });
-    expect(lerEstadoDeGrupo(app(["mute", G], { muteAction: { muted: true } }))).toBeNull();
-    expect(lerEstadoDeGrupo(app(["archive", "5511@s.whatsapp.net"], { archiveChatAction: { archived: true } }))).toBeNull();
+    expect(lerEstadoDeGrupo(app(["lock", G], { lockChatAction: { locked: false } }))).toBeNull();
+    expect(lerEstadoDeGrupo(app(["archive", "5511@s.whatsapp.net"], arquivar))).toBeNull();
+    // Tolerância: aninhado em SyncActionValue.
+    expect(
+      lerEstadoDeGrupo(evento("AppState", { Index: ["pin_v1", G], SyncActionValue: { pinAction: { pinned: false } } })),
+    ).toEqual({ jid: G, pinned: false });
   });
   it("Archive, Pin e AppState são eventos de estado", () => {
     expect(ehEventoDeEstado({ type: "Pin" })).toBe(true);
@@ -58,7 +64,7 @@ describe("aplicarEstadoDeGrupo", () => {
     const { client, update } = admin(true);
     const ok = await aplicarEstadoDeGrupo(client, {
       ...base,
-      payload: evento("AppState", { Index: ["archive", G], SyncActionValue: { archiveChatAction: { archived: true } } }),
+      payload: evento("AppState", { Index: ["archive", G], timestamp: 1, archiveChatAction: { archived: true } }),
     });
     expect(ok.status).toBe("updated");
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));

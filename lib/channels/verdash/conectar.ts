@@ -74,7 +74,8 @@ export const VERDASH_CHANNEL_LABEL = "Verdash";
  * histórico o que o cliente recebeu sem ninguém digitar.
  */
 // `AppState` e não `Archive`/`Pin`: o filtro do webhook do FZAP descarta esses nomes calado (PUT devolve 200
-// sem eles, medido em 07/11). O AppState cru é pouco volume; `estado-de-grupo.ts` ignora sem log o que não é grupo.
+// sem eles, medido em 07/11). O AppState traz toda mutação da conta (cresce numa sincronização completa);
+// `estado-de-grupo.ts` só grava arquivar/fixar de grupo e ignora o resto sem log.
 const EVENTOS = ["Message", "AutomationMessage", "Connected", "Disconnected", "LoggedOut", "AppState"];
 
 /**
