@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 const state = vi.hoisted(() => ({
   user: true,
+  role: "agent" as string,
   contact: { organization_id: "org-a", is_anonymized: false } as {
     organization_id: string;
     is_anonymized: boolean;
@@ -12,14 +13,14 @@ const state = vi.hoisted(() => ({
   admin: vi.fn(),
 }));
 vi.mock("@/lib/auth/require-role", () => ({
-  // A rota passou a exigir PAPEL (`agent`), e nao apenas sessao: ela devolve o
+  // A rota exige PAPEL (`viewer`+, enriquecimento so `agent`+), e nao apenas sessao: ela devolve o
   // enriquecimento de prospeccao, que o banco esconde de `authenticated` de
   // proposito. Este mock respeita `state.user` para o caso de 401 continuar
   // sendo exercido de verdade, e fixa a organizacao ATIVA em `org-a` — que e o
   // ponto do conserto: a organizacao vem da sessao, nunca da linha do contato.
   requireRole: async () =>
     state.user
-      ? { ok: true as const, user: { id: "user-a" }, org: { orgId: "org-a" } }
+      ? { ok: true as const, user: { id: "user-a" }, org: { orgId: "org-a", role: state.role } }
       : {
           ok: false as const,
           response: new Response(JSON.stringify({ error: { code: "unauthenticated" } }), {
@@ -78,6 +79,7 @@ const run = () =>
   });
 beforeEach(() => {
   state.user = true;
+  state.role = "agent";
   state.contact = { organization_id: "org-a", is_anonymized: false };
   state.candidate = {
     data: { ...prospect, secret_raw: "must not leave server" },
@@ -107,6 +109,17 @@ describe("enriquecimento autorizado no resumo CRM", () => {
   it("requer autenticação", async () => {
     state.user = false;
     expect((await run()).status).toBe(401);
+    expect(state.admin).not.toHaveBeenCalled();
+  });
+  it("viewer (e o acompanhamento somente leitura) lê o resumo, mas nunca o enriquecimento", async () => {
+    state.role = "viewer";
+    state.candidate = { data: { name: "Prospect" }, created_at: "2026-01-01T00:00:00Z" };
+    const res = await run();
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.enrichment).toBeNull();
+    expect(body.data.leads).toEqual([]);
+    // Controle: o service role nem é aberto para quem está abaixo de `agent`.
     expect(state.admin).not.toHaveBeenCalled();
   });
   it("não recupera enriquecimento de contato anonimizado", async () => {

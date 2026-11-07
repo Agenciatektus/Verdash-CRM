@@ -35,6 +35,7 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
+import { ROLE_RANK } from "@/lib/auth/types";
 import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
@@ -97,8 +98,15 @@ export async function GET(
   // um `viewer` recebia pelo lado de ca o que a RLS nega pelo lado de la — e
   // tambem pulavam as checagens de sessao de suporte encerrada e de MFA em
   // divida, que so existem dentro de `requireRole`.
-  const authz = await requireRole("agent", { requestId, resource: "contacts" });
+  //
+  // `viewer` LÊ o resto do resumo (negócios, pedidos, atividade, demandas): o
+  // painel do Inbox tem modo leitura para ele e para o acompanhamento de
+  // suporte somente leitura, e o 403 aqui virava "Não consegui ler estes dados"
+  // nas abas. O ENRIQUECIMENTO continua `agent`+ (o motivo acima), decidido
+  // pelo papel efetivo do banco que `requireRole` devolve.
+  const authz = await requireRole("viewer", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
+  const veEnriquecimento = ROLE_RANK[authz.org.role] >= ROLE_RANK.agent;
 
   const supabase = await createClient();
 
@@ -116,7 +124,7 @@ export async function GET(
   // Candidates are worker-only. Authorize the contact through RLS first, then
   // scope this read to that exact contact and organization. Never expose raw data.
   const enrichment = await (async () => {
-    if (contactScope.is_anonymized) return { enrichment: null, enrichment_error: false };
+    if (contactScope.is_anonymized || !veEnriquecimento) return { enrichment: null, enrichment_error: false };
     try {
       const admin = createAdminClient();
       const candidato = await admin.from("prospecting_candidates")
