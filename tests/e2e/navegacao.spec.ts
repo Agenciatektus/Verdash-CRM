@@ -12,6 +12,7 @@ import { mkdirSync } from "node:fs";
 import * as path from "node:path";
 
 import { test, expect, type Page } from "./helpers/test";
+import { nativoDaEscolha } from "./helpers/escolha";
 
 import { lerCreds, loginComoAdmin, loginComoDono } from "./helpers/login-admin";
 import { afirmarAdminDeTenantPuro, afirmarDonoDoServidor } from "./utils/precondicao";
@@ -57,7 +58,11 @@ const sidebar = (page: Page) => page.getByRole("navigation", { name: "Navegaçã
  */
 const trilho = (page: Page) => page.getByRole("navigation", { name: "Grupos da navegação" });
 async function abrirGrupo(page: Page, nome: string): Promise<void> {
-  await trilho(page).getByRole("button", { name: nome, exact: true }).click();
+  // O nome acessível do grupo pode trazer o estado ao lado (ex.: "Canais
+  // Conectando…", o ponto de saúde das conexões). Ancorado no início para não
+  // casar outro grupo cujo nome só CONTENHA este.
+  const exato = new RegExp(`^${nome}(\\s|$)`);
+  await trilho(page).getByRole("button", { name: exato }).click();
 }
 
 async function expectSemOverflowHorizontal(page: Page, contexto: string): Promise<void> {
@@ -99,7 +104,10 @@ test.describe("navegação agrupada", () => {
     // Organização não aparece no trilho: seu hub (Configurações) é o link
     // "Ajustes" do rodapé fixo — ver o teste do rodapé abaixo.
     const grupos = trilho(page).getByRole("button");
-    await expect(grupos).toHaveText(["Conversas", "CRM", "Agentes", "Canais", "Análise"]);
+    // O botão de Conversas leva o contador da fila ("Conversas1") quando há
+    // alguém esperando — depende do que outra spec deixou no banco. O número é
+    // aceito; o rótulo e a ORDEM continuam exatos.
+    await expect(grupos).toHaveText([/^Conversas\d*$/, "CRM", "Agentes", "Canais", "Análise"]);
 
     await page.screenshot({
       path: path.join(EVIDENCE, "nav-sidebar-agrupado.png"),
@@ -134,7 +142,8 @@ test.describe("navegação agrupada", () => {
 
     await page.screenshot({ path: path.join(EVIDENCE, "nav-hub-crm.png"), fullPage: true });
 
-    await page.getByRole("link", { name: /Etapas do funil/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Etapas do funil/ }).click();
     await page.waitForURL(/settings\/tenant\/pipelines/);
     await expect(page.getByRole("heading", { name: "Etapas do funil", level: 1 })).toBeVisible();
   });
@@ -155,7 +164,8 @@ test.describe("navegação agrupada", () => {
     // tem); o hub continua sendo a rota `/app/crm`.
     await page.goto("/app/crm");
     await page.waitForURL(/\/app\/crm$/);
-    await page.getByRole("link", { name: /Produtos/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Produtos/ }).click();
     await page.waitForURL(/\/app\/products/);
   });
 
@@ -182,7 +192,8 @@ test.describe("navegação agrupada", () => {
 
     await page.screenshot({ path: path.join(EVIDENCE, "nav-hub-ia.png"), fullPage: true });
 
-    await page.getByRole("link", { name: /Conhecimento/ }).click();
+    // O hub está no <main>; a coluna do grupo repete o link, e o caminho medido é o do hub.
+    await page.getByRole("main").getByRole("link", { name: /Conhecimento/ }).click();
     await page.waitForURL(/knowledge\/sources/);
   });
 
@@ -197,7 +208,15 @@ test.describe("navegação agrupada", () => {
     await abrirGrupo(page, "Canais");
     await sidebar(page).getByRole("link", { name: "Conexões" }).click();
     await page.waitForURL(/\/app\/connections/);
-    await expect(page.getByRole("tab", { name: /oficial/i })).toBeVisible();
+    // Conexões virou página única (#354): o oficial deixou de ser aba e é um
+    // dos métodos do assistente "Conectar" › WhatsApp. O passo do nome só
+    // avança a tela (nada é criado antes de escolher o método e concluir).
+    await page.getByRole("main").getByRole("button", { name: "Conectar", exact: true }).click();
+    await page.getByRole("dialog", { name: "O que você quer conectar?" }).getByRole("button", { name: /^WhatsApp/ }).click();
+    const assistente = page.getByRole("dialog");
+    await assistente.getByLabel("Nome da conexão").fill("Navegação E2E");
+    await assistente.getByRole("button", { name: "Continuar" }).click();
+    await expect(assistente.getByRole("radio", { name: /API Oficial/ })).toBeVisible();
   });
 
   test("o ⌘K acha o canal oficial por nome, mesmo sem tela própria", async ({ page }) => {
@@ -265,21 +284,24 @@ test.describe("navegação agrupada", () => {
   test.describe("mobile", () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test("em 390px, o sidebar vira gaveta e não cria overflow horizontal", async ({ page }) => {
+    // ⚠️ Abaixo de 760px a casca é a do app de celular (`CascaDoCelular`): o
+    // hambúrguer saiu, e o inventário completo mora no "Mais" da barra de abas.
+    test("em 390px, o sidebar vira o menu Mais e não cria overflow horizontal", async ({ page }) => {
       await loginAdmin(page);
 
       await expect(sidebar(page), "o sidebar desktop fica fora da árvore acessível no mobile").toHaveCount(0);
       await expectSemOverflowHorizontal(page, "shell mobile após login");
 
-      await page.getByRole("button", { name: "Abrir navegação" }).click();
-      await expect(sidebar(page)).toBeVisible();
-      await expectSemOverflowHorizontal(page, "shell mobile com drawer aberto");
+      await page.getByRole("navigation", { name: "Seções do CRM" }).getByRole("button", { name: "Mais" }).click();
+      const mais = page.getByRole("dialog", { name: "Mais" });
+      await expect(mais).toBeVisible();
+      await expectSemOverflowHorizontal(page, "shell mobile com o Mais aberto");
       await page.screenshot({
         path: path.join(EVIDENCE, "nav-mobile-390-drawer-aberta.png"),
         fullPage: true,
       });
 
-      await sidebar(page).getByRole("link", { name: "Funis", exact: true }).click();
+      await mais.getByRole("link", { name: /^Funis(\s|$)/ }).click();
       await page.waitForURL(/\/app\/kanban/);
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await expectSemOverflowHorizontal(page, "shell mobile após navegar pelo drawer");
@@ -322,7 +344,7 @@ test.describe("navegação agrupada", () => {
     await expect(trilho(page).getByRole("button", { name: "Conversas" })).toBeVisible();
   });
 
-  test("a equipe carregada no Inbox continua legível em Financeiro e Faturamento sem recarregar", async ({
+  test("a equipe carregada em Financeiro continua legível em Faturamento sem recarregar", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -341,15 +363,18 @@ test.describe("navegação agrupada", () => {
     await expect(modulo.getByText("Instalado", { exact: true })).toBeVisible({ timeout: 30_000 });
 
     // A jornada medida é de administrador de tenant, com autenticação real.
-    // Depois do Inbox só há cliques em Link, mantendo o QueryClient da casca.
+    // Depois de Financeiro só há navegação do cliente, mantendo o QueryClient.
     await loginAdmin(page);
     const equipeRecebida = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === "/api/v1/team/assignable" && r.request().method() === "GET",
     );
-    await page.goto("/app/inbox");
-    await page.getByRole("tab", { name: /^Todas/ }).click();
-    await expect(page.getByLabel("Filtrar por atendente")).toBeVisible();
+    // O cenário antigo partia do Inbox, que pedia a equipe ao abrir pelo
+    // "Filtrar por atendente". O filtro saiu, e nem o Inbox nem o Funil buscam a
+    // equipe no cliente ao abrir (medido: nenhum GET em 120 s). Quem busca hoje
+    // é Financeiro, com a MESMA chave ["team","assignable"] que Faturamento lê:
+    // é esse cache compartilhado, sem recarga, que o caso mede.
+    await page.goto("/app/settings/tenant/financeiro");
     const resposta = await equipeRecebida;
     expect(resposta.ok()).toBe(true);
     const { data: equipe } = (await resposta.json()) as {
@@ -361,14 +386,15 @@ test.describe("navegação agrupada", () => {
     const inicioDoDocumento = await page.evaluate(() => performance.timeOrigin);
     const erros: string[] = [];
     page.on("pageerror", (erro) => erros.push(erro.message));
+    // Cache compartilhado: depois da 1ª resposta, ninguém busca a equipe de novo.
+    let buscasDaEquipeDepois = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/api/v1/team/assignable" && r.method() === "GET") buscasDaEquipeDepois++;
+    });
 
-    await page.getByRole("link", { name: "Configurações", exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/settings$/);
-    await page.locator('a[href="/app/settings/tenant/financeiro"]').click();
-    await expect(page).toHaveURL(/\/app\/settings\/tenant\/financeiro$/);
     await expect(page.getByRole("heading", { name: "Comissão", exact: true })).toBeVisible();
     await expect(
-      page.getByLabel("Pessoa").locator(`option[value="${pessoa!.user_id}"]`),
+      nativoDaEscolha(page.getByLabel("Pessoa")).locator(`option[value="${pessoa!.user_id}"]`),
     ).toHaveText("E2E Admin");
     await expect(page.getByText("Algo deu errado", { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(inicioDoDocumento);
@@ -377,14 +403,17 @@ test.describe("navegação agrupada", () => {
       fullPage: true,
     });
 
-    await sidebar(page).getByRole("link", { name: "Ver tudo em Análise", exact: true }).click();
-    await expect(page).toHaveURL(/\/app\/analise$/);
+    // O "Ver tudo em Análise" saiu da coluna (09/10/2026) e Faturamento é fora
+    // do sidebar de propósito; a porta sem recarga é o ⌘K (navegação do cliente).
     const relatorioRecebido = page.waitForResponse(
       (r) =>
         new URL(r.url()).pathname === "/api/v1/reports/financeiro" &&
         r.request().method() === "GET",
     );
-    await page.locator('a[href="/app/faturamento"]').click();
+    await page.keyboard.press("ControlOrMeta+k");
+    const paleta = page.getByRole("dialog");
+    await paleta.getByRole("combobox").fill("Faturamento");
+    await paleta.getByRole("option", { name: /Faturamento/ }).first().click();
     await expect(page).toHaveURL(/\/app\/faturamento$/);
     const relatorio = await relatorioRecebido;
     expect(relatorio.ok()).toBe(true);
@@ -394,6 +423,7 @@ test.describe("navegação agrupada", () => {
     await expect(
       page.getByRole("heading", { name: "Comissão por pessoa", exact: true }),
     ).toBeVisible();
+    expect(buscasDaEquipeDepois, "Faturamento leu a equipe do cache, sem novo GET").toBe(0);
     // O período pode estar vazio. Nomes de responsáveis só são comprovados
     // aqui quando o relatório real tem essa linha; o unitário cobre os demais.
     for (const linha of totais.por_profissional) {

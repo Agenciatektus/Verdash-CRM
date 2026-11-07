@@ -107,7 +107,7 @@ export function SeriePanel() {
             if (granularidadeValida(v)) setGranularidade(v);
           }}
         >
-          <SelectTrigger className="w-32 md:w-40" aria-label={t("Granularidade")}>
+          <SelectTrigger className="w-32 mb:h-11 md:w-40" aria-label={t("Granularidade")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

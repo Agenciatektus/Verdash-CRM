@@ -79,14 +79,15 @@ test.describe("Lote 12 — #955 o vocabulário de etiquetas", () => {
     await page.goto("/app/settings");
     // O cartão de Configurações leva rótulo E descrição dentro do mesmo <a>, então
     // o nome acessível é a frase inteira — o discriminador honesto é o href.
-    const link = page.locator('a[href="/app/settings/tags"]');
+    // O hub está no <main>; a coluna de Ajustes repete a mesma porta.
+    const link = page.getByRole("main").locator('a[href="/app/settings/tags"]');
     await expect(link, "Configurações tem de ter a porta para Tags").toBeVisible({ timeout: 30_000 });
     registra(`#955 J24.3 · porta em /app/settings = "${(await link.innerText()).replace(/\n/g, " | ")}"`);
     await captura(page, "955-01-porta-em-configuracoes");
     await link.click();
     await page.waitForURL(/\/app\/settings\/tags/);
 
-    await expect(page.getByRole("heading", { name: "Tags", level: 1 })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Etiquetas", level: 1 })).toBeVisible({ timeout: 30_000 });
     const linha = page.getByRole("row", { name: new RegExp(TAG_A) });
     await expect(linha).toBeVisible({ timeout: 30_000 });
     const celulas = await linha.locator("td").allInnerTexts();
