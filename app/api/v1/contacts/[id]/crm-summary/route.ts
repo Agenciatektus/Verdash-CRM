@@ -35,7 +35,7 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
-import { ROLE_RANK } from "@/lib/auth/types";
+import { roleAtLeast } from "@/lib/auth/types";
 import { ALVO_DE_CONTATO, VINCULO_DE_CONTATO } from "@/app/api/v1/leads/[id]/contatos-relacionados/route";
 import { atalhosDoFunil } from "@/lib/leads/atalhos-do-card";
 import { camposDoFunil, camposPorEscopo, settingsDoEmbed } from "@/lib/leads/campos-do-funil";
@@ -106,7 +106,7 @@ export async function GET(
   // pelo papel efetivo do banco que `requireRole` devolve.
   const authz = await requireRole("viewer", { requestId, resource: "contacts" });
   if (!authz.ok) return authz.response;
-  const veEnriquecimento = ROLE_RANK[authz.org.role] >= ROLE_RANK.agent;
+  const veEnriquecimento = roleAtLeast(authz.org.role, "agent");
 
   const supabase = await createClient();
 
