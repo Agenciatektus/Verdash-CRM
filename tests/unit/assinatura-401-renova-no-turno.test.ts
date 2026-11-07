@@ -19,7 +19,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { streamText } from "ai";
+import { generateText, streamText } from "ai";
 
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 import {
@@ -36,6 +36,8 @@ vi.mock("ai", () => ({
   asSchema: vi.fn(),
   tool: (t: unknown) => t,
 }));
+vi.mock("@/lib/cobranca/ia-propria", async (orig) =>
+  (await import("@/tests/helpers/ia-propria-instalacao-serve")).instalacaoServeAOrg(await orig()));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({})) }));
 vi.mock("@/lib/ai/credenciais/aviso-da-assinatura", () => ({
   sincronizarAvisoDaAssinatura: vi.fn(async () => "aberto"),
@@ -144,6 +146,18 @@ function roteiroDoProvedor(passos: Array<"ok" | "401">) {
   return () => indice;
 }
 
+async function respostaDaReserva() {
+  const b = respostaBoa();
+  return {
+    text: await b.text,
+    usage: await b.usage,
+    response: await b.response,
+    steps: [],
+    toolCalls: [],
+    finishReason: "stop",
+  };
+}
+
 async function rodar() {
   return runModelCall(
     poolDaAssinatura(),
@@ -213,6 +227,33 @@ describe("401 → renova → 401: dois POSTs e ponto (sem laço)", () => {
       conectada: false,
       recusa: "falha:refresh_token_revoked",
     });
+  });
+
+  it("⭐ reserva no OpenRouter responde, mas a conta desconectada AINDA abre o aviso", async () => {
+    vi.mocked(renovarAssinaturaNoTurno).mockResolvedValue({
+      ok: false,
+      motivo: "falha",
+      motivoDetalhe: "refresh_token_revoked",
+    });
+    vi.mocked(sincronizarAvisoDaAssinatura).mockClear();
+    roteiroDoProvedor(["401", "401"]);
+    vi.mocked(generateText).mockResolvedValue({ ...(await respostaDaReserva()) } as never);
+    const registroComReserva = {
+      ...(registry as object),
+      openrouter: () => ({ specificationVersion: "v3", provider: "openrouter", modelId: "x" }),
+    } as never;
+
+    const r = await runModelCall(
+      poolDaAssinatura(),
+      { openrouterApiKey: "chave...te", cacheTtl: "1h" },
+      { tenantId: ORG, purpose: "agent_turn", messages: [{ role: "user", content: "oi" }] },
+      { registry: registroComReserva, log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never },
+    );
+
+    expect(r.provider).toBe("openrouter");
+    // Sem este aviso a Tektus pagaria cada turno na reserva e ninguém reconectaria.
+    expect(vi.mocked(sincronizarAvisoDaAssinatura)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sincronizarAvisoDaAssinatura).mock.calls[0]?.[1]).toMatchObject({ conectada: false });
   });
 
   it("⭐ `em_curso` (outro processo renovando) NÃO abre aviso de conta desconectada", async () => {

@@ -257,3 +257,20 @@ export function decidirQuedaDoProvedor(entrada: {
     temChaveDeReserva: entrada.temChaveDeReserva,
   });
 }
+
+/**
+ * A reserva sem chave OpenAI: o OpenRouter da instalação (a chave da Tektus).
+ * Nenhuma instalação nossa tem `OPENAI_API_KEY`, então sem este degrau a queda
+ * da assinatura (limite de uso, token vencido) só podia terminar em humano.
+ */
+export const PROVEDOR_DE_RESERVA_NO_ROTEADOR = "openrouter";
+
+/**
+ * O id que a reserva usa. A assinatura serve o id sem prefixo (`gpt-6-luna`);
+ * o roteador exige o prefixo do fabricante (`openai/gpt-6-luna`). Id que já traz
+ * rota, e a reserva direta na OpenAI, seguem como estão.
+ */
+export function modeloNaReserva(provedorDaReserva: string, modelo: string): string {
+  if (provedorDaReserva !== PROVEDOR_DE_RESERVA_NO_ROTEADOR) return modelo;
+  return modelo.includes("/") ? modelo : `${PROVEDOR_DE_RESERVA_DA_ASSINATURA}/${modelo}`;
+}

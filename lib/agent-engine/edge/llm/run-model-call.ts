@@ -30,7 +30,7 @@ import { PONTO_POR_ID } from '@/lib/ai/pontos/registro';
 // este seam, a resolução dos pontos, a mídia, o embedding e o runtime do agente
 // importam daqui — não cada um a sua (issue #2377).
 import { ParProvedorModeloInvalidoError, validarParProvedorModelo } from '@/lib/ai/par-provedor-modelo';
-import { decidirQuedaDoProvedor } from '@/lib/ai/pontos/reserva-da-assinatura';
+import { classificarFalhaDaAssinatura, decidirQuedaDoProvedor, modeloNaReserva } from '@/lib/ai/pontos/reserva-da-assinatura';
 import { scrubMessage } from '@/lib/sentry/scrub';
 import { identificarConteudoBloqueado } from './conteudo-bloqueado';
 
@@ -38,7 +38,7 @@ import type { Logger } from '../../obs/logger';
 import { decidirParaOSeam, marcarEconomicoQueFalhou } from './binding-do-ponto';
 import {
   resolveOrgLlmConfig,
-  temChaveDeReserva,
+  resolverReservaDaAssinatura,
   type LlmEdgeConfig,
   type OrcamentoDaOrg,
   type OrgLlmConfig,
@@ -1107,7 +1107,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
    * A QUEDA DA ASSINATURA (#1639, item 3) — a metade que faltava da política.
    *
    * `decidirQuedaDoProvedor` já existe e é pura; o que faltava era respondê-lo:
-   * `temChaveDeReserva` pergunta à MESMA escada de resolução se a chave `openai`
+   * `resolverReservaDaAssinatura` pergunta à escada de resolução se há chave `openai` ou OpenRouter
    * da empresa existe. Devolve a config da reserva quando a política manda cair,
    * e `null` quando o desfecho é o de sempre — o erro ORIGINAL é relançado, sem
    * um erro novo inventado no lugar dele.
@@ -1122,24 +1122,15 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
     // `error_message` já vem redigida (chaves/Bearer fora) — e é só ela que a
     // classificação usa, para separar "token expirado" de "sem autorização".
     const { http_status: status, error_message: detalhe } = normalizarErro(falha);
-    const temReserva = await temChaveDeReserva(db, cfg, input.tenantId);
+    const reserva = await resolverReservaDaAssinatura(db, cfg, input.tenantId);
     const decisaoDaQueda = decidirQuedaDoProvedor({
       provider: config.provider,
       status,
       detalhe,
-      temChaveDeReserva: temReserva,
+      temChaveDeReserva: reserva !== null,
     });
     if (decisaoDaQueda === null || decisaoDaQueda.acao !== 'tentar_reserva') return null;
-    try {
-      return await resolveOrgLlmConfig(db, cfg, input.tenantId, {
-        provider: decisaoDaQueda.provedorDeReserva,
-        credentialId: null,
-      });
-    } catch {
-      // A reserva existia na pergunta e sumiu na resolução (revogou no meio da
-      // chamada). Errar com o erro ORIGINAL é dizer a verdade ao operador.
-      return null;
-    }
+    return reserva;
   };
 
   try {
@@ -1158,10 +1149,13 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
       // Sem fábrica para a reserva (registry de teste, provedor removido):
       // o erro original é o que interessa, e ele não muda de mão.
       if (fabricaDaReserva === undefined) throw falhaDaAssinatura;
+      // A chave da instalação nunca vai para o endereço que a empresa escolheu.
+      if (decisao.baseUrl && reserva.origemDaChave === 'chave_da_instalacao') throw falhaDaAssinatura;
       // A troca ANTES da nova tentativa: se a reserva também falhar, a linha de
       // `llm_calls` grava o provedor que de fato falhou por último, e não o que
       // a chamada começou a falar.
       config = reserva;
+      model = modeloNaReserva(reserva.provider, model);
       await gateDeOrcamento(reserva);
       deps.log?.warn('llm: assinatura indisponível — chamada caiu na reserva', {
         organization_id: input.tenantId,
@@ -1171,6 +1165,15 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
         origem_da_escolha: decisao.origem,
       });
       result = await chamarCom(reserva, fabricaDaReserva);
+      // A reserva respondeu, mas a conta continua desconectada: sem este aviso
+      // a Tektus pagaria o turno para sempre e ninguém reconectaria.
+      if (renovacaoDoTurno.recusa !== null && classificarFalhaDaAssinatura(normalizarErro(falhaDaAssinatura).http_status) !== 'limite_de_uso') {
+        await sincronizarAvisoDaAssinatura(createAdminClient(), {
+          organizationId: input.tenantId,
+          conectada: false,
+          recusa: renovacaoDoTurno.recusa,
+        }).catch(() => 'falhou');
+      }
     }
   } catch (err) {
     err = identificarConteudoBloqueado(err) ?? err;
