@@ -85,7 +85,7 @@ export function SeriePanel() {
           <CardTitle className="text-base">{t("Ganhos por período")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErroDoPainel mensagem="Erro ao carregar a evolução dos ganhos." aoTentar={() => void refetch()} recarregando={isFetching} />
+          <ErroDoPainel mensagem={t("Erro ao carregar a evolução dos ganhos.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );

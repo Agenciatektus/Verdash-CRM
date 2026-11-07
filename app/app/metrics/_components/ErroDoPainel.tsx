@@ -3,6 +3,7 @@
 import { Aviso } from "@/components/ui/aviso";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
+import type { ReactNode } from "react";
 
 /**
  * A falha de UM painel, dentro dele: aviso crítico com "Tentar de novo". Seção
@@ -13,7 +14,8 @@ export function ErroDoPainel({
   aoTentar,
   recarregando = false,
 }: {
-  mensagem: string;
+  /** Já traduzida por quem chama: t() aqui receberia parâmetro livre (cerca de i18n). */
+  mensagem: ReactNode;
   aoTentar: () => void;
   recarregando?: boolean;
 }) {
@@ -27,7 +29,7 @@ export function ErroDoPainel({
         </Button>
       }
     >
-      {t(mensagem)}
+      {mensagem}
     </Aviso>
   );
 }

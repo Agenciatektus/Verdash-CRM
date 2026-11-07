@@ -44,7 +44,7 @@ export function PrevisaoPanel() {
           <CardTitle className="text-sm font-semibold">{t("Previsão")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErroDoPainel mensagem="Erro ao carregar a previsão." aoTentar={() => void refetch()} recarregando={isFetching} />
+          <ErroDoPainel mensagem={t("Erro ao carregar a previsão.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );

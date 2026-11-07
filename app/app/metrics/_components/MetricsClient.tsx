@@ -7,7 +7,6 @@ import { useState, type ReactNode } from "react";
 import { useAttendantMetrics, type AttendantMetric } from "@/hooks/metrics/useAttendantMetrics";
 import { EmptyState } from "@/components/empty/EmptyState";
 import { BarraDeProgresso } from "@/components/ui/barra-de-progresso";
-import { CartaoDeIndicador } from "@/components/ui/cartao-de-indicador";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatarDuracao } from "@/lib/metrics/canais";
 import { WarningOctagon } from "@/lib/ui/icons";
@@ -17,6 +16,7 @@ import { MetaDoMesPanel, type EstadoDaMeta } from "./MetaDoMesPanel";
 import { PerdasPanel } from "./PerdasPanel";
 import { PrevisaoPanel } from "./PrevisaoPanel";
 import { SeriePanel } from "./SeriePanel";
+import { IndicadoresDoTopo } from "./IndicadoresDoTopo";
 import { useMetasDoMes } from "@/hooks/metrics/useMetasDoMes";
 import { janelaDoMes, mesLocal } from "@/lib/metas/periodo";
 import { useTeamMembers } from "@/hooks/team/useTeamMembers";
@@ -52,17 +52,6 @@ interface Props {
   descricao: string;
 }
 
-/** Média da 1ª resposta ponderada pelas conversas de cada atendente; sem medida = null (nunca 0). */
-function primeiraRespostaGeral(atendentes: AttendantMetric[]): number | null {
-  let soma = 0;
-  let peso = 0;
-  for (const a of atendentes) {
-    if (a.avg_first_response_seconds === null) continue;
-    soma += a.avg_first_response_seconds * a.conversations_handled;
-    peso += a.conversations_handled;
-  }
-  return peso > 0 ? soma / peso : null;
-}
 
 export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: Props) {
   const t = useT();
@@ -165,45 +154,12 @@ export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: 
   const metrics = data.data;
   const funnelTotal = metrics.funnel.reduce((acc, s) => acc + s.count, 0);
   const maxCount = Math.max(1, ...metrics.funnel.map((s) => s.count));
-  const ganhas = metrics.attendants.reduce((acc, a) => acc + a.won, 0);
-  const perdidas = metrics.attendants.reduce((acc, a) => acc + a.lost, 0);
   // Só a meta da EMPRESA: a de um funil com o rótulo "Meta do mês" seria lida como a da empresa.
   const metaDaEmpresa = metasDoMes.data?.data.metas.find((m) => m.escopo === "empresa");
 
   return moldura(
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <CartaoDeIndicador
-          rotulo={t("Meta do mês")}
-          valor={metaDaEmpresa ? `${metaDaEmpresa.percentual}%` : "—"}
-          explicacao={
-            metaDaEmpresa
-              ? metaDaEmpresa.atingida
-                ? t("Meta atingida.")
-                : `${t("Faltam")} ${metaDaEmpresa.falta} ${t("para a meta")}`
-              : estadoDaMeta === "carregando"
-                ? undefined
-                : estadoDaMeta === "erro"
-                  ? t("Não consegui carregar a meta do mês")
-                  : t("Nenhuma meta cadastrada para este mês.")
-          }
-        >
-          {metaDaEmpresa ? (
-            <BarraDeProgresso
-              valor={metaDaEmpresa.percentual}
-              rotulo={t("Meta do mês")}
-              tom={metaDaEmpresa.atingida ? "ok" : "marca"}
-            />
-          ) : null}
-        </CartaoDeIndicador>
-        <CartaoDeIndicador rotulo={t("Vendas ganhas")} valor={ganhas.toLocaleString("pt-BR")} explicacao={t("últimos 30 dias")} />
-        <CartaoDeIndicador rotulo={t("Perdidos")} valor={perdidas.toLocaleString("pt-BR")} explicacao={t("últimos 30 dias")} />
-        <CartaoDeIndicador
-          rotulo={t("1ª resposta (média)")}
-          valor={formatarDuracao(primeiraRespostaGeral(metrics.attendants))}
-          explicacao={t("ponderada pelas conversas de cada atendente")}
-        />
-      </div>
+      <IndicadoresDoTopo meta={metaDaEmpresa} estadoDaMeta={estadoDaMeta} atendentes={metrics.attendants} />
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
       {/* Acima do funil e da performance de propósito: é o número do sistema

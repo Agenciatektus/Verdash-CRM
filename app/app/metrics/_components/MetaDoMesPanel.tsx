@@ -87,7 +87,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
 
         {estado === "erro" ? (
           <ErroDoPainel
-            mensagem="Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta."
+            mensagem={t("Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta.")}
             aoTentar={aoTentar}
           />
         ) : null}

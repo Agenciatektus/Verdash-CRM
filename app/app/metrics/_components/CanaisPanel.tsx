@@ -57,7 +57,7 @@ export function CanaisPanel({ owner }: Props) {
           <CardTitle className="text-base">{t("Por canal")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <ErroDoPainel mensagem="Erro ao carregar os canais." aoTentar={() => void refetch()} recarregando={isFetching} />
+          <ErroDoPainel mensagem={t("Erro ao carregar os canais.")} aoTentar={() => void refetch()} recarregando={isFetching} />
         </CardContent>
       </Card>
     );

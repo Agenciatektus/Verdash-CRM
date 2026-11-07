@@ -85,7 +85,7 @@ export function PerdasPanel() {
   if (isError || !data)
     return (
       <ErroDoPainel
-        mensagem="Erro ao carregar o relatório de perdas."
+        mensagem={t("Erro ao carregar o relatório de perdas.")}
         aoTentar={() => void refetch()}
         recarregando={isFetching}
       />
