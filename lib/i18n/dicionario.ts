@@ -7677,6 +7677,10 @@ export const DICIONARIO: Traducoes = {
   "Token de segurança do webhook": { es: "Token de seguridad del webhook" },
   "URL do webhook (cole no MercadoPhone)": { es: "URL del webhook (pega en MercadoPhone)" },
   MercadoPhone: { es: "MercadoPhone" },
+  "Importar vendas desde (até 90 dias)": { es: "Importar ventas desde (hasta 90 días)" },
+  "Importar vendas desde": { es: "Importar ventas desde" },
+  "Faltou tempo: clique de novo para continuar.": { es: "Se acabó el tiempo: haz clic de nuevo para continuar." },
+  "{vendas} vendas e {margens} margens importadas.": { es: "{vendas} ventas y {margens} márgenes importados." },
   "Conecte o PDV da loja para trazer estoque, clientes e vendas para o CRM.": {
     es: "Conecta el PDV de la tienda para traer stock, clientes y ventas al CRM.",
   },

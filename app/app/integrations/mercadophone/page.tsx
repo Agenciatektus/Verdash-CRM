@@ -49,7 +49,7 @@ export default async function MercadoPhoneIntegrationPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ConexaoMercadoPhone conectado={conectado} isAdmin={isAdmin} />
+            <ConexaoMercadoPhone conectado={conectado} isAdmin={isAdmin} orgId={activeOrg?.orgId ?? null} />
           </CardContent>
         </Card>
       </SecaoDaPagina>

@@ -75634,6 +75634,24 @@ create trigger trg_seed_org_teto_de_ia
   after insert on public.organizations
   for each row execute function public.fn_seed_org_teto_de_ia();
 
+-- ---- organizacao nova sem Anthropic por padrao (migration 9250) ----
+-- Mesmo corpo da migration 9250, sem o backfill (o baseline reaplica a cada update e desfaria uma escolha da org).
+-- Fica DEPOIS do bloco da 9096 (que ainda define o corpo antigo) e ANTES da VARREDURA anon (cria funcao): a ultima
+-- definicao vence, e a cerca apendice-do-baseline-nao-diverge-da-cadeia compara exatamente esta com a da cadeia.
+
+create or replace function public.fn_seed_org_llm_defaults() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  if coalesce(new.settings->'llm'->>'default_model', '') = '' then
+    new.settings := jsonb_set(
+      coalesce(new.settings, '{}'::jsonb), '{llm}',
+      coalesce(new.settings->'llm', '{}'::jsonb)
+        || jsonb_build_object('provider', 'openrouter', 'default_model', 'google/gemini-2.5-flash-lite'),
+      true);
+  end if;
+  return new;
+end; $$;
+
 
 
 -- ---- claim do alerta de IA da plataforma (migration 9097) ----
@@ -84534,6 +84552,43 @@ alter table public.crm_stages
 comment on column public.crm_stages.gatilho_frases is
   'Ate 5 frases (9092). Mensagem ENVIADA pela loja que contem uma delas (sem acento nem caixa) leva o negocio aberto do contato a esta etapa; so avanca. Fala do cliente nunca aciona.';
 
+-- Mesmo bloco da migration 9240. Nao cria funcao: pode ficar depois da VARREDURA anon.
+
+-- manifest: 9240 — order_margins (custo e lucro por item vendido no MercadoPhone; só manager+ lê, escrita só service_role) — a margem não pode ir em orders.payload, que o time inteiro e as ferramentas MCP leem.
+
+create table if not exists public.order_margins (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  order_id uuid references public.orders(id) on delete set null,
+  venda_id text not null,
+  item_seq int not null,
+  produto text,
+  categoria text,
+  quantidade numeric,
+  valor_total_cents bigint not null,
+  valor_custo_cents bigint not null,
+  lucro_cents bigint not null,
+  origem text,
+  vendedor text,
+  data_venda timestamptz not null,
+  status text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint order_margins_item_key unique (organization_id, venda_id, item_seq)
+);
+
+create index if not exists order_margins_org_data_idx
+  on public.order_margins (organization_id, data_venda);
+
+alter table public.order_margins enable row level security;
+drop policy if exists order_margins_select on public.order_margins;
+create policy order_margins_select on public.order_margins
+  for select to authenticated
+  using (public.fn_role_at_least(organization_id, 'manager'));
+revoke all on public.order_margins from anon, authenticated;
+grant select on public.order_margins to authenticated;
+grant select, insert, update, delete on public.order_margins to service_role;
+
 -- ---- a linha não troca de organização em NENHUMA tabela de public (migration 9031) ----
 --
 -- A 9030 pôs trg_organizacao_nao_muda nas 52 tabelas cuja for all só exigia
@@ -84740,3 +84795,4 @@ begin
   revoke select on public.importacoes_de_historico from authenticated;
   execute format('grant select (%s) on public.importacoes_de_historico to authenticated', cols);
 end $grants_importacoes$;
+
