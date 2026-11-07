@@ -164,7 +164,7 @@ export function CadastroDoServidorMcpExterno() {
   }
 
   return (
-    <div className="flex max-w-2xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>{t("Endereço e chave")}</CardTitle>

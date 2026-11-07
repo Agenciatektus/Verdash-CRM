@@ -4,7 +4,7 @@ import { Pagina, SecaoDaPagina } from "@/components/pagina";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2, Search } from "lucide-react";
+import { ArrowLeft, CircleNotch, MagnifyingGlass } from "@/lib/ui/icons";
 
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { Button } from "@/components/ui/button";
@@ -144,7 +144,7 @@ export function NewProposalClient({
       <div className="flex items-center gap-3 mb:hidden">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/app/proposals" className="flex items-center gap-1.5 text-muted-foreground">
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-4 w-4" aria-hidden />
             <span>{t("Voltar às propostas")}</span>
           </Link>
         </Button>
@@ -187,7 +187,7 @@ export function NewProposalClient({
 
               {initialLeads.length > 5 ? (
                 <div className="relative mb-2">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" aria-hidden />
                   <Input
                     type="search"
                     placeholder={t("Filtrar negócio por título, cliente ou telefone…")}
@@ -288,7 +288,7 @@ export function NewProposalClient({
             >
               {criando ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <CircleNotch className="mr-2 h-4 w-4 animate-spin" />
                   {t("Criando proposta…")}
                 </>
               ) : (
