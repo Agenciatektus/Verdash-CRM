@@ -49,6 +49,7 @@ import { audit } from "@/lib/audit";
 import {
   LlmNotConfiguredError,
   resolveOrgLlmConfig,
+  resolverReservaDaAssinatura,
   temChaveDeReserva,
 } from "@/lib/agent-engine/edge/llm/credentials";
 import {
@@ -297,6 +298,18 @@ describe("2. resolveOrgLlmConfig: assinatura → reserva → erro antigo", () =>
     // Com a chave vinda do `.env` da instalação a resposta também é `true`:
     // a reserva é a escada INTEIRA, não só a linha da empresa.
     expect(await temChaveDeReserva(semChave.pool, cfgComReserva, ORG)).toBe(true);
+  });
+
+  it("sem chave OpenAI, o OpenRouter da instalação é a reserva (e sem ele, humano)", async () => {
+    const semChave = poolDaOrg({ credenciais: [] });
+    const cfgSoOpenRouter = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA } as never;
+    const reserva = await resolverReservaDaAssinatura(semChave.pool, cfgSoOpenRouter, ORG);
+    expect(reserva?.provider).toBe("openrouter");
+    expect(await temChaveDeReserva(semChave.pool, cfgSoOpenRouter, ORG)).toBe(true);
+    expect(await resolverReservaDaAssinatura(semChave.pool, cfg, ORG)).toBeNull();
+    // Chave OpenAI continua na frente do roteador quando existe.
+    const comAmbas = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA, ["openai" + "ApiKey"]: CHAVE_SENTINELA } as never;
+    expect((await resolverReservaDaAssinatura(semChave.pool, comAmbas, ORG))?.provider).toBe("openai");
   });
 });
 

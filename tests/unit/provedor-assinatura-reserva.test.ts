@@ -22,6 +22,7 @@ import {
   classificarFalhaDaAssinatura,
   decidirQuedaDaAssinatura,
   decidirQuedaDoProvedor,
+  modeloNaReserva,
   provedorDeReserva,
   type DecisaoDaQueda,
   type MotivoDaQueda,
@@ -199,5 +200,15 @@ describe("a reserva é um par declarado, e a queda é assimétrica", () => {
     expect(provedorDeReserva("openai")).toBeNull();
     expect(provedorDeReserva("anthropic")).toBeNull();
     expect(provedorDeReserva("custom")).toBeNull();
+  });
+});
+
+describe("modeloNaReserva — o id que a reserva fala", () => {
+  it("no roteador, o id da assinatura ganha o prefixo do fabricante", () => {
+    expect(modeloNaReserva("openrouter", "gpt-6-luna")).toBe("openai/gpt-6-luna");
+  });
+  it("id que já traz rota e a reserva direta na OpenAI não mudam", () => {
+    expect(modeloNaReserva("openrouter", "openai/gpt-6-luna")).toBe("openai/gpt-6-luna");
+    expect(modeloNaReserva("openai", "gpt-6-luna")).toBe("gpt-6-luna");
   });
 });
