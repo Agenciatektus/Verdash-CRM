@@ -16,6 +16,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 
 import { env } from "@/lib/env";
+import { comPrivacidadeDoOpenRouter } from "@/lib/agent-engine/edge/llm/providers";
 
 /** Endpoint da OpenRouter. Compatível com a API da OpenAI, então o provider
  *  `@ai-sdk/openai` fala com ela sem dependência nova. */
@@ -78,9 +79,11 @@ export function resolveLanguageModel(model: ModelId): LanguageModel | null {
   if (gatewayConfig()) return id as LanguageModel;
 
   if (env.OPENROUTER_API_KEY) {
+    const baseURL = env.OPENROUTER_BASE_URL || OPENROUTER_BASE_URL;
     return createOpenAI({
       apiKey: env.OPENROUTER_API_KEY,
-      baseURL: env.OPENROUTER_BASE_URL || OPENROUTER_BASE_URL,
+      baseURL,
+      fetch: comPrivacidadeDoOpenRouter(globalThis.fetch, baseURL),
     }).chat(id); // chat/completions, como o registry do worker (providers.ts)
   }
 
