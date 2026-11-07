@@ -34,3 +34,27 @@ describe('OpenRouter sem coleta de dados', () => {
     expect(b.vistos[0]!.body).toBe('não é json');
   });
 });
+
+describe('ligação no registry (tirar o wrapper reprova)', () => {
+  it('a fábrica openrouter do registry envia data_collection=deny', async () => {
+    const { createDefaultRegistry } = await import('@/lib/agent-engine/edge/llm/providers');
+    const vistos: string[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_i: unknown, init?: RequestInit) => {
+      vistos.push(String(init?.body));
+      return new Response('{}', { status: 500 });
+    }) as unknown as typeof fetch;
+    try {
+      const modelo = createDefaultRegistry().openrouter!('sk-teste', 'openai/gpt-6-luna');
+      try {
+        await (modelo as unknown as { doGenerate: (o: unknown) => Promise<unknown> }).doGenerate({ prompt: [{ role: 'user', content: [{ type: 'text', text: 'oi' }] }] });
+      } catch {
+        // o 500 do espião é esperado; só o corpo enviado importa
+      }
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(vistos.length).toBeGreaterThan(0);
+    expect(JSON.parse(vistos[0]!).provider).toEqual({ data_collection: 'deny' });
+  });
+});
