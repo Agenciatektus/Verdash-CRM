@@ -14,6 +14,7 @@ import { DotsThree } from "@/lib/ui/icons";
  * O menu ⋯ de uma linha: Cor, Renomear, Juntar e Excluir num botão só (os quatro
  * lado a lado empilhavam no tablet e a tabela passava da borda). A `cliente`
  * reservada pelo sistema só aceita Cor, pelo mesmo motivo de antes.
+ * `modal={false}`: menu modal que abre diálogo deixa pointer-events:none no body.
  */
 export function MenuDaLinha({
   tag,
@@ -27,7 +28,7 @@ export function MenuDaLinha({
   aoEscolher: (acao: AcaoDeVocabulario) => void;
 }) {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button size="sm" variant="ghost" className="mb:min-h-(--mb-alvo) mb:min-w-(--mb-alvo)" aria-label={`${t("Ações da etiqueta")} ${tag}`}>
           <DotsThree size={18} aria-hidden />

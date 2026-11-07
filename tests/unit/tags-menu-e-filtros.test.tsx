@@ -79,4 +79,14 @@ describe("filtros e lote", () => {
     fireEvent.click(screen.getByLabelText("Selecionar vip"));
     expect(document.querySelector("[data-lote-de-etiquetas]")).toBeNull();
   });
+
+  it("trocar de filtro limpa a seleção: a barra não age em etiqueta escondida", () => {
+    montar();
+    fireEvent.click(screen.getByLabelText("Selecionar vip"));
+    expect(document.querySelector("[data-lote-de-etiquetas]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Fora do vocabulário" }));
+    expect(document.querySelector("[data-lote-de-etiquetas]")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Selecionar todas as etiquetas"));
+    expect(document.querySelector("[data-lote-de-etiquetas]")).toHaveAttribute("data-lote-de-etiquetas", "1");
+  });
 });

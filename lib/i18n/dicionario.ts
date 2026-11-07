@@ -16713,6 +16713,7 @@ export const DICIONARIO: Traducoes = {
   "Etiqueta acrescentada.": { es: "Etiqueta añadida." },
   "Acrescentar": { es: "Añadir" },
   "Nova etiqueta": { es: "Nueva etiqueta" },
+  "Nenhuma etiqueta deste tipo nesta página.": { es: "Ninguna etiqueta de este tipo en esta página." },
   "Fora do vocabulário": { es: "Fuera del vocabulario" },
   "Sugeridas": { es: "Sugeridas" },
   "Em uso": { es: "En uso" },

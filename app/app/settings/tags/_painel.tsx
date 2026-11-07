@@ -173,7 +173,12 @@ export function PainelDeTags({
   // A SELEÇÃO do lote, por nome canônico (a mesma régua do banco): "VIP" e
   // "vip" são a mesma etiqueta.
   const [marcadas, setMarcadas] = useState<Set<string>>(() => new Set());
-  const [filtro, setFiltro] = useState<"todas" | "fora" | "sugeridas">("todas");
+  const [filtro, setFiltroSemLimpar] = useState<"todas" | "fora" | "sugeridas">("todas");
+  // Trocar de filtro limpa a seleção: a barra de lote só age no que está à vista.
+  const setFiltro = (novo: typeof filtro) => {
+    setFiltroSemLimpar(novo);
+    setMarcadas(new Set());
+  };
 
   const destinos = useMemo(
     () =>
@@ -559,7 +564,9 @@ export function PainelDeTags({
         </Table>
         {visiveis.length === 0 && (
           <p className="border-t border-border/60 p-3 text-sm text-muted-foreground">
-            {t("Nenhuma etiqueta encontrada.")}
+            {paginado && filtro !== "todas"
+              ? t("Nenhuma etiqueta deste tipo nesta página.")
+              : t("Nenhuma etiqueta encontrada.")}
           </p>
         )}
         {!paginado && tags.length >= TETO_DA_LISTA && (

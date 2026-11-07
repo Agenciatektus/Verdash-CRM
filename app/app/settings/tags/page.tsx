@@ -41,7 +41,7 @@ import { tagsInternasDaOrg } from "@/lib/schemas/settings";
 import { createClient } from "@/lib/supabase/server";
 
 import { PainelDeTags } from "./_painel";
-import { NovaEtiqueta } from "./_sugestoes";
+import { NovaEtiqueta } from "./_nova-etiqueta";
 import { TagsInternasForm } from "./_tags-internas-form";
 
 export const metadata = { title: "Etiquetas" };
