@@ -431,6 +431,32 @@ describe("4. a queda no runModelCall: a reserva responde e o log conta quem", ()
     );
   });
 
+  it("sem chave OpenAI, a assinatura falha (429) e a reserva é o OpenRouter com id prefixado", async () => {
+    (estado.fake as FakeSupabase).linha = linhaDoLogin();
+    const { pool } = poolDoSeam(PROVEDOR_POR_ASSINATURA);
+    const idsRecebidos: string[] = [];
+    const registro = {
+      [PROVEDOR_POR_ASSINATURA]: registroQueFalha(erroDeLimite()),
+      openrouter: (apiKey: string, modelId: string, baseUrl?: string) => {
+        idsRecebidos.push(modelId);
+        return (registroOk as never as (k: string, m: string, b?: string) => unknown)(apiKey, modelId, baseUrl);
+      },
+      anthropic: registroOk,
+      fake: registroOk,
+    } as never;
+    const cfgSoOpenRouter = { cacheTtl: "1h", openrouterApiKey: CHAVE_SENTINELA } as never;
+
+    const r = await runModelCall(
+      pool,
+      cfgSoOpenRouter,
+      { tenantId: ORG, purpose: "agent_turn", messages: [{ role: "user", content: "oi" }] },
+      { registry: registro },
+    );
+
+    expect(r.provider).toBe("openrouter");
+    expect(idsRecebidos).toEqual(["openai/gpt-5-teste"]);
+  });
+
   it("provedor SEM reserva continua falhando como sempre (o freio é por provedor)", async () => {
     const { pool, inserts } = poolDoSeam("anthropic");
     const registro = {
