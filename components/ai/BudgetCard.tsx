@@ -33,7 +33,9 @@ import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
  */
 import { useEffect, useState } from "react";
 
+import { Aviso } from "@/components/ui/aviso";
 import { Badge } from "@/components/ui/badge";
+import { BarraDeProgresso } from "@/components/ui/barra-de-progresso";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -200,37 +202,23 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       </div>
 
       {chave && (
-        <p className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200">
+        <Aviso tom="warn" className="mt-3">
           {chave}
-        </p>
+        </Aviso>
       )}
 
       {status.gasto_incompleto && (
-        <p
-          data-testid="aviso-medicao-incompleta"
-          className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200"
-        >
-          {t(AVISO_DE_MEDICAO)}
-        </p>
+        <Aviso tom="warn" className="mt-3">
+          <span data-testid="aviso-medicao-incompleta">{t(AVISO_DE_MEDICAO)}</span>
+        </Aviso>
       )}
 
       <div className="mt-4 space-y-2">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full transition-all ${
-              status.pct >= 100
-                ? "bg-destructive"
-                : status.pct >= status.alarm_threshold_pct
-                  ? "bg-amber-500"
-                  : "bg-primary"
-            }`}
-            style={{ width: `${pct}%` }}
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            role="progressbar"
-          />
-        </div>
+        <BarraDeProgresso
+          valor={pct}
+          rotulo={t("Orçamento mensal de IA")}
+          tom={status.pct >= 100 ? "crit" : status.pct >= status.alarm_threshold_pct ? "warn" : "marca"}
+        />
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span>
             <strong>{fmtCents(consumed)}</strong>
@@ -302,7 +290,7 @@ function OpcaoDeModo({
         <span className="block text-sm font-medium">{titulo}</span>
         <span className="block text-xs text-muted-foreground">{corpo}</span>
         {disabled && motivoBloqueado && (
-          <span className="block text-xs text-amber-700 dark:text-amber-300">
+          <span className="block text-xs text-warning-fg">
             {motivoBloqueado}
           </span>
         )}
@@ -481,7 +469,7 @@ function EditBudgetDialog({ status }: { status: BudgetStatus }) {
           )}
 
           {armando && (
-            <div className="space-y-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="space-y-1.5 rounded-lg border bg-warning-bg p-3">
               <p className="text-xs">
                 {t("A parada começa a valer")} <strong>72 {t("horas")}</strong> {t("depois de salvar. É o tempo de você ver o aviso chegar antes que alguma conversa pare.")}
               </p>

@@ -6,7 +6,10 @@ import { AbasDaInbox, type AbaComContagem } from "@/components/inbox/filtros/Aba
 import type { InboxTab } from "@/components/inbox/InboxFilters";
 import { MetaDaConversa } from "@/components/inbox/item/MetaDaConversa";
 import { Badge } from "@/components/ui/badge";
+import { BarraDeProgresso } from "@/components/ui/barra-de-progresso";
+import { CartaoDeIndicador } from "@/components/ui/cartao-de-indicador";
 import { Chip } from "@/components/ui/chip";
+import { Pilula } from "@/components/ui/pilula";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useT } from "@/hooks/i18n/useT";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
@@ -74,6 +77,25 @@ export function SecaoMarcadores({ tema }: { tema: Tema }) {
             { rotulo: t("Tarefa atrasada"), no: <MetaDaConversa conversation={conversa({ passo_da_conversa: "atrasada" })} comando={ATENDENTE} meuUserId="eu" rotuloCanal={null} /> },
           ]}
         />
+      </Exemplo>
+      <Exemplo nome="Pilula" mapa="comp:pilula" tema={tema}>
+        <Estados
+          itens={[
+            { rotulo: t("Neutro"), no: <Pilula>{t("Rascunho")}</Pilula> },
+            { rotulo: "Info", no: <Pilula tom="info">{t("Em teste")}</Pilula> },
+            { rotulo: "Ok", no: <Pilula tom="ok">{t("Ativo")}</Pilula> },
+            { rotulo: "Warn", no: <Pilula tom="warn">{t("Perto do limite")}</Pilula> },
+            { rotulo: "Crit", no: <Pilula tom="crit">{t("Parado")}</Pilula> },
+          ]}
+        />
+      </Exemplo>
+      <Exemplo nome="CartaoDeIndicador" mapa="comp:card" tema={tema}>
+        <div className="grid grid-cols-2 gap-3">
+          <CartaoDeIndicador rotulo={t("Custo no período")} valor="US$ 38,20" explicacao={t("últimos 30 dias")} />
+          <CartaoDeIndicador rotulo={t("Orçamento mensal de IA")} valor="38%">
+            <BarraDeProgresso valor={38} rotulo={t("Orçamento mensal de IA")} />
+          </CartaoDeIndicador>
+        </div>
       </Exemplo>
       <Exemplo nome="Badge" mapa="comp:badge" tema={tema}>
         <div className="flex flex-wrap gap-2">

@@ -86,7 +86,7 @@ export function UsageChart({ payload }: Props) {
   const hasHandoff = handoffData.some((p) => p.pct > 0);
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <ChartCard title={t("Quanto gastou por dia (US$)")}>
         {!hasCost ? (
           <EmptyChart />

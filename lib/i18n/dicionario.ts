@@ -4976,6 +4976,11 @@ export const DICIONARIO: Traducoes = {
   },
   "Só acompanhar": { es: "Solo monitorear" },
   "Tentar de novo": { es: "Intentar de nuevo" },
+  "Não consegui carregar o uso de IA": { es: "No pude cargar el uso de IA" },
+  Neutro: { es: "Neutro" },
+  "Em teste": { es: "En prueba" },
+  "Perto do limite": { es: "Cerca del límite" },
+  "últimos 30 dias": { es: "últimos 30 días" },
   "Tipo de uso": { es: "Tipo de uso" },
   "Todos os números desta página são só deste intervalo. Mude as datas para comparar um mês com o outro.": {
     es: "Todos los números de esta página corresponden solo a este intervalo. Cambia las fechas para comparar un mes con otro.",

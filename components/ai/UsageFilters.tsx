@@ -8,8 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
+import { Chip } from "@/components/ui/chip";
 import { CampoDeData } from "@/components/ui/campo-de-data";
+import { Label } from "@/components/ui/label";
+import { BarraDeFiltros } from "@/components/pagina";
 import { useT } from "@/hooks/i18n/useT";
 import { PONTO_POR_ID } from "@/lib/ai/pontos/registro";
 
@@ -32,6 +34,17 @@ interface Props {
 
 const ALL_AGENTS = "all";
 const DEBOUNCE_MS = 300;
+const PERIODOS = [
+  { dias: 7, rotulo: "7 dias" },
+  { dias: 30, rotulo: "30 dias" },
+  { dias: 90, rotulo: "90 dias" },
+] as const;
+const PADRAO_DIAS = 30;
+
+/** O `from` (dia UTC, como a rota lê) que faz do período os últimos N dias, hoje incluído. */
+function desdeDe(dias: number): string {
+  return new Date(Date.now() - (dias - 1) * 86_400_000).toISOString().slice(0, 10);
+}
 
 export function UsageFilters({ agents, kinds, initial }: Props) {
   const t = useT();
@@ -42,6 +55,20 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
   const [kind, setKind] = useState<string>(initial.invocation_kind ?? "all");
   const [from, setFrom] = useState<string>(initial.from ?? "");
   const [to, setTo] = useState<string>(initial.to ?? "");
+  // Link com intervalo que nenhum chip reproduz acende "Personalizado" e mostra De/Até.
+  const [personalizado, setPersonalizado] = useState<boolean>(
+    !!initial.to || (!!initial.from && !PERIODOS.some((p) => desdeDe(p.dias) === initial.from)),
+  );
+  const diasAtivos = personalizado
+    ? undefined
+    : !from
+      ? PADRAO_DIAS
+      : PERIODOS.find((p) => desdeDe(p.dias) === from)?.dias;
+  const escolherPeriodo = (dias: number) => {
+    setPersonalizado(false);
+    setFrom(dias === PADRAO_DIAS ? "" : desdeDe(dias));
+    setTo("");
+  };
 
   // A lista era fixa e quase toda de nomes que `llm_calls.purpose` não tem
   // (`sentiment_check`, `embed_chunk`...): escolher um desses devolvia zero. O escolhido entra
@@ -82,12 +109,40 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
   }, [agentId, kind, from, to]);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">{t("Agente")}</Label>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("Período")}>
+        {PERIODOS.map((p) => (
+          <Chip key={p.dias} ligado={diasAtivos === p.dias} onClick={() => escolherPeriodo(p.dias)}>
+            {t(p.rotulo)}
+          </Chip>
+        ))}
+        <Chip ligado={personalizado} onClick={() => setPersonalizado(true)}>
+          {t("Personalizado")}
+        </Chip>
+      </div>
+      {personalizado && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="usage-from" className="text-xs text-muted-foreground">
+              {t("De")}
+            </Label>
+            <CampoDeData tipo="date" id="usage-from" value={from} onValorChange={setFrom} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="usage-to" className="text-xs text-muted-foreground">
+              {t("Até")}
+            </Label>
+            <CampoDeData tipo="date" id="usage-to" value={to} onValorChange={setTo} />
+          </div>
+        </div>
+      )}
+      <BarraDeFiltros ativos={Number(agentId !== ALL_AGENTS) + Number(kind !== "all")}>
         <Select value={agentId} onValueChange={setAgentId}>
-          <SelectTrigger>
-            <SelectValue />
+          <SelectTrigger aria-label={t("Agente")} className="sm:w-60">
+            <span>
+              <span className="text-subtle" aria-hidden="true">{t("Agente")}:</span>{" "}
+              <SelectValue />
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL_AGENTS}>{t("Todos")}</SelectItem>
@@ -98,13 +153,12 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="space-y-1">
-        <Label className="text-xs text-muted-foreground">{t("Tipo de uso")}</Label>
         <Select value={kind} onValueChange={setKind}>
-          <SelectTrigger>
-            <SelectValue />
+          <SelectTrigger aria-label={t("Tipo de uso")} className="sm:w-72">
+            <span>
+              <span className="text-subtle" aria-hidden="true">{t("Tipo de uso")}:</span>{" "}
+              <SelectValue />
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("Todas")}</SelectItem>
@@ -115,27 +169,7 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
             ))}
           </SelectContent>
         </Select>
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="usage-from" className="text-xs text-muted-foreground">
-          {t("De")}
-        </Label>
-        <CampoDeData tipo="date"
-          id="usage-from"
-          value={from}
-          onValorChange={(valorEscolhido) => setFrom(valorEscolhido)} />
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="usage-to" className="text-xs text-muted-foreground">
-          {t("Até")}
-        </Label>
-        <CampoDeData tipo="date"
-          id="usage-to"
-          value={to}
-          onValorChange={(valorEscolhido) => setTo(valorEscolhido)} />
-      </div>
+      </BarraDeFiltros>
     </div>
   );
 }

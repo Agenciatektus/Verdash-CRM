@@ -112,6 +112,23 @@ describe("UsageFilters — Tipo de uso", () => {
   });
 });
 
+describe("UsageFilters — Personalizado", () => {
+  it("link com from/to customizado acende o chip e mostra De/Até", () => {
+    render(<UsageFilters agents={[]} kinds={[]} initial={{ from: "2026-01-01", to: "2026-01-31" }} />);
+
+    expect(screen.getByRole("button", { name: "Personalizado" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("De")).toBeInTheDocument();
+    expect(screen.getByLabelText("Até")).toBeInTheDocument();
+  });
+
+  it("sem intervalo, 30 dias fica aceso e De/Até escondidos", () => {
+    render(<UsageFilters agents={[]} kinds={[]} initial={{}} />);
+
+    expect(screen.getByRole("button", { name: "30 dias" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByLabelText("De")).toBeNull();
+  });
+});
+
 describe("UsageDashboardClient — as opções não encolhem ao filtrar", () => {
   it("com um tipo escolhido, os outros tipos do período continuam oferecidos", { timeout: TETO_MS }, async () => {
     busca = "invocation_kind=stage_classifier";
