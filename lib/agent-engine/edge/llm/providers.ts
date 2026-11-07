@@ -166,6 +166,43 @@ function comRaciocinioDesligado(inner: typeof fetch): typeof fetch {
 }
 
 /**
+ * Privacidade nas chamadas ao OpenRouter: `provider.data_collection = 'deny'`
+ * manda o roteador usar só provedores que NÃO guardam nem treinam com o prompt.
+ * O prompt do CRM carrega conversa de cliente final; sem este campo o roteador
+ * pode escolher um provedor que retém o texto.
+ *
+ * Só no endereço canônico (`openrouter.ai`): um gateway próprio do operador pode
+ * recusar campo que não conhece. Um `provider` já presente no corpo é preservado
+ * e só ganha `data_collection` se não trouxe o seu. Corpo não-JSON passa intacto.
+ */
+export function comPrivacidadeDoOpenRouter(inner: typeof fetch, endpoint: string): typeof fetch {
+  let ehOpenRouter = false;
+  try {
+    ehOpenRouter = new URL(endpoint).hostname === 'openrouter.ai';
+  } catch {
+    ehOpenRouter = false;
+  }
+  if (!ehOpenRouter) return inner;
+  return (input, init) => {
+    const corpo = init?.body;
+    if (typeof corpo === 'string') {
+      try {
+        const json = JSON.parse(corpo) as Record<string, unknown>;
+        const bruto = json['provider'];
+        const provider = bruto !== null && typeof bruto === 'object' ? (bruto as Record<string, unknown>) : {};
+        return inner(input, {
+          ...init,
+          body: JSON.stringify({ ...json, provider: { data_collection: 'deny', ...provider } }),
+        });
+      } catch {
+        // Corpo não-JSON: repassa intacto.
+      }
+    }
+    return inner(input, init);
+  };
+}
+
+/**
  * Esforço de raciocínio das chamadas DIRETAS à OpenAI — knob
  * OPENAI_REASONING_EFFORT (opcional; ausente = nada é injetado e vale o padrão
  * do modelo).
@@ -347,7 +384,7 @@ export function createDefaultRegistry(opts?: {
         apiKey,
         baseURL: endpoint,
         headers: cabecalhosDeAtribuicaoOpenRouter(),
-        fetch: contain(endpoint),
+        fetch: comPrivacidadeDoOpenRouter(contain(endpoint), endpoint),
       });
       // Chat Completions, NÃO Responses: a OpenRouter fala a API da OpenAI
       // (chat/completions). O `createOpenAI()(modelId)` desta versão do SDK usa
