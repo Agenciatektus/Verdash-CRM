@@ -310,7 +310,9 @@ export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: 
           operação (rodízio #1330). Fora do filtro de atendente a RLS é quem
           escopa: agent vê as próprias conversas, manager+ a organização. */}
       <CanaisPanel owner={selectedOwner} />
-      <SeriePanel />
+      <div className="lg:col-span-2">
+        <SeriePanel />
+      </div>
       </div>
     </div>,
   );
