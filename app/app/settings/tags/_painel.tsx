@@ -516,7 +516,7 @@ export function PainelDeTags({
                 </TableCell>
                 <TableCell
                   data-rotulo={t("Em uso")}
-                  className="p-3 tabular-nums lg:hidden"
+                  className="p-3 whitespace-nowrap tabular-nums lg:hidden"
                   title={`${t("Contatos")} / ${t("Leads")} / ${t("Conversas")}`}
                 >
                   {linha.uso_em_contatos} / {linha.uso_em_leads} / {linha.uso_em_conversas}
