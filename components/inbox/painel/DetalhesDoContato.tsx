@@ -13,16 +13,16 @@ import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
 import type { ContactPatch } from "@/lib/schemas/contacts";
 import { PencilSimple, UserCircle } from "@/lib/ui/icons";
 
-type Campo = "display_name" | "email" | "birthdate";
+type Campo = "name" | "email" | "birthdate";
 
 /** O rótulo de cada campo editável, na ordem em que a ficha os mostra. */
 const ROTULO_DO_CAMPO: Record<Campo, string> = {
-  display_name: "Nome",
+  name: "Nome",
   email: "E-mail",
   birthdate: "Data de nascimento",
 };
 const CAMPOS = Object.keys(ROTULO_DO_CAMPO) as Campo[];
-const TIPO_DO_INPUT: Record<Campo, string> = { display_name: "text", email: "email", birthdate: "date" };
+const TIPO_DO_INPUT: Record<Campo, string> = { name: "text", email: "email", birthdate: "date" };
 
 interface Props {
   contactId: string | null;
@@ -59,12 +59,11 @@ export const DetalhesDoContato = forwardRef<HTMLElement, Props>(function Detalhe
 
   const dados = contato.data?.data;
   const atual = (c: Campo): string => {
-    if (c === "display_name") {
-      // O campo edita o apelido GUARDADO. Sem apelido, o ponto de partida é o nome
-      // de gente pela regra única (`nomeDoContato`), nunca uma cadeia montada aqui:
-      // `tests/unit/rotulo-do-contato.test.ts` reprova a sétima cópia dela.
-      const guardado = typeof dados?.display_name === "string" ? dados.display_name.trim() : "";
-      if (guardado !== "") return guardado;
+    if (c === "name") {
+      // O campo edita o nome ESCOLHIDO (`name`, o mesmo do "Editar contato") e
+      // mostra o nome de gente pela regra única (`nomeDoContato`): o escolhido
+      // vence o perfil do WhatsApp (#907). Editar `display_name` aqui deixava o
+      // pushName à vista depois de a pessoa renomear o contato na ficha.
       return nomeDoContato(dados) ?? nomeDaConversa ?? "";
     }
     return (dados?.[c] as string | null | undefined) ?? "";
