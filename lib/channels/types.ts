@@ -153,6 +153,13 @@ export interface OutboundContact {
 export interface ChannelGroup {
   chatId: string;
   subject: string | null;
+  /** Campos do diretório: só presentes quando o transporte os informa. Nunca há participantes aqui. */
+  participantCount?: number | null;
+  adminCount?: number;
+  /** Papel DESTE número no grupo; `null` = não se sabe. */
+  papel?: "dono" | "admin" | "membro" | null;
+  isAnnounce?: boolean;
+  tipo?: "grupo" | "comunidade" | "grupo_da_comunidade";
 }
 
 /**
@@ -519,6 +526,8 @@ export interface ChannelAdapter {
 
   /** Grupos do número. Ausente = o canal não lista grupos. */
   listGroups?(input: ChannelTenantScope & { sessionRef: string }): Promise<ChannelGroup[]>;
+  /** Gestão de UM grupo (painel da inbox): ação já validada por `lib/grupos/acoes.ts`. LANÇA `GrupoAcaoError`. */
+  groupAction?(input: ChannelTenantScope & { sessionRef: string; entrada: Record<string, unknown>; chamada: unknown }): Promise<unknown>;
 
   /** Liga/desliga o recebimento de grupos na sessão; `true` só com a troca confirmada. */
   setGroupIntake?(input: { sessionRef: string; receive: boolean }): Promise<boolean>;

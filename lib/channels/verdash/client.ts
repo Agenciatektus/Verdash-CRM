@@ -24,6 +24,8 @@
  */
 import { assertDestinoResolvidoSeguro } from "@/lib/automation/outbound-ip";
 import { samePhone } from "@/lib/channels/phone-variants";
+import type { ChannelGroup } from "@/lib/channels/types";
+import { GrupoAcaoError, infoDoGrupo, type PedidoAoFzap } from "@/lib/grupos/acoes";
 import { assertSafeOutboundUrl } from "@/lib/automation/outbound-url";
 
 import { verdashFunctionsUrl } from "./credentials";
@@ -606,7 +608,7 @@ const JID_DE_GRUPO = /^[\d-]+@g\.us$/;
  * O FZAP muda o envelope entre versões (`data: [...]`, `data.Groups`, `data.groups`) e o nome
  * entre `Name`/`name`; o que não for JID de grupo fica de fora.
  */
-export function gruposDaLista(data: unknown): Array<{ chatId: string; subject: string | null }> {
+export function gruposDaLista(data: unknown): ChannelGroup[] {
   const d = data as Record<string, unknown> | unknown[] | null;
   const lista = Array.isArray(d)
     ? d
@@ -615,21 +617,50 @@ export function gruposDaLista(data: unknown): Array<{ chatId: string; subject: s
       : Array.isArray(d?.Groups)
         ? (d.Groups as unknown[])
         : [];
-  const out: Array<{ chatId: string; subject: string | null }> = [];
+  const out: ChannelGroup[] = [];
   for (const item of lista) {
     const g = (item ?? {}) as Record<string, unknown>;
     const chatId = String(g.chatId ?? g.JID ?? g.jid ?? "");
     if (!JID_DE_GRUPO.test(chatId)) continue;
     const nome = String(g.subject ?? g.Name ?? g.name ?? "").trim().slice(0, 200);
-    out.push({ chatId, subject: nome || null });
+    out.push({ chatId, subject: nome || null, ...detalhesDoGrupo(g) });
   }
   return out;
 }
 
+/**
+ * Contagens, papel e tipo. Pareado, a Verdash já devolve pronto (`adminCount`, `tipo`…);
+ * direto, vêm do FZAP cru e saem dos participantes, pela mesma regra do `crm-listar-grupos`.
+ * Os participantes são lidos só para contar: nunca saem desta função. No modo direto o
+ * telefone da sessão não está à mão, então `papel` fica `null`.
+ */
+function detalhesDoGrupo(g: Record<string, unknown>): Omit<ChannelGroup, "chatId" | "subject"> {
+  const gente = (Array.isArray(g.participants) ? g.participants : Array.isArray(g.Participants) ? g.Participants : []) as Array<
+    Record<string, unknown>
+  >;
+  const ehAdmin = (p: Record<string, unknown>) =>
+    p.isSuperAdmin === true || p.IsSuperAdmin === true || p.isAdmin === true || p.IsAdmin === true;
+  const total = g.participantCount ?? g.ParticipantCount;
+  const pai = String(g.linkedParentJid ?? g.LinkedParentJID ?? "");
+  const tipo =
+    g.tipo === "grupo" || g.tipo === "comunidade" || g.tipo === "grupo_da_comunidade"
+      ? g.tipo
+      : g.isParent === true || g.IsParent === true
+        ? "comunidade"
+        : pai.endsWith("@g.us")
+          ? "grupo_da_comunidade"
+          : "grupo";
+  return {
+    participantCount: typeof total === "number" ? total : gente.length || null,
+    adminCount: typeof g.adminCount === "number" ? g.adminCount : gente.filter(ehAdmin).length,
+    papel: g.papel === "dono" || g.papel === "admin" || g.papel === "membro" ? g.papel : null,
+    isAnnounce: g.isAnnounce === true || g.IsAnnounce === true,
+    tipo,
+  };
+}
+
 /** Grupos do número. Pareado pergunta à Verdash (o token daqui não vale no FZAP); direto, ao FZAP. */
-export async function verdashListarGrupos(
-  creds: VerdashCredentials,
-): Promise<Array<{ chatId: string; subject: string | null }>> {
+export async function verdashListarGrupos(creds: VerdashCredentials): Promise<ChannelGroup[]> {
   // 35 s: o `/group/list` traz todos os participantes (vários MB num número comercial).
   if (!creds.vinculoId) return gruposDaLista(await fzapRequest(creds, "/group/list", { method: "GET", timeoutMs: 35_000 }));
 
@@ -654,4 +685,65 @@ export async function verdashListarGrupos(
     throw new Error(`verdash_request_failed: ${res.status} ${json?.error ?? ""}`.trim());
   }
   return gruposDaLista(json.data?.groups);
+}
+
+/**
+ * Uma ação de gestão sobre UM grupo (`lib/grupos/acoes.ts`). `chamada` já vem validada.
+ * Pareado pergunta à edge `crm-grupo-acao` (a resposta do `info` já vem pronta); direto fala com o FZAP.
+ * LANÇA `GrupoAcaoError`.
+ */
+export async function verdashGrupoAcao(
+  creds: VerdashCredentials,
+  entrada: Record<string, unknown>,
+  chamada: PedidoAoFzap,
+): Promise<unknown> {
+  try {
+    if (creds.vinculoId) return await grupoAcaoPareada(creds, entrada);
+    const dados = await fzapRequest<Record<string, unknown>>(creds, chamada.rota, {
+      method: chamada.method,
+      body: chamada.corpo,
+    });
+    if (entrada.acao === "info") {
+      const status = await fzapRequest<{ jid?: string }>(creds, "/session/status", { method: "GET", timeoutMs: 10_000 }).catch(() => null);
+      return infoDoGrupo(dados ?? {}, String(status?.jid ?? "").split(/[:@]/)[0]!.replace(/\D/g, ""));
+    }
+    if (entrada.acao === "link") {
+      return { link: String(dados?.inviteLink ?? dados?.InviteLink ?? dados?.link ?? "") || null };
+    }
+    return { ok: true };
+  } catch (err) {
+    throw erroDoFzap(err);
+  }
+}
+
+async function grupoAcaoPareada(creds: VerdashCredentials, entrada: Record<string, unknown>): Promise<unknown> {
+  const res = await fetch(`${verdashFunctionsUrl().replace(/\/+$/, "")}/crm-grupo-acao`, {
+    method: "POST",
+    headers: { "x-crm-token": creds.token, "Content-Type": "application/json" },
+    body: JSON.stringify(entrada),
+    signal: AbortSignal.timeout(35_000),
+  });
+  const json = (await res.json().catch(() => null)) as { success?: boolean; error?: string; motivo?: string; data?: unknown } | null;
+  if (res.ok && json?.success === true) return json.data;
+  if (json?.error === "whatsapp_recusou") throw new GrupoAcaoError("whatsapp_recusou", String(json.motivo ?? "").slice(0, 200));
+  if (json?.error === "instancia_desconectada" || json?.error === "fzap_timeout" || json?.error === "fzap_indisponivel") {
+    throw new GrupoAcaoError(json.error);
+  }
+  throw new GrupoAcaoError("erro_interno");
+}
+
+/** O texto que o fzapRequest lança (`verdash_request_failed: 422 motivo`) vira o erro tipado. */
+export function erroDoFzap(err: unknown): GrupoAcaoError {
+  if (err instanceof GrupoAcaoError) return err;
+  const msg = err instanceof Error ? err.message : String(err);
+  const m = /^verdash_request_failed: (\d{3})\s*(.*)$/s.exec(msg);
+  if (m) {
+    const status = Number(m[1]);
+    // 401/403 é o FZAP recusando o token da instância (deslogada/revogada), não regra do WhatsApp.
+    if (status === 401 || status === 403) return new GrupoAcaoError("instancia_desconectada");
+    if (status >= 500) return new GrupoAcaoError("fzap_indisponivel");
+    return new GrupoAcaoError("whatsapp_recusou", m[2]!.slice(0, 200));
+  }
+  if (/timeout|aborted/i.test(msg)) return new GrupoAcaoError("fzap_timeout");
+  return new GrupoAcaoError("erro_interno");
 }

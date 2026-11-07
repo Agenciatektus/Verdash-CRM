@@ -34,10 +34,20 @@ describe("grupos do número", () => {
   });
   it("lista os grupos com a organização da sessão, nunca do body", async () => {
     autorizado();
-    vi.mocked(listarGruposDoNumero).mockResolvedValue([{ chatId: "1@g.us", subject: "A", enabled: false, enabledAt: null, presente: true, iaResponde: false }]);
-    const res = await GET(new NextRequest("http://x"), ctx);
+    vi.mocked(listarGruposDoNumero).mockResolvedValue({
+      grupos: [{ chatId: "1@g.us", subject: "A", enabled: false, enabledAt: null, presente: true, iaResponde: false }] as never,
+      atualizadoEm: "2026-09-23T12:00:00.000Z",
+      desatualizado: false,
+    });
+    const res = await GET(new NextRequest("http://x?refresh=1"), ctx);
     expect(res.status).toBe(200);
-    expect(listarGruposDoNumero).toHaveBeenCalledWith(expect.anything(), { organizationId: ORG, channelSessionId: SESS });
+    expect(listarGruposDoNumero).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: ORG, channelSessionId: SESS, refresh: true }),
+    );
+    const j = await res.json();
+    expect(j.data).toHaveLength(1);
+    expect(j.meta).toEqual({ atualizado_em: "2026-09-23T12:00:00.000Z", desatualizado: false });
   });
   it("liga um grupo", async () => {
     autorizado();
@@ -70,13 +80,13 @@ describe("grupos do número", () => {
   // ── #2729 — a chave POR GRUPO "Permitir que a IA responda neste grupo" ────
   it("#2729: libera a IA num grupo, sem tocar no filtro do WhatsApp", async () => {
     autorizado();
-    vi.mocked(definirIaDoGrupo).mockResolvedValue({ ia_responde: true });
+    vi.mocked(definirIaDoGrupo).mockResolvedValue({ ia_responde: true, ia_modo: "todas" });
     const res = await PUT(
       new NextRequest("http://x", { method: "PUT", body: JSON.stringify({ group_chat_id: "1@g.us", ia_responde: true }) }),
       ctx,
     );
     expect(res.status).toBe(200);
-    expect(definirIaDoGrupo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: ORG, groupChatId: "1@g.us", iaResponde: true, actorUserId: "u1" }));
+    expect(definirIaDoGrupo).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ organizationId: ORG, groupChatId: "1@g.us", iaModo: "todas", actorUserId: "u1" }));
     expect(alternarGrupo).not.toHaveBeenCalled();
     // O mesmo `organization_id` forjado no body que o teste acima prova ignorado.
     expect(vi.mocked(definirIaDoGrupo).mock.calls[0]![1]).not.toHaveProperty("organization_id");

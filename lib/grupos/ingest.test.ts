@@ -42,6 +42,7 @@ const ligado = (extra: Partial<NonNullable<Awaited<ReturnType<IngestDeGrupoDb["g
   contactId: "c",
   conversationId: "v",
   iaResponde: false,
+  iaModo: "off" as "off" | "chamada" | "todas",
   ...extra,
 });
 
@@ -189,8 +190,22 @@ describe("gravarMensagemDeGrupo", () => {
   // a mensagem gravada pede o turno do agente — o MESMO evento
   // `ai_agent.dispatch_requested` da conversa individual, pelo mesmo consumidor
   // (`lib/agent-engine/edge/crm/drain.ts`), que é quem decide se o turno roda.
+  it("9224: modo chamada pede o turno só para mensagem que chamou o número, e grava a marca", async () => {
+    const sem = db(ligado({ iaModo: "chamada" }));
+    await gravarMensagemDeGrupo(sem, entrada());
+    expect(sem.pedirDespachoDeIa).not.toHaveBeenCalled();
+    const com = db(ligado({ iaModo: "chamada" }));
+    await gravarMensagemDeGrupo(com, entrada({ chamada: true }));
+    expect(com.pedirDespachoDeIa).toHaveBeenCalledTimes(1);
+    expect(com.inserirMensagem).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ group_chamada: true }) }));
+    // modo desligado ignora a chamada.
+    const off = db(ligado({ iaModo: "off" }));
+    await gravarMensagemDeGrupo(off, entrada({ chamada: true }));
+    expect(off.pedirDespachoDeIa).not.toHaveBeenCalled();
+  });
+
   it("#2729: grupo que libera a IA ganha o pedido de turno, depois do carimbo da conversa", async () => {
-    const d = db(ligado({ iaResponde: true }));
+    const d = db(ligado({ iaModo: "todas" }));
     await expect(gravarMensagemDeGrupo(d, entrada())).resolves.toBe("gravada");
     expect(d.pedirDespachoDeIa).toHaveBeenCalledWith({
       organizationId: ORG,
@@ -210,22 +225,22 @@ describe("gravarMensagemDeGrupo", () => {
     await gravarMensagemDeGrupo(semChave, entrada());
     expect(semChave.pedirDespachoDeIa).not.toHaveBeenCalled();
 
-    const chaveDesligada = db(ligado({ iaResponde: false }));
+    const chaveDesligada = db(ligado({ iaModo: "off" }));
     await gravarMensagemDeGrupo(chaveDesligada, entrada());
     expect(chaveDesligada.pedirDespachoDeIa).not.toHaveBeenCalled();
 
     // Linha gravada por uma versão anterior (coluna ainda nula): falha fechada.
-    const nula = db({ id: "g1", subject: "A", contactId: "c", conversationId: "v", iaResponde: null } as never);
+    const nula = db({ id: "g1", subject: "A", contactId: "c", conversationId: "v", iaModo: null } as never);
     await gravarMensagemDeGrupo(nula, entrada());
     expect(nula.pedirDespachoDeIa).not.toHaveBeenCalled();
   });
 
   it("#2729: eco do celular e mensagem repetida não pedem turno, mesmo com a chave ligada", async () => {
-    const eco = db(ligado({ iaResponde: true }));
+    const eco = db(ligado({ iaModo: "todas" }));
     await gravarMensagemDeGrupo(eco, entrada({ direction: "outbound", remetente: null }));
     expect(eco.pedirDespachoDeIa).not.toHaveBeenCalled();
 
-    const dup = db(ligado({ iaResponde: true }), true);
+    const dup = db(ligado({ iaModo: "todas" }), true);
     await gravarMensagemDeGrupo(dup, entrada());
     expect(dup.pedirDespachoDeIa).not.toHaveBeenCalled();
   });
@@ -496,7 +511,7 @@ describe("criarIngestDeGrupoDb — dois webhooks do mesmo grupo novo terminam nu
   // ── #2729 — a chave da IA vem LIDA da linha do grupo, junto com o resto ───
   it("#2729: grupoLigado devolve a chave da IA (e a coluna entra no SELECT)", async () => {
     const { admin, comandos } = adminDeMentira({
-      leitura: { channel_session_groups: { data: { id: "g1", subject: "A", contact_id: "c", conversation_id: "v", ia_responde: true }, error: null } },
+      leitura: { channel_session_groups: { data: { id: "g1", subject: "A", contact_id: "c", conversation_id: "v", ia_responde: true, ia_modo: "todas" }, error: null } },
     });
     await expect(criarIngestDeGrupoDb(admin as never).grupoLigado(ORG, SESS, "1@g.us")).resolves.toEqual({
       id: "g1",
@@ -504,6 +519,7 @@ describe("criarIngestDeGrupoDb — dois webhooks do mesmo grupo novo terminam nu
       contactId: "c",
       conversationId: "v",
       iaResponde: true,
+      iaModo: "todas",
     });
     expect(comandos[0]!.filtros).toEqual(expect.arrayContaining([["enabled", true]]));
   });

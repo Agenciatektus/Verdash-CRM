@@ -390,18 +390,23 @@ async function processEvent(
   // produção (ver `pos-entrada.ts`). Conversa sem linha na fila (LEFT JOIN sem
   // par) chega com `ia_responde` nulo, que é "não sei se liberaram" — e não sei
   // não responde.
-  const { rows: convRows } = await pool.query<{ is_group: boolean; ia_responde: boolean | null }>(
-    `select c.is_group, g.ia_responde
+  const { rows: convRows } = await pool.query<{ is_group: boolean; ia_responde: boolean | null; ia_modo: string | null; chamada: boolean | null }>(
+    `select c.is_group, g.ia_responde, g.ia_modo, (m.metadata->>'group_chamada') = 'true' as chamada
        from conversations c
+       left join messages m
+         on m.organization_id = c.organization_id and m.id = $3 and m.conversation_id = c.id
        left join channel_session_groups g
          on g.organization_id = c.organization_id
         and g.channel_session_id = c.channel_session_id
         and g.group_chat_id = c.group_chat_id
       where c.organization_id = $1 and c.id = $2`,
-    [event.organization_id, p.conversation_id],
+    [event.organization_id, p.conversation_id, p.inbound_message_id],
   );
   if (convRows[0]?.is_group !== false) {
-    if (!grupoLiberaIa(convRows[0]?.ia_responde)) {
+    // Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo.
+    // `ia_responde` desligado manda (mesma régua do ingest): o app anterior à 9224 só grava o boolean.
+    const modo = convRows[0]?.ia_responde === true ? (convRows[0]?.ia_modo ?? 'todas') : null;
+    if (!grupoLiberaIa(modo, convRows[0]?.chamada)) {
       log.info('drain: conversa de grupo sem a chave da IA liberada — evento pulado', { event_id: event.id });
     return 'processado';
   }

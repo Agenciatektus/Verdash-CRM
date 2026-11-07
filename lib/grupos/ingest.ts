@@ -22,7 +22,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { marcarConversaComMensagem } from "@/lib/channels/marcar-conversa";
 import { canonicalPhoneBR, phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
-import { grupoLiberaIa } from "@/lib/grupos/ia-no-grupo";
+import { grupoLiberaIa, modoDaIa, type IaModo } from "@/lib/grupos/ia-no-grupo";
 import { logger } from "@/lib/logger";
 import { CHAVE_DAS_MENCOES } from "@/lib/messaging/mencoes-de-grupo";
 import { remetenteDeGrupoSchema, type RemetenteDeGrupo } from "@/lib/messaging/remetente-de-grupo";
@@ -55,6 +55,8 @@ export interface EntradaDeGrupo {
    * dela); o grupo segue a mesma régua para não perder a foto que chegou sem link.
    */
   temMidia?: boolean;
+  /** 9224 — a mensagem citou ou marcou este número (ver `./chamada.ts`). */
+  chamada?: boolean;
 }
 
 export interface IngestDeGrupoDb {
@@ -73,6 +75,8 @@ export interface IngestDeGrupoDb {
        * `false` (o default da coluna) mantém a IA calada no grupo, como sempre.
        */
       iaResponde: boolean;
+      /** 9224 — o modo da IA: `off` | `chamada` | `todas`. */
+      iaModo: IaModo;
     } | null
   >;
   criarContatoDoGrupo(org: string, chatId: string, subject: string | null): Promise<string>;
@@ -206,6 +210,7 @@ export async function gravarMensagemDeGrupo(
       // metadata só acrescenta a lista que faltava.
       raw_type: e.rawType,
       ...(remetente?.success ? { group_sender: remetente.data } : {}),
+      ...(e.chamada ? { group_chamada: true } : {}),
       ...(mencoes.length > 0 ? { [CHAVE_DAS_MENCOES]: mencoes } : {}),
     },
   });
@@ -230,7 +235,7 @@ export async function gravarMensagemDeGrupo(
   // Daqui para baixo nada mais acontece: este pedido é o ÚNICO efeito novo do
   // grupo liberado, e ele não substitui o `message.group_received` — nenhum
   // outro consumidor passa a enxergar mensagem de grupo.
-  if (e.direction === "inbound" && grupoLiberaIa(grupo.iaResponde) && resultado.messageId) {
+  if (e.direction === "inbound" && grupoLiberaIa(grupo.iaModo, e.chamada) && resultado.messageId) {
     await db.pedirDespachoDeIa({
       organizationId: e.organizationId,
       conversationId,
@@ -248,7 +253,7 @@ export function criarIngestDeGrupoDb(admin: SupabaseClient): IngestDeGrupoDb {
     async grupoLigado(org, session, chatId) {
       const { data, error } = await admin
         .from("channel_session_groups")
-        .select("id, subject, contact_id, conversation_id, ia_responde")
+        .select("id, subject, contact_id, conversation_id, ia_responde, ia_modo")
         .eq("organization_id", org)
         .eq("channel_session_id", session)
         .eq("group_chat_id", chatId)
@@ -271,6 +276,7 @@ export function criarIngestDeGrupoDb(admin: SupabaseClient): IngestDeGrupoDb {
               contact_id: string | null;
               conversation_id: string | null;
               ia_responde: boolean | null;
+              ia_modo?: string | null;
             }
           | null;
       return r
@@ -282,6 +288,9 @@ export function criarIngestDeGrupoDb(admin: SupabaseClient): IngestDeGrupoDb {
             // Coluna nula (linha anterior à 0653) é a mesma coisa que
             // desligada: não sei se liberaram, e não sei não responde.
             iaResponde: r.ia_responde === true,
+            // Linha sem `ia_modo` (banco antes da 9224): vale o boolean antigo.
+            // `ia_responde` desligado manda: o app anterior à 9224 só grava o boolean (P1 do Cassio no #541).
+            iaModo: r.ia_responde !== true ? "off" : r.ia_modo ? modoDaIa(r.ia_modo) : "todas",
           }
         : null;
     },

@@ -70,6 +70,7 @@ const CADASTRO = {
   locale: "pt-BR",
   currency: "BRL",
   media_retention_days: 90,
+  group_media_retention_days: 30,
   media_retention_enforced: false,
 };
 const pedido = (body: unknown) =>
