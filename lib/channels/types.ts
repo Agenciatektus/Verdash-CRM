@@ -526,6 +526,8 @@ export interface ChannelAdapter {
 
   /** Grupos do número. Ausente = o canal não lista grupos. */
   listGroups?(input: ChannelTenantScope & { sessionRef: string }): Promise<ChannelGroup[]>;
+  /** Gestão de UM grupo (painel da inbox): ação já validada por `lib/grupos/acoes.ts`. LANÇA `GrupoAcaoError`. */
+  groupAction?(input: ChannelTenantScope & { sessionRef: string; entrada: Record<string, unknown>; chamada: unknown }): Promise<unknown>;
 
   /** Liga/desliga o recebimento de grupos na sessão; `true` só com a troca confirmada. */
   setGroupIntake?(input: { sessionRef: string; receive: boolean }): Promise<boolean>;

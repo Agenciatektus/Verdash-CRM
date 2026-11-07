@@ -49,8 +49,10 @@ import {
   verdashEnviar,
   verdashStatusPareado,
   fotoDoContatoPareado,
+  verdashGrupoAcao,
   verdashListarGrupos,
 } from "../verdash/client";
+import { GrupoAcaoError, type PedidoAoFzap } from "@/lib/grupos/acoes";
 import { phoneLookupVariants } from "@/lib/channels/phone-variants";
 import { DETALHE_NUMERO_EM_CONFLITO, DETALHE_QR_RESCAN_NATIVO } from "../health";
 import {
@@ -560,6 +562,15 @@ export const verdashAdapter: ChannelAdapter = {
     });
     if (!creds) throw new Error("verdash_sem_credencial");
     return verdashListarGrupos(creds);
+  },
+
+  async groupAction(input: ChannelTenantScope & { sessionRef: string; entrada: Record<string, unknown>; chamada: unknown }) {
+    const creds = await resolveVerdashCreds(createAdminClient(), {
+      organizationId: input.organizationId,
+      instanceName: input.sessionRef,
+    });
+    if (!creds) throw new GrupoAcaoError("instancia_desconectada");
+    return verdashGrupoAcao(creds, input.entrada, input.chamada as PedidoAoFzap);
   },
 
   /**
