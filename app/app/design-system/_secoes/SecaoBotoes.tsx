@@ -3,7 +3,7 @@
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { useT } from "@/hooks/i18n/useT";
 import type { IdDoMapa } from "@/lib/design-system/mapa";
-import { Bell, CircleNotch, DotsThree, Plus, Trash } from "@/lib/ui/icons";
+import { Bell, DotsThree, Plus, Trash } from "@/lib/ui/icons";
 
 import { Estados, Exemplo, Secao } from "../_componentes/Secao";
 import type { Tema } from "../_componentes/tema";
@@ -41,8 +41,7 @@ function LinhaDaVariante({ variante, mapa, tema }: { variante: Variante; mapa: I
           {
             rotulo: t("Carregando"),
             no: (
-              <Button variant={variante} disabled aria-busy>
-                <CircleNotch className="animate-spin" aria-hidden />
+              <Button variant={variante} loading>
                 {t("Salvando…")}
               </Button>
             ),
