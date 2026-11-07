@@ -107,6 +107,15 @@ export function ConversationHeader({
   const automaticoDaOrg = useAutomaticoAtivo();
 
   const c = conversation.contacts ?? null;
+  /**
+   * A TRAVA DE HUMANO MORA NO CONTATO, não na conversa — e é por isso que
+   * fechar a conversa não a solta. Enquanto `force_human` for `true`, os três
+   * guards do motor (`skip("force_human")`, `isLeadInHandoff`, `before-send`)
+   * continuam vetando a IA. Sem esta leitura, a escolha do fechamento apareceria
+   * em conversa nenhuma (ou em todas, que é pior: perguntaria sobre uma trava
+   * que não existe).
+   */
+  const contatoTravadoComEquipe = c?.force_human === true;
   const displayName = rotuloParaAEquipe(c, t);
   /**
    * POR ONDE ESTA CONVERSA ENTROU — o mesmo rótulo da lista e da tela de

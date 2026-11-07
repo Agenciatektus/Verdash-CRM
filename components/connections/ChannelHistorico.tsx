@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useT } from "@/hooks/i18n/useT";
+import { useTagDeIdioma } from "@/hooks/i18n/useLocaleDeData";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
 import { resumirErroDaImportacao } from "@/lib/channels/historico/resumo-do-erro";
@@ -21,10 +23,16 @@ interface Previa {
   parcial: boolean;
 }
 
+type Escopo = "todos" | "so_crm";
+
 interface Importacao {
   id: string;
-  status: "previa" | "rodando" | "erro" | "cancelada" | "concluida";
-  dias?: number;
+  status: "previa" | "aguardando" | "rodando" | "erro" | "cancelada" | "concluida";
+  dias?: number | null;
+  escopo?: Escopo;
+  origem?: "manual" | "queda";
+  desde?: string | null;
+  ate?: string | null;
   previa?: Previa | null;
   conversas_feitas?: number;
   mensagens_gravadas?: number;
@@ -40,6 +48,8 @@ interface Importacao {
 interface Historico {
   guardar_historico: boolean;
   importacao: Importacao | null;
+  /** A recuperação aberta da queda (aguardando ou rodando), à parte da manual. */
+  recuperacao_da_queda?: Importacao | null;
 }
 
 const DIAS = [30, 90, 180, 365] as const;
@@ -54,13 +64,20 @@ function ehConflito(err: unknown): boolean {
  * A importação do histórico do número (#999), no cartão da conexão.
  *
  * A tela só pede e acompanha: quem anda a importação é o cron, uma rodada por
- * minuto, por isso o GET repete a cada 10 s enquanto está `rodando`. A prévia
- * é lenta (dezenas de segundos) e roda sem travar o resto do cartão.
+ * minuto, por isso o GET repete a cada 10 s enquanto há algo `rodando` ou
+ * `aguardando` (a manual e a da queda). A prévia é lenta (dezenas de segundos)
+ * e roda sem travar o resto do cartão.
+ *
+ * Spec 32: o escopo "Só contatos do CRM" vem ligado por padrão. A importação da
+ * queda do número nasce sempre com esse escopo; a manual escolhe aqui.
  */
 export function ChannelHistorico({ channelId }: { channelId: string }) {
   const t = useT();
+  const tag = useTagDeIdioma();
   const qc = useQueryClient();
+  const idDoInterruptor = useId();
   const [dias, setDias] = useState<number>(30);
+  const [soCrm, setSoCrm] = useState(true);
   const [contando, setContando] = useState(false);
   const [busy, setBusy] = useState(false);
   const [izzyAberto, setIzzyAberto] = useState(false);
@@ -79,11 +96,15 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
     queryKey: chave,
     queryFn: () => apiClient.get<{ data: Historico }>(rota),
     refetchOnWindowFocus: false,
-    refetchInterval: (q) => (q.state.data?.data.importacao?.status === "rodando" ? 10_000 : false),
+    refetchInterval: (q) => {
+      const d = q.state.data?.data;
+      return d?.importacao?.status === "rodando" || d?.recuperacao_da_queda ? 10_000 : false;
+    },
   });
 
   const guardar = query.data?.data.guardar_historico;
   const imp = query.data?.data.importacao ?? null;
+  const daQueda = query.data?.data.recuperacao_da_queda ?? null;
 
   async function acao(corpo: Record<string, unknown>) {
     setBusy(true);
@@ -98,13 +119,15 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
     }
   }
 
-  async function pedirPrevia(izzy = false) {
+  /** `izzy`: prévia do outro CRM, com o token colado (o servidor usa o escopo `todos`). */
+  async function pedirPrevia(escopo: Escopo | "izzy") {
+    const izzy = escopo === "izzy";
     setContando(true);
     setErroDaPrevia(null);
     try {
       await apiClient.post(
         rota,
-        izzy ? { acao: "previa", dias, fonte: "izzy", token: tokenIzzy.trim() } : { acao: "previa", dias },
+        izzy ? { acao: "previa", dias, fonte: "izzy", token: tokenIzzy.trim() } : { acao: "previa", dias, escopo },
         { timeoutMs: PREVIA_TIMEOUT_MS },
       );
       if (izzy) setTokenIzzy("");
@@ -114,6 +137,12 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
       await qc.invalidateQueries({ queryKey: chave });
       setContando(false);
     }
+  }
+
+  /** Mudar o interruptor refaz a prévia do número que está na tela, no escopo novo. */
+  function mudarEscopo(ligado: boolean) {
+    setSoCrm(ligado);
+    if (imp?.status === "previa" && imp.fonte !== "izzy") void pedirPrevia(ligado ? "so_crm" : "todos");
   }
 
   if (query.isLoading) return null;
@@ -127,8 +156,10 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
   const p = imp?.previa ?? null;
   const rodando = imp?.status === "rodando";
   const status = imp?.status;
+  // Com a recuperação da queda aberta, a manual espera: a da queda tem a vez.
+  const manualBloqueada = daQueda !== null;
   // Nova prévia: sem nada, depois de prévia (refazer), cancelada ou concluída.
-  const podePedirPrevia = !rodando && status !== "erro";
+  const podePedirPrevia = !rodando && status !== "erro" && !manualBloqueada;
   const numeros = p && doIzzy
     ? t("{conversas} conversas no Izzy").replace("{conversas}", String(p.conversas))
     : p
@@ -140,6 +171,10 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
         .replace("{audios}", String(p.audios))
         .replace("{imagens}", String(p.imagens))
     : null;
+  const formatarData = (iso: string | null | undefined) =>
+    iso
+      ? new Date(iso).toLocaleString(tag, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "";
 
   // Outro CRM (Izzy): independe de 'Guardar o histórico', que é do número do WhatsApp.
   const formDoIzzy = podePedirPrevia && (
@@ -160,7 +195,7 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
             value={tokenIzzy}
             onChange={(e) => setTokenIzzy(e.target.value)}
           />
-          <Button size="sm" variant="outline" disabled={contando || busy || tokenIzzy.trim().length < 8} onClick={() => void pedirPrevia(true)}>
+          <Button size="sm" variant="outline" disabled={contando || busy || tokenIzzy.trim().length < 8} onClick={() => void pedirPrevia("izzy")}>
             {contando ? t("Contando as conversas…") : t("Ver prévia")}
           </Button>
         </div>
@@ -182,6 +217,38 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
   return (
     <div className="flex flex-col gap-1">
       {titulo}
+
+      {daQueda && (
+        <div className="flex flex-col gap-1 rounded-md border p-2">
+          <p className="text-[11px] font-medium">
+            {t("Recuperando as conversas da queda ({desde} a {ate})")
+              .replace("{desde}", formatarData(daQueda.desde))
+              .replace("{ate}", formatarData(daQueda.ate))}
+          </p>
+          {daQueda.status === "rodando" ? (
+            <p className="text-[11px] text-muted-foreground">{t("Importando agora.")}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">{t("Esperando sua vez na fila de importação.")}</p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            {t("A importação manual fica disponível quando a recuperação da queda terminar.")}
+          </p>
+        </div>
+      )}
+
+      {podePedirPrevia && (
+        <div className="flex items-start gap-2">
+          <Switch id={idDoInterruptor} checked={soCrm} disabled={contando || busy} onCheckedChange={mudarEscopo} />
+          <div className="flex flex-col">
+            <label htmlFor={idDoInterruptor} className="text-[11px] font-medium">
+              {t("Só contatos do CRM")}
+            </label>
+            <p className="text-[11px] text-muted-foreground">
+              {t("Traz só as conversas de quem já tem ficha no CRM, sem criar fichas novas.")}
+            </p>
+          </div>
+        </div>
+      )}
       <p className="text-[11px] text-muted-foreground">{t("Período: últimos 30, 90, 180 ou 365 dias")}</p>
 
       {rodando && imp && (
@@ -242,7 +309,11 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
         <>
           <p className="text-[11px]">{numeros}</p>
           <div>
-            <Button size="sm" disabled={busy || contando} onClick={() => void acao({ acao: "importar", importacaoId: imp.id })}>
+            <Button
+              size="sm"
+              disabled={busy || contando || manualBloqueada}
+              onClick={() => void acao({ acao: "importar", importacaoId: imp.id })}
+            >
               {t("Importar")}
             </Button>
           </div>
@@ -269,7 +340,12 @@ export function ChannelHistorico({ channelId }: { channelId: string }) {
               <option key={d} value={d}>{t("{dias} dias").replace("{dias}", String(d))}</option>
             ))}
           </Escolha>
-          <Button size="sm" variant="outline" disabled={contando || busy} onClick={() => void pedirPrevia()}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={contando || busy}
+            onClick={() => void pedirPrevia(soCrm ? "so_crm" : "todos")}
+          >
             {contando ? t("Contando as conversas…") : t("Ver prévia")}
           </Button>
         </div>

@@ -8,7 +8,7 @@
  */
 import { tool } from '../../../edge/llm/run-model-call';
 import type { ContextoDoTurno } from '../portoes-de-entrada';
-import { getLeadContext, type LeadContextResult } from '../../../edge/crm/get-lead-context';
+import type { LeadContextResult } from '../../../edge/crm/get-lead-context';
 import type { criarEvidenciasComerciaisDoTurno } from '../../../guardrails/promise/evidencias-comerciais';
 import { citationsFromHits, searchKnowledge } from '../../search-knowledge';
 import { getLeadNoteBody } from '../../lead-notes';
@@ -25,10 +25,10 @@ type SaidaDoContexto = Awaited<ReturnType<typeof carregarContextoDoTurno>>;
 
 export function criarGetLeadContext(
   c: ContextoDoTurno,
-  r: { fusoDaOrg: string; turnContextKnobs: SaidaDoContexto['turnContextKnobs']; mcpToolIdsDoTurno: string[]; noteRunError: (err: Error) => void },
+  r: { lerContextoDaConversa: SaidaDoContexto['lerContextoDaConversa']; mcpToolIdsDoTurno: string[]; noteRunError: (err: Error) => void },
 ) {
-  const { deps, pool, input, preview, tenantId, leadId } = c;
-  const { fusoDaOrg, turnContextKnobs, mcpToolIdsDoTurno, noteRunError } = r;
+  const { preview } = c;
+  const { lerContextoDaConversa, mcpToolIdsDoTurno, noteRunError } = r;
   return tool({
     ...AGENT_TOOL_DEFS.get_lead_context,
     execute: async (): Promise<
@@ -43,14 +43,8 @@ export function criarGetLeadContext(
       | { ok: false; error: { code: string; message: string } }
     > => {
       try {
-        const releitura = preview
-          ? preview.context
-          : await getLeadContext(
-              pool,
-              deps.crmCfg,
-              { tenantId, leadId, conversationId: input.conversationId, fuso: fusoDaOrg },
-              turnContextKnobs,
-            );
+        // #3836: a releitura passa pela MESMA espera da mídia (e o mesmo prazo) da abertura.
+        const releitura = preview ? preview.context : await lerContextoDaConversa();
         // Sem esta linha a projeção da abertura seria decorativa: bastaria o
         // modelo chamar esta ferramenta para receber o contexto CRU de volta,
         // com `lead_id`, `conversation_id` e caminho de mídia. A releitura é a

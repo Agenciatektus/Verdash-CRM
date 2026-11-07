@@ -111,6 +111,8 @@ export function notaDaVitrine(agora: number, corpo: string): Note {
     media_storage_path: null,
     media_mime: null,
     media_size_bytes: null,
+    media_expired_at: null,
+    media_retention_days: null,
   };
 }
 

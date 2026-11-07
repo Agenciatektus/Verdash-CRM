@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 import { useAssignableMembers } from "@/hooks/inbox/useAssignableMembers";
 import { useTransferConversation } from "@/hooks/inbox/useTransferConversation";
 import { useChannelSessions } from "@/hooks/channels/useChannelSessions";
@@ -77,8 +78,8 @@ export function TransferirPopover({ conversationId, devolver, numero }: Props) {
   const opcoes = (members.data ?? []).filter((m) => m.user_id !== user.id);
   const termo = busca.trim().toLocaleLowerCase();
   const escolhido = opcoes.find((m) => m.user_id === destino) ?? null;
-  const nomeDe = (m: { full_name: string | null; user_id: string }) =>
-    m.full_name ?? `${t("Atendente")} ${m.user_id.slice(0, 8)}`;
+  // #3023: a régua única do rótulo do membro (sem pedaço de uuid na tela).
+  const nomeDe = (m: { full_name: string | null; user_id: string }) => rotuloDoMembro(m, t);
   const visiveis = termo
     ? opcoes.filter((m) => (m.full_name ?? "").toLocaleLowerCase().includes(termo))
     : opcoes;

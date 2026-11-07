@@ -30,6 +30,8 @@ import type { Logger } from '@/lib/agent-engine/obs/logger';
 
 /** 22h57 em São Paulo (UTC-3) — fora da janela de disparo 7h-22h. */
 const NOITE = new Date('2026-10-04T01:57:58Z');
+/** 12h em São Paulo — dentro das duas janelas. */
+const DIA = new Date('2026-10-04T15:00:00Z');
 
 const ORG = 'org-do-teste';
 const SESSAO = 'sessao-do-teste';
@@ -172,6 +174,28 @@ describe('o sandbox segue rebaixando o veto de pacing a aviso (#2555 não mexe n
 
     expect(pAssistido.result.candidates).toEqual([]);
     expect(pAssistido.result.impediments.map((i) => i.code)).toEqual(['outside_window']);
+    expect(pAssistido.result.warnings).toEqual([]);
+  });
+
+  it('cap estourado numa RESPOSTA: a prévia não avisa nem veta (9061)', async () => {
+    const ctx = await contextoDaPrevia(DIA);
+    expect(ctx.pacing.resposta).toBe(true);
+    const estourado: GateContext = {
+      ...ctx,
+      pacing: { ...ctx.pacing, state: { lastSentAt: null, sentToday: 999, numberActivatedAt: null } },
+    };
+
+    const pAssistido = previa('assisted');
+    const assistido = applyPreviewPolicy(
+      { send_message: definicao(vi.fn()) },
+      pAssistido,
+      estourado,
+      () => [],
+    );
+    await chamar(assistido, 'send_message', { body: RESPOSTA });
+
+    expect(pAssistido.result.candidates.map((c) => c.body)).toEqual([RESPOSTA]);
+    expect(pAssistido.result.impediments).toEqual([]);
     expect(pAssistido.result.warnings).toEqual([]);
   });
 });

@@ -34,11 +34,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 const ALL = "__all__";
 
 function attendantLabel(a: AttendantMetric, t: (texto: string) => string): string {
-  return a.name ?? a.email ?? `${t("Atendente")} ${a.user_id.slice(0, 8)}`;
+  return rotuloDoMembro({ full_name: a.name, email: a.email, user_id: a.user_id }, t);
 }
 
 interface Props {
@@ -138,7 +139,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
                 .filter((m) => m.role !== "viewer")
                 .map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
-                    {m.full_name ?? m.email ?? m.user_id.slice(0, 8)}
+                    {rotuloDoMembro(m, t)}
                     {m.user_id === currentUserId ? ` ${t("(você)")}` : ""}
                   </SelectItem>
                 ))}
@@ -174,6 +175,7 @@ export function MetricsClient({ canCompare, currentUserId }: Props) {
         periodo={metasDoMes.data?.data.periodo ?? null}
         metas={metasDoMes.data?.data.metas ?? []}
         podeConfigurar={canCompare}
+        valores={metasDoMes.data?.data.valores_do_periodo ?? null}
       />
 
       <Card>

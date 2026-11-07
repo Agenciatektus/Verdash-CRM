@@ -8,7 +8,10 @@
  */
 import { prospectingConversationContext } from '@/lib/prospecting/context';
 
-import { getLeadContext } from '../../edge/crm/get-lead-context';
+import { getLeadContext, type LeadContextResult } from '../../edge/crm/get-lead-context';
+import { TETO_DA_ESPERA_DA_DERIVACAO_MS } from '@/lib/messaging/media/derivable';
+import { esperarMidiaDerivavel } from '../espera-da-midia';
+import { anotarUltimaInboundVista } from '../turno-ja-respondido';
 import { auxModelArgs, type AuxModelArgs } from '../aux-model-args';
 import { getLeadState } from '../lead-state';
 import { composeSystemPrompt, loadOrgMemory, renderOrgMemory } from '../org-memory';
@@ -19,6 +22,7 @@ import { loadSkills, renderSkillIndex } from '../skills';
 import {
   CASES_SYSTEM_BLOCK,
   TRANSPARENCIA_SYSTEM_BLOCK,
+  blocoDoModoDePrevia,
   blocosDeAgendaResidentes,
   latestCheckpoint,
   loadInboundForJob,
@@ -33,7 +37,7 @@ export interface EntradaDoContexto {
 }
 
 export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoContexto) {
-  const { deps, pool, input, preview, tenantId, leadId } = c;
+  const { deps, pool, input, preview, tenantId, leadId, runLog, liveJob } = c;
   const { agentConfig, contextKnobs, fusoDaOrg } = e;
 
   // Knobs por-turno: a versão publicada vence o env; sem ela, env (main.ts).
@@ -87,6 +91,45 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
   // juntos, o pico chega a 32 leituras sobre 10 conexões (default do pg, knob
   // DB_POOL_MAX). O pg enfileira e nenhuma destas leituras segura conexão, então
   // o pior caso é espera de fila no pico, não erro nem deadlock.
+  //
+  // #3836: a mídia que chega no MEIO do turno entrava como `[audio]`. Toda leitura
+  // da conversa que alimenta o prompt passa por `lerContextoDaConversa`, que espera
+  // a derivação (com teto) antes de ler. O prazo nasce UMA vez para o turno inteiro.
+  const prazoDaMidia = Date.now() + TETO_DA_ESPERA_DA_DERIVACAO_MS;
+  const esperarMidiaDoTurno = async (): Promise<void> => {
+    // Prévia nunca espera: não responde a ninguém e o contexto vem de fora.
+    if (preview) return;
+    const espera = await esperarMidiaDerivavel(pool, {
+      organizationId: tenantId,
+      conversationId: input.conversationId,
+      prazoMs: prazoDaMidia,
+      log: runLog,
+      ...(deps.sleep !== undefined ? { sleep: deps.sleep } : {}),
+    });
+    // Reanota o que a espera trouxe, senão o job da mensagem nova responde de novo.
+    // Só com a derivação CONCLUÍDA (no teto, quem responde é o job da mídia) e só
+    // mídia que já tem texto (#3845). Follow-up não entra na régua.
+    if (espera.desfecho === 'derivacao_concluida' && liveJob().kind === 'inbound_turn') {
+      await anotarUltimaInboundVista(
+        pool,
+        { organizationId: tenantId, contactId: leadId, conversationId: input.conversationId, jobId: liveJob().id },
+        { apenasMidiaComTexto: true },
+      );
+    }
+  };
+  /** A leitura da conversa que alimenta o prompt: abertura e releitura da ferramenta. */
+  const lerContextoDaConversa = async (): Promise<LeadContextResult> => {
+    await esperarMidiaDoTurno();
+    return getLeadContext(
+      pool,
+      deps.crmCfg,
+      { tenantId, leadId, conversationId: input.conversationId, fuso: fusoDaOrg },
+      turnContextKnobs,
+    );
+  };
+  // Também antes das trilhas: a linha do job e o histórico são lidos nelas.
+  await esperarMidiaDoTurno();
+
   const [playbook, [skills, inboundDoJob], orgMemory, [previous, leadState]] =
     await Promise.all([
       (async () => {
@@ -147,19 +190,10 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
   // testada (o bloco da cadeia nomeia `crm_list_event_types`, e nomear
   // ferramenta ausente faz o modelo tentar chamá-la).
   if (agentConfig !== null) blocosResidentes.push(...blocosDeAgendaResidentes(agentConfig.toolIds));
-  if (preview)
-    blocosResidentes.push(
-      'MODO PRÉVIA: proponha a resposta com send_message. Operações são propostas separadas; nunca diga que executou uma proposta. Nenhum envio real acontece.',
-    );
+  // #3757: o bloco da prévia diz de QUEM é a voz (sandbox = agente; assisted = atendente).
+  if (preview) blocosResidentes.push(blocoDoModoDePrevia(preview.kind));
   const system = blocosResidentes.join('\n\n');
-  const openingContext = preview
-    ? preview.context
-    : await getLeadContext(
-        pool,
-        deps.crmCfg,
-        { tenantId, leadId, conversationId: input.conversationId, fuso: fusoDaOrg },
-        turnContextKnobs,
-      );
+  const openingContext = preview ? preview.context : await lerContextoDaConversa();
   if (!openingContext.ok) {
     // Sem contexto não há turno: transiente (CRM fora) OU permanente (lead
     // sumiu) — ambos re-tentam pela fila e morrem em 'dead' se persistirem.
@@ -177,5 +211,6 @@ export async function carregarContextoDoTurno(c: ContextoDoTurno, e: EntradaDoCo
     leadState,
     system,
     openingContext,
+    lerContextoDaConversa,
   };
 }

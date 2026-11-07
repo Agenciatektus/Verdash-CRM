@@ -10,7 +10,8 @@ import { claimOfJob } from '../../queue/claim';
 import { runModelCall, type ModelMessage, type ToolSet } from '../../edge/llm/run-model-call';
 import { runBeforeSend } from '../../guardrails/before-send';
 import { hasOpenCaseForContact, openCase } from '../human-cases';
-import { eTurnoDeResposta } from '../inbound-turn';
+import { eTurnoDeResposta, inboundsNaoRespondidos } from '../inbound-turn';
+import { INSTRUCAO_DO_PEDIDO_HUMANO, previaContinuaAtePropor } from '../proposta-sob-pedido';
 import { garantirPerguntaDoRoteiro, perguntaDoRoteiroPodeSair } from '../roteiro-no-turno';
 import { CORRECAO_DO_TURNO_MUDO, PASSOS_DA_CORRECAO, turnoMudoPedeCorrecao } from '../turno-mudo';
 import { previaPedeCorrecaoDoTurnoMudo, tetoDePassosAtingido } from '../desfecho-da-previa';
@@ -76,9 +77,28 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
   // A correção também pode gastar o teto dela (3 passos) só em consultas: na
   // prévia isso é a mesma falha do teto da primeira chamada, não decisão.
   let tetoNaCorrecao = false;
+  // #3281 — só o primeiro silêncio sem oferta nem impedimento recebe o pedido humano.
+  // Ele ocupa a MESMA recuperação abaixo: nunca há terceira chamada.
+  const pedidoHumano =
+    preview?.kind === 'assisted' &&
+    previaContinuaAtePropor({
+      candidatos: preview.result.candidates.length,
+      propostas: preview.result.proposals.length,
+      impedimentos: preview.result.impediments.map((i) => i.code),
+      tentativasDeEnvio: estado.tentativasDeEnvio,
+      textoEscrito: turn.result.text,
+      inboundsSemResposta: inboundsNaoRespondidos(preview.context.context.messages).length,
+      finishReason: turn.result.finishReason,
+      saidaTruncada,
+      tetoDePassosAtingido: tetoDePassosAtingido({
+        passosUsados: turn.result.steps?.length ?? 0,
+        maxSteps,
+        finishReason: turn.result.finishReason,
+      }),
+    });
   const correcaoDoTurnoMudoPedida =
     preview?.kind === 'assisted'
-      ? previaPedeCorrecaoDoTurnoMudo({
+      ? pedidoHumano || previaPedeCorrecaoDoTurnoMudo({
           textoEscrito: turn.result.text,
           candidatos: preview.result.candidates.length,
           tentativasDeEnvio: estado.tentativasDeEnvio,
@@ -100,7 +120,10 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
       job_id: job?.id ?? null,
       previa: preview?.kind ?? null,
     });
-    const pedidoDeCorrecao: ModelMessage = { role: 'user', content: CORRECAO_DO_TURNO_MUDO };
+    const pedidoDeCorrecao: ModelMessage = {
+      role: 'user',
+      content: pedidoHumano ? INSTRUCAO_DO_PEDIDO_HUMANO : CORRECAO_DO_TURNO_MUDO,
+    };
     const correcao = await runModelCall(
       pool,
       deps.llmCfg,
@@ -114,6 +137,10 @@ export async function corrigirAposOModelo(c: ContextoDoTurno, r: EntradaDaCorrec
         messages: [...openingMessages, ...turn.result.responseMessages, pedidoDeCorrecao],
         tools,
         maxSteps: Math.min(maxSteps, PASSOS_DA_CORRECAO),
+        // #3281: no assistido a correção para assim que houver uma proposta.
+        ...(preview?.kind === 'assisted'
+          ? { pararQuando: () => preview.result.candidates.length > 0 }
+          : {}),
         ...(agentConfig !== null
           ? {
               model: agentConfig.model,

@@ -38,6 +38,7 @@ import {
   type TemplateContact,
 } from "@/lib/inbox/template-vars";
 import { ApiError } from "@/lib/api/types";
+import { Button } from "@/components/ui/button";
 import { showApiError } from "@/components/feedback/ApiErrorToast";
 import { mimeDaMidia, type MidiaDeTemplate } from "@/lib/templates/midias";
 import { lerRespostaRapidaGravada } from "@/lib/inbox/resposta-rapida";
@@ -45,7 +46,13 @@ import type { Message } from "@/lib/types/messaging";
 import type { AvisoDeRascunho } from "@/lib/inbox/rascunho-sugerido";
 import { apiClient } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
-import { embutirMencoes, podarMencoes, type MencaoEscolhida } from "@/lib/notifications/mentions";
+import {
+  embutirMencoes,
+  podarMencoes,
+  podarMencoesDaEdicao,
+  type MencaoEscolhida,
+} from "@/lib/notifications/mentions";
+import { avisoDaContinua } from "@/lib/channels/numero-do-atendente";
 
 export interface ComposerHandle { focus: () => void }
 
@@ -90,13 +97,15 @@ interface Props {
   contatoBloqueadoId?: string | null;
   /** O usuário logado (#3282): a barra de recursos lembra o recolhimento POR usuário. */
   usuarioId?: string | null;
+  /** Abre OUTRA conversa do mesmo contato (#3732): a recusa do envio pode apontar para ela. */
+  onAbrirConversa?: (id: string) => void;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   {
     conversationId, initialDraft = "", initialMode = "reply", active = true, onDraftChange, disabled,
     blockedReason, janelaFechada, aguardandoAssumir = false, contactName, contactDisplayName, currentContactId, respondendo, onCancelarResposta,
-    rascunho = null, conversa = null, fechada = false, contatoBloqueadoId = null, usuarioId = null,
+    rascunho = null, conversa = null, fechada = false, contatoBloqueadoId = null, usuarioId = null, onAbrirConversa,
   },
   ref,
 ) {
@@ -163,6 +172,18 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [mencoes, setMencoes] = useState<MencaoEscolhida[]>([]);
   const [mencaoDispensada, setMencaoDispensada] = useState(false);
   const [mencaoIndice, setMencaoIndice] = useState(0);
+  /**
+   * A CONVERSA QUE CONTINUA (#3732) — a recusa do envio com destino. Guarda a
+   * conversa em que a recusa aconteceu: o compositor nem sempre remonta ao trocar
+   * de conversa, e o aviso da anterior não pode travar a caixa da seguinte.
+   */
+  const [continua, setContinua] = useState<{
+    conversationId: string;
+    conversaId: string;
+    modelo: string;
+    nome: string | null;
+  } | null>(null);
+  const continuaAqui = continua?.conversationId === conversationId ? continua : null;
   useEffect(() => {
     onDraftChange?.(text, mode);
   }, [text, mode, onDraftChange]);
@@ -206,7 +227,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   // até a API voltar impedia digitar a próxima mensagem com o campo ainda cheio.
   // `aguardandoAssumir` (#3012) entra AQUI: um termo a mais na trava de sempre,
   // nunca um desabilitar paralelo que pudesse divergir dela.
-  const isDisabled = disabled || !!blockedReason || upload.isPending || aguardandoAssumir;
+  const isDisabled =
+    disabled || !!blockedReason || upload.isPending || aguardandoAssumir || continuaAqui !== null;
   // A janela só alcança o que SAI. Em modo nota o composer segue liberado.
   const respostaBarrada = isDisabled || (mode === "reply" && !!janelaFechada);
   const campoBarrado = mode === "note" ? isDisabled : respostaBarrada;
@@ -316,7 +338,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     }
     const start = ta.selectionStart ?? text.length;
     const end = ta.selectionEnd ?? text.length;
-    setText(text.slice(0, start) + trecho + text.slice(end));
+    const novo = text.slice(0, start) + trecho + text.slice(end);
+    setText(novo);
+    // O trecho desloca o que está à direita: as menções andam junto (#2463).
+    setMencoes((atual) => podarMencoesDaEdicao(text, novo, atual));
     requestAnimationFrame(() => {
       ta.focus();
       ta.selectionStart = ta.selectionEnd = start + trecho.length;
@@ -329,8 +354,13 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     const gatilhoAqui = resolverMencao(text, caret);
     if (!gatilhoAqui) return;
     const inserido = `@${opcao.rotulo} `;
-    setText(text.slice(0, gatilhoAqui.start) + inserido + text.slice(caret));
-    setMencoes((atual) => [...atual, { id: opcao.membro.user_id, nome: opcao.rotulo }]);
+    const novo = text.slice(0, gatilhoAqui.start) + inserido + text.slice(caret);
+    setText(novo);
+    setMencoes((atual) => [
+      // A inserção desloca o que já estava à direita (#2463, `podarMencoesDaEdicao`).
+      ...podarMencoesDaEdicao(text, novo, atual),
+      { id: opcao.membro.user_id, nome: opcao.rotulo, inicio: gatilhoAqui.start },
+    ]);
     const pos = gatilhoAqui.start + inserido.length;
     setCaret(pos);
     setMencaoIndice(0);
@@ -381,7 +411,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             restoreOnError();
             const restaurado = restaurar(taRef.current?.value ?? "");
             setMencoes((atual) =>
-              podarMencoes(restaurado, [...mencoesEnviadas, ...atual.filter((m) => !mencoesEnviadas.includes(m))]),
+              podarMencoes(restaurado, [
+                // Sem `inicio`: o texto restaurado passou pelas edições feitas
+                // DURANTE o envio; sem posição a poda decide por presença (#2463).
+                ...mencoesEnviadas.map(({ id, nome }) => ({ id, nome })),
+                ...atual.filter((m) => !mencoesEnviadas.includes(m)),
+              ]),
             );
           },
           // Só as escolhas DESTA nota (#2463): a lista pode já ter a menção da
@@ -405,11 +440,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           // próxima frase sair citando algo que o atendente já respondeu.
           onCancelarResposta?.();
           consumirRascunhoEnviado();
+          // #3732: a trava da conversa que continua cai quando o envio volta a ser aceito.
+          setContinua(null);
           requestAnimationFrame(() => autoresize());
         },
         // Sem isto o texto some quando o envio falha, e quem escreveu um
         // parágrafo o perde sem ter como recuperá-lo.
-        onError: restoreOnError,
+        // #3732: recusa "esta conversa está no número de outro atendente" →
+        // a faixa diz PARA ONDE IR e trava a caixa.
+        onError: (erro) => {
+          restoreOnError();
+          const aviso = erro instanceof ApiError ? avisoDaContinua(erro.code, erro.details) : null;
+          if (aviso) setContinua({ conversationId, ...aviso });
+        },
       },
     );
   }
@@ -437,6 +480,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
    */
   function escreverNoCampo(conteudo: string, focar = true) {
     setText(conteudo);
+    // Substituir o campo mexe no texto das menções (#2463).
+    setMencoes((atual) => podarMencoesDaEdicao(text, conteudo, atual));
     const ta = taRef.current;
     if (!ta) return;
     requestAnimationFrame(() => {
@@ -818,6 +863,19 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
             {t("Solte o arquivo para anexar")}
           </div>
         )}
+        {/* A CONVERSA CONTINUA EM OUTRO NÚMERO (#3732): a faixa diz para onde ir. */}
+        {continuaAqui && (
+          <div
+            role="status"
+            data-testid="conversa-continua-em-outro-numero"
+            className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-sm border border-warning/40 bg-warning-bg px-3 py-2 text-xs"
+          >
+            <span>{t(continuaAqui.modelo).replace("{nome}", continuaAqui.nome ?? "")}</span>
+            <Button size="sm" variant="outline" onClick={() => onAbrirConversa?.(continuaAqui.conversaId)}>
+              {t("Abrir a conversa")}
+            </Button>
+          </div>
+        )}
         {!nota && <ReplyReviewPanel sugestao={sugestao} disabled={isDisabled} />}
         {rascunho && !rascunhoUsado && !nota && <AvisoDoRascunho rascunho={rascunho} />}
         {/* O AVISO DO BLOQUEIO ATÉ ASSUMIR (#3012): o motivo junto da caixa travada. */}
@@ -904,7 +962,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
               setMencaoIndice(0);
               // A escolha que sumiu do texto sai da lista agora (#2463); só na
               // edição à mão, para o retry da nota manter as menções.
-              setMencoes((atual) => podarMencoes(e.target.value, atual));
+              setMencoes((atual) => podarMencoesDaEdicao(text, e.target.value, atual));
               if (!resolverMencao(e.target.value, pos)) setMencaoDispensada(false);
               autoresize();
             }}

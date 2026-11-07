@@ -2543,6 +2543,7 @@ export type Database = {
           id: string;
           name: string;
           organization_id: string;
+          schedule: Json;
           updated_at: string;
         };
         ComputedFields: never;
@@ -2552,6 +2553,7 @@ export type Database = {
           id?: string;
           name: string;
           organization_id: string;
+          schedule?: Json;
           updated_at?: string;
         };
         Update: {
@@ -2560,6 +2562,7 @@ export type Database = {
           id?: string;
           name?: string;
           organization_id?: string;
+          schedule?: Json;
           updated_at?: string;
         };
         Relationships: [
@@ -5799,6 +5802,8 @@ export type Database = {
           created_at: string;
           criado_por: string | null;
           destino_jid: string | null;
+          /** `fixo` (default) ou `responsavel` — ver #3803. */
+          destino_modo: string;
           ligado: boolean;
           mensagens_ignoradas: number;
           organization_id: string;
@@ -5815,6 +5820,7 @@ export type Database = {
           created_at?: string;
           criado_por?: string | null;
           destino_jid?: string | null;
+          destino_modo?: string;
           ligado?: boolean;
           mensagens_ignoradas?: number;
           organization_id: string;
@@ -5830,6 +5836,7 @@ export type Database = {
           created_at?: string;
           criado_por?: string | null;
           destino_jid?: string | null;
+          destino_modo?: string;
           ligado?: boolean;
           mensagens_ignoradas?: number;
           organization_id?: string;
@@ -6466,6 +6473,7 @@ export type Database = {
           provider_conversation_id: string | null;
           rag_review_status: string | null;
           reply_context_revision: number;
+          sector_id: string | null;
           service_closed_at: string | null;
           service_revision: number;
           service_started_at: string | null;
@@ -6514,6 +6522,7 @@ export type Database = {
           provider_conversation_id?: string | null;
           rag_review_status?: string | null;
           reply_context_revision?: number;
+          sector_id?: string | null;
           service_closed_at?: string | null;
           service_revision?: number;
           service_started_at?: string | null;
@@ -6559,6 +6568,7 @@ export type Database = {
           provider_conversation_id?: string | null;
           rag_review_status?: string | null;
           reply_context_revision?: number;
+          sector_id?: string | null;
           service_closed_at?: string | null;
           service_revision?: number;
           service_started_at?: string | null;
@@ -11556,6 +11566,7 @@ export type Database = {
           status: string;
           title: string;
           updated_at: string;
+          valid_until: string | null;
         };
         ComputedFields: never;
         Insert: {
@@ -11569,6 +11580,7 @@ export type Database = {
           status?: string;
           title: string;
           updated_at?: string;
+          valid_until?: string | null;
         };
         Update: {
           body?: string;
@@ -11581,6 +11593,7 @@ export type Database = {
           status?: string;
           title?: string;
           updated_at?: string;
+          valid_until?: string | null;
         };
         Relationships: [
           {
@@ -11914,6 +11927,7 @@ export type Database = {
           channel_session_id: string;
           id: string;
           organization_id: string;
+          resposta: boolean;
           sent_at: string;
         };
         ComputedFields: never;
@@ -11921,12 +11935,14 @@ export type Database = {
           channel_session_id: string;
           id?: string;
           organization_id: string;
+          resposta?: boolean;
           sent_at?: string;
         };
         Update: {
           channel_session_id?: string;
           id?: string;
           organization_id?: string;
+          resposta?: boolean;
           sent_at?: string;
         };
         Relationships: [
@@ -13701,6 +13717,8 @@ export type Database = {
           role: string;
           updated_at: string;
           user_id: string;
+          /** WhatsApp PESSOAL do membro, E.164 — destino do aviso no modo `responsavel` (#3803). */
+          whatsapp_e164: string | null;
         };
         ComputedFields: never;
         Insert: {
@@ -13717,6 +13735,7 @@ export type Database = {
           role: string;
           updated_at?: string;
           user_id: string;
+          whatsapp_e164?: string | null;
         };
         Update: {
           accepted_at?: string | null;
@@ -13732,6 +13751,7 @@ export type Database = {
           role?: string;
           updated_at?: string;
           user_id?: string;
+          whatsapp_e164?: string | null;
         };
         Relationships: [
           {
@@ -15718,6 +15738,7 @@ export type Database = {
           provider_conversation_id: string | null;
           rag_review_status: string | null;
           reply_context_revision: number;
+          sector_id: string | null;
           service_closed_at: string | null;
           service_revision: number;
           service_started_at: string | null;
@@ -15783,7 +15804,9 @@ export type Database = {
       };
       fn_definir_carteira_do_cliente: {
         Args: {
-          p_actor: string;
+          // Nulo = o SISTEMA (#3514): só com `p_origem: "automacao"`, que a
+          // função exige e recusa a quem chega com ator.
+          p_actor: string | null;
           p_contact: string;
           p_dono: string;
           p_org: string;
@@ -16313,10 +16336,18 @@ export type Database = {
         Args: { p_conversation_id: string; p_organization_id: string; p_to_user_id: string };
         Returns: string;
       };
+      fn_conversa_que_continua: {
+        Args: { p_conversation_id: string; p_organization_id: string; p_user_id: string };
+        Returns: string;
+      };
       fn_org_operante: { Args: { p_org: string }; Returns: boolean };
       fn_org_parada_descarta_fila: { Args: { p_org: string }; Returns: undefined };
       fn_passagem_devolvida: {
         Args: { p_conversation_id: string; p_organization_id: string };
+        Returns: number;
+      };
+      fn_passar_conversas_do_contato: {
+        Args: { p_contact: string; p_dono: string; p_org: string };
         Returns: number;
       };
       fn_pgrst_recusar_replay_do_gateway: { Args: Record<PropertyKey, never>; Returns: undefined };
@@ -16625,6 +16656,7 @@ export type Database = {
           provider_conversation_id: string | null;
           rag_review_status: string | null;
           reply_context_revision: number;
+          sector_id: string | null;
           service_closed_at: string | null;
           service_revision: number;
           service_started_at: string | null;

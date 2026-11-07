@@ -36,6 +36,7 @@ import { MaisAcoesDoLote } from "./lote/MaisAcoesDoLote";
 
 /** O teto da rota em lote por chamada (`lead_ids` máx. 50). */
 export const LOTE_MAXIMO = 50;
+import { rotuloDoMembro } from "@/lib/users/rotulo-do-atendente";
 
 interface BulkActionBarProps {
   selectedIds: string[];
@@ -163,9 +164,11 @@ export function BulkActionBar({
   // heurística que erra ("Negociação" → "Negociaçãos"), e a contagem já diz
   // tudo que o plural diria: "12 selecionados" não fica pior que "12 Pacientes
   // selecionados", e nunca fica errado.
+  // O card é o NEGÓCIO (`vocab.deal`: "Pedido" no e-commerce), não a pessoa
+  // (`vocab.lead`: "Cliente") — o resto do funil já chama o card de negócio (#3811).
   const rotuloDaContagem =
     selectedIds.length === 1
-      ? `1 ${vocab.lead} ${t("selecionado")}`
+      ? `1 ${t(vocab.deal)} ${t("selecionado")}`
       : `${selectedIds.length} ${t("selecionados")}`;
 
   /**
@@ -346,7 +349,7 @@ export function BulkActionBar({
                 .filter((m) => m.user_id !== user.id)
                 .map((m) => (
                   <DropdownMenuItem key={m.user_id} onClick={() => runAssign(m.user_id)}>
-                    {m.full_name ?? t("Sem nome")}
+                    {rotuloDoMembro(m, t)}
                   </DropdownMenuItem>
                 ))}
               <DropdownMenuSeparator />
@@ -474,7 +477,7 @@ export function BulkActionBar({
           <DialogHeader>
             <DialogTitle>
               {selectedIds.length === 1
-                ? `${t("Excluir")} 1 ${vocab.lead}?`
+                ? `${t("Excluir")} 1 ${t(vocab.deal)}?`
                 : `${t("Excluir")} ${selectedIds.length} ${t("selecionados")}?`}
             </DialogTitle>
             <DialogDescription>

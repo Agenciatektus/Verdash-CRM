@@ -203,7 +203,7 @@ test("fechar canal preserva demanda, desfecho explícito e nova entrada volta à
     // Desde o painel em abas (visual v2, 3.3) o botão mora na aba Negócios; a
     // volta ao Resumo é o que o resto desta spec lê (demandas e memória).
     await page.getByRole("tab", { name: "Negócios" }).click();
-    await expect(page.getByRole("button", { name: "Novo Lead", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Novo negócio", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "Resumo" }).click();
     // Fechar não é mais `window.confirm()` (bloqueado em iframe, ignora o
     // tema) — é o `AlertDialog` da casa. Desde o visual v2 o ícone do

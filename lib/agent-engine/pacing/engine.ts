@@ -15,7 +15,10 @@ import type { PacingKnobs, WarmupStep } from './defaults';
 export interface PacingState {
   /** Último envio deste número (qualquer dia) — base do throttle. */
   lastSentAt: Date | null;
-  /** Envios deste número desde a meia-noite LOCAL do tenant. */
+  /**
+   * DISPAROS deste número desde a meia-noite LOCAL do tenant (1ª mensagem,
+   * follow-up, campanha). Resposta a quem escreveu não entra (`pacing_ledger.resposta`).
+   */
   sentToday: number;
   /** Ativação do número (channel_knobs.number_activated_at); null = idade 0 (conservador). */
   numberActivatedAt: Date | null;
@@ -156,12 +159,19 @@ export function decidePacing(input: PacingInput): PacingDecision {
     }
   }
 
-  let waitMs = 0;
-  if (state.lastSentAt) {
-    const requiredGapMs = knobs.throttleMs + jitterOf(rng, knobs);
-    waitMs = Math.max(0, requiredGapMs - (now.getTime() - state.lastSentAt.getTime()));
-  }
-  return { allow: true, waitMs };
+  return { allow: true, waitMs: throttleWaitMs(now, state, knobs, rng) };
+}
+
+/** Espera restante do espaçamento (throttle + jitter) desde o último envio do número. */
+function throttleWaitMs(
+  now: Date,
+  state: PacingState,
+  knobs: PacingKnobs,
+  rng: () => number,
+): number {
+  if (!state.lastSentAt) return 0;
+  const requiredGapMs = knobs.throttleMs + jitterOf(rng, knobs);
+  return Math.max(0, requiredGapMs - (now.getTime() - state.lastSentAt.getTime()));
 }
 
 /**

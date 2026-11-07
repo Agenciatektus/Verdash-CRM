@@ -72,7 +72,7 @@ export function SubmenuDoFunil({ contactId, onDialogo }: {
                   (`regrasDoMenu().funil`: agent+, nunca suporte só leitura), a mesma
                   régua de `POST /leads`. */}
               <DropdownMenuItem className={CLASSE_DO_ITEM} onSelect={() => onDialogo({ tipo: "criar-lead" })}>
-                {t("Criar lead")}
+                {t("Criar negócio")}
               </DropdownMenuItem>
             </>
           )}
