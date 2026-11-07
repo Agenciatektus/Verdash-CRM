@@ -75,6 +75,46 @@ export interface NumeroInternoDeAviso {
   respostaWhatsappHabilitada?: boolean;
   /** `config_aviso_de_caso.channel_session_id` — a conexão que envia os avisos. */
   sessaoId?: string | null;
+  /**
+   * Telefones das conexões ATIVAS da própria organização — preenchido SÓ com a
+   * exceção da plataforma ligada (`organizations.aviso_para_conexao_propria`,
+   * 9231). Aí o aviso pode cair numa conexão com agente, e o que chega de outra
+   * conexão da mesma organização é cortado aqui, antes do contato, da conversa,
+   * do roteador e do despacho: é a trava do laço robô↔robô. Vazio = sem corte.
+   */
+  conexoesDaPropriaOrg?: string[];
+}
+
+/**
+ * A exceção da plataforma (9231) está ligada nesta organização? Lança se a
+ * leitura falhar: o motor de envio prefere errar fechado (não envia).
+ */
+export async function avisoParaConexaoPropriaPermitido(
+  db: SupabaseClient,
+  organizationId: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("organizations")
+    .select("aviso_para_conexao_propria")
+    .eq("id", organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as { aviso_para_conexao_propria?: boolean | null } | null)?.aviso_para_conexao_propria === true;
+}
+
+/** Telefones das conexões ativas da organização, só com a exceção ligada. Lança se a leitura falhar. */
+async function conexoesQueSaoInternas(db: SupabaseClient, organizationId: string): Promise<string[]> {
+  if (!(await avisoParaConexaoPropriaPermitido(db, organizationId))) return [];
+  const { data, error } = await db
+    .from("channel_sessions")
+    .select("phone_number")
+    .eq("organization_id", organizationId)
+    .is("archived_at", null)
+    .not("phone_number", "is", null);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<{ phone_number: string | null }>)
+    .map((l) => l.phone_number)
+    .filter((n): n is string => !!n);
 }
 
 /**
@@ -153,6 +193,13 @@ export function ehOChatDoAvisoDeAgendamento(parsed: ChatIdentidade, destino: str
  * cru deixaria o corte passar batido justamente no cadastro mais comum.
  */
 export function ehOChatDoAviso(parsed: ChatIdentidade, cfg: NumeroInternoDeAviso): boolean {
+  // 9231: com a exceção ligada, quem fala é uma conexão da própria organização.
+  const telefone = parsed.phone;
+  if ((parsed.kind === "phone" || parsed.kind === "lid") && telefone &&
+      (cfg.conexoesDaPropriaOrg ?? []).some((n) => phoneLookupVariants(n).includes(telefone))) {
+    return true;
+  }
+
   if (!cfg.destino && !cfg.jid) return false;
 
   // Em modo privacidade (`@lid`) o ingestor do canal preenche `phone` com o
@@ -191,6 +238,7 @@ export async function lerNumeroInternoDeAviso(
   // acessória. Um clone com a imagem nova e o schema velho não tem a tabela e
   // recebe `42P01`; um client sem rede lança antes de devolver `error`.
   let data: unknown = null;
+  let conexoes: string[] = [];
   try {
     const r = await db
       .from("config_aviso_de_caso")
@@ -199,6 +247,7 @@ export async function lerNumeroInternoDeAviso(
       .maybeSingle();
     if (r.error) throw new Error(r.error.message);
     data = r.data;
+    conexoes = await conexoesQueSaoInternas(db, organizationId);
   } catch (err) {
     // ABERTA na ação (a mensagem segue o caminho normal) e NOMEADA no log: uma
     // leitura que falha não pode descartar mensagem de cliente, mas também não
@@ -221,6 +270,7 @@ export async function lerNumeroInternoDeAviso(
     jid: linha?.destino_jid ?? null,
     respostaWhatsappHabilitada: linha?.resposta_whatsapp_habilitada === true,
     sessaoId: linha?.channel_session_id ?? null,
+    conexoesDaPropriaOrg: conexoes,
   };
   _cache.set(organizationId, { at: agora, valor });
   return valor;
@@ -247,7 +297,7 @@ export async function ehContatoDoNumeroInterno(
 ): Promise<boolean> {
   const cfg = await lerNumeroInternoDeAviso(db, organizationId);
   const daAgenda = await lerNumeroDoAvisoDeAgendamento(db, organizationId);
-  if (!cfg.destino && !cfg.jid && !daAgenda) return false;
+  if (!cfg.destino && !cfg.jid && !daAgenda && !cfg.conexoesDaPropriaOrg?.length) return false;
 
   // Mesmo `try` da leitura acima, e pela mesma razão: o CINTO não pode ser o
   // que derruba a cadeia de efeitos que ele existe para proteger.
@@ -277,6 +327,35 @@ export async function ehContatoDoNumeroInterno(
       lid: linha.wa_lid ?? null,
   };
   return ehOChatDoAviso(chat, cfg) || ehOChatDoAvisoDeAgendamento(chat, daAgenda);
+}
+
+/**
+ * Só a metade 9231 do corte: quem fala é uma conexão ativa da própria org, com a
+ * exceção da plataforma ligada. Para o ingestor nativo (Verdash/FZAP), que não
+ * passa pelo corte inteiro; sem a flag a lista é vazia e nada muda.
+ */
+export async function ehConexaoDaPropriaOrg(
+  db: SupabaseClient,
+  organizationId: string,
+  telefone: string | null,
+): Promise<boolean> {
+  if (!telefone) return false;
+  const { conexoesDaPropriaOrg } = await lerNumeroInternoDeAviso(db, organizationId);
+  return (conexoesDaPropriaOrg ?? []).some((n) => phoneLookupVariants(n).includes(telefone));
+}
+
+/** `ehConexaoDaPropriaOrg` + rastro no contador, para o ingestor nativo. */
+export async function ignoraConexaoDaPropriaOrg(
+  db: SupabaseClient,
+  input: { organizationId: string; channelSessionId: string },
+  msg: { identity: { phone: string | null }; direction: "inbound" | "outbound" },
+): Promise<boolean> {
+  if (!(await ehConexaoDaPropriaOrg(db, input.organizationId, msg.identity.phone))) return false;
+  await registrarMensagemIgnorada(db, input.organizationId, {
+    direction: msg.direction,
+    sessionId: input.channelSessionId,
+  });
+  return true;
 }
 
 /** A pergunta que os ingestores fazem, com a leitura já resolvida. */

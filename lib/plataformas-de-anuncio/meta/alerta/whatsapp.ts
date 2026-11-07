@@ -21,7 +21,7 @@ export interface DepsDoWhatsApp {
   carregaConfig(orgId: string): Promise<ConfigDoAviso | null>;
   carregaCanal(orgId: string, canalId: string): Promise<CanalDoAviso | null>;
   /** O destino é número de conexão ativa da própria organização (laço robô com robô). */
-  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string): Promise<boolean>;
+  destinoEhDaPropriaOrganizacao(orgId: string, telefone: string, remetenteId: string): Promise<boolean>;
   transporte: TransporteDoAviso;
   pacing: PacingDoAviso;
   clock: () => Date;
@@ -59,7 +59,7 @@ export async function enviarAvisoNoWhatsApp(
 
     if (
       !opcoes.permiteDestinoDaPropriaOrganizacao &&
-      (await deps.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino))
+      (await deps.destinoEhDaPropriaOrganizacao(orgId, cfg.telefone_destino, canal.id))
     ) {
       return "falhou:destino_da_propria_organizacao";
     }
@@ -93,7 +93,7 @@ export async function criarEnviadorDeWhatsApp(
       {
         carregaConfig: (o) => db.carregaConfig(o),
         carregaCanal: (o, c) => db.carregaCanal(o, c),
-        destinoEhDaPropriaOrganizacao: (o, t) => db.destinoEhDaPropriaOrganizacao(o, t),
+        destinoEhDaPropriaOrganizacao: (o, t, r) => db.destinoEhDaPropriaOrganizacao(o, t, r),
         transporte,
         pacing,
         clock: () => new Date(),
