@@ -77958,6 +77958,35 @@ grant select, insert, update, delete on public.channel_session_group_directory t
 
 notify pgrst, 'reload schema';
 
+-- ---- IA em tres modos por grupo (migration 9224) ----
+-- Função da migration 9224 (a coluna ia_modo e o backfill ficam mais abaixo, depois da 0653).
+
+-- manifest: 9224 — IA em três modos por grupo (off, chamada, todas): substitui o liga/desliga ia_responde. `chamada` só responde a mensagem que cita ou menciona o número. ia_responde segue espelhando ia_modo <> 'off' para leitores antigos.
+
+-- (coluna ia_modo e backfill: mais abaixo, depois do bloco que cria ia_responde — migration 0653)
+
+-- LID do próprio número (aprendido nas mensagens que ele envia em grupo): grava SÓ a chave `own_lid`,
+-- atômico. Regravar o metadata inteiro desfaria um `disabled`/`ai_gate` gravado no meio (molde 0545).
+create or replace function public.fn_gravar_own_lid(p_organization_id uuid, p_channel_session_id uuid, p_lid text)
+returns void
+language sql
+security definer
+set search_path = public
+as $function$
+  update public.channel_sessions
+     set metadata = jsonb_set(coalesce(metadata, '{}'::jsonb), '{own_lid}', to_jsonb(p_lid), true)
+   where organization_id = p_organization_id
+     and id = p_channel_session_id
+     and p_lid ~ '^[0-9]{5,20}$'
+     and coalesce(metadata->>'own_lid', '') is distinct from p_lid;
+$function$;
+
+revoke execute on function public.fn_gravar_own_lid(uuid, uuid, text) from public, anon, authenticated;
+grant execute on function public.fn_gravar_own_lid(uuid, uuid, text) to service_role;
+
+
+notify pgrst, 'reload schema';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -80889,6 +80918,28 @@ comment on column public.channel_session_groups.ia_responde is
   'A chave POR GRUPO "Permitir que a IA responda neste grupo" (issue #2729). DESLIGADA por padrão, que é o comportamento de sempre: a mensagem de grupo entra na inbox pela fila do grupo (enabled) e a IA não responde. LIGADA, o ingest do grupo pede o turno do agente (mesmo evento ai_agent.dispatch_requested da conversa individual) e o motor deixa de pular o evento — as proteções de envio (janela de 24h, ritmo, teto diário, silêncio pós-handoff, elegibilidade) seguem valendo. Não mexe no filtro do WhatsApp nem existe para grupo fora da fila: sem linha ligada não há mensagem para responder.';
 
 notify pgrst, 'reload schema';
+
+-- ---- IA em tres modos por grupo: coluna e backfill (migration 9224) ----
+-- Depois do bloco da 0653: o backfill lê ia_responde. A função fn_gravar_own_lid da 9224 fica antes da VARREDURA.
+set lock_timeout = '3s';
+
+alter table public.channel_session_groups
+  add column if not exists ia_modo text not null default 'off';
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.channel_session_groups'::regclass
+      and conname = 'channel_session_groups_ia_modo_check'
+  ) then
+    alter table public.channel_session_groups
+      add constraint channel_session_groups_ia_modo_check check (ia_modo in ('off', 'chamada', 'todas'));
+  end if;
+end $$;
+
+-- Quem já tinha a IA ligada continua respondendo toda mensagem.
+update public.channel_session_groups set ia_modo = 'todas' where ia_responde and ia_modo = 'off';
 
 -- ---- a tarefa nasce presa à demanda do atendimento (migration 0659, #2818) ----
 -- Hoje a tarefa tem DOIS vínculos opcionais, `lead_id` e `contact_id`, e nenhum

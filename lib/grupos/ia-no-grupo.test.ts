@@ -13,12 +13,21 @@ import { grupoLiberaIa } from "./ia-no-grupo";
  */
 describe("grupoLiberaIa", () => {
   it("libera apenas quando a chave está explicitamente ligada", () => {
-    expect(grupoLiberaIa(true)).toBe(true);
+    expect(grupoLiberaIa("todas")).toBe(true);
+    expect(grupoLiberaIa("chamada", true)).toBe(true);
+  });
+
+  it("chamada só libera com chamada === true", () => {
+    for (const c of [false, undefined, null, "true", 1]) expect(grupoLiberaIa("chamada", c)).toBe(false);
+    expect(grupoLiberaIa("chamada")).toBe(false);
   });
 
   it("falha fechada: todo o resto é não responde", () => {
     const casos: [unknown, string][] = [
       [false, "desligada"],
+      [true, "boolean antigo"],
+      ["off", "modo off"],
+      ["Todas", "caixa errada"],
       [null, "coluna nula (linha anterior à migration)"],
       [undefined, "coluna nem veio no SELECT"],
       [0, "zero"],
@@ -28,7 +37,7 @@ describe("grupoLiberaIa", () => {
       [NaN, "NaN"],
     ];
     for (const [valor, rotulo] of casos) {
-      expect(grupoLiberaIa(valor), rotulo).toBe(false);
+      expect(grupoLiberaIa(valor, true), rotulo).toBe(false);
     }
   });
 });
