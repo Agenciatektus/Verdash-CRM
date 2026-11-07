@@ -17,9 +17,17 @@ describe("lerEstadoDeGrupo", () => {
     expect(lerEstadoDeGrupo(evento("Archive", { JID: "5511@s.whatsapp.net", Action: { archived: true } }))).toBeNull();
     expect(lerEstadoDeGrupo(evento("Archive", { JID: G }))).toBeNull();
   });
-  it("só Archive e Pin são eventos de estado (AppState cru não é assinado)", () => {
+  it("lê a mutação crua do AppState (formato do whatsmeow)", () => {
+    const app = (Index: unknown, SyncActionValue: unknown) => evento("AppState", { Index, SyncActionValue });
+    expect(lerEstadoDeGrupo(app(["archive", G], { archiveChatAction: { archived: true } }))).toEqual({ jid: G, archived: true });
+    expect(lerEstadoDeGrupo(app(["archive", G], { archiveChatAction: { archived: false } }))).toEqual({ jid: G, archived: false });
+    expect(lerEstadoDeGrupo(app(["pin_v1", G], { pinAction: { pinned: true } }))).toEqual({ jid: G, pinned: true });
+    expect(lerEstadoDeGrupo(app(["mute", G], { muteAction: { muted: true } }))).toBeNull();
+    expect(lerEstadoDeGrupo(app(["archive", "5511@s.whatsapp.net"], { archiveChatAction: { archived: true } }))).toBeNull();
+  });
+  it("Archive, Pin e AppState são eventos de estado", () => {
     expect(ehEventoDeEstado({ type: "Pin" })).toBe(true);
-    expect(ehEventoDeEstado({ type: "AppState" })).toBe(false);
+    expect(ehEventoDeEstado({ type: "AppState" })).toBe(true);
     expect(ehEventoDeEstado({ type: "Message" })).toBe(false);
   });
 });
@@ -45,6 +53,21 @@ describe("aplicarEstadoDeGrupo", () => {
     const { client } = admin(false);
     const r = await aplicarEstadoDeGrupo(client, { ...base, payload: evento("Pin", { JID: G, Action: { pinned: true } }) });
     expect(r).toMatchObject({ status: "ignored", reason: "estado_grupo_fora_do_diretorio" });
+  });
+  it("AppState de arquivar grupo atualiza; de outra ação ou de 1:1 ignora sem banco", async () => {
+    const { client, update } = admin(true);
+    const ok = await aplicarEstadoDeGrupo(client, {
+      ...base,
+      payload: evento("AppState", { Index: ["archive", G], SyncActionValue: { archiveChatAction: { archived: true } } }),
+    });
+    expect(ok.status).toBe("updated");
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ archived: true }));
+    update.mockClear();
+    for (const Index of [["mute", G], ["archive", "5511@s.whatsapp.net"]]) {
+      const r = await aplicarEstadoDeGrupo(client, { ...base, payload: evento("AppState", { Index, SyncActionValue: {} }) });
+      expect(r).toMatchObject({ status: "ignored", reason: "estado_sem_interesse" });
+    }
+    expect(update).not.toHaveBeenCalled();
   });
   it("formato desconhecido: ignora sem tocar no banco", async () => {
     const { client, update } = admin(true);

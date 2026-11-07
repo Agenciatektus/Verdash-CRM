@@ -73,9 +73,9 @@ export const VERDASH_CHANNEL_LABEL = "Verdash";
  * o que o próprio FZAP manda por automação, e deixá-la de fora esconderia do
  * histórico o que o cliente recebeu sem ninguém digitar.
  */
-// `Archive`/`Pin` e não `AppState`: o FZAP repassa cada ação com o próprio nome (visto na Verdash: Mute,
-// DeleteForMe), e o `AppState` cru (Index/SyncActionValue de todo chat) só traria volume e PII.
-const EVENTOS = ["Message", "AutomationMessage", "Connected", "Disconnected", "LoggedOut", "Archive", "Pin"];
+// `AppState` e não `Archive`/`Pin`: o filtro do webhook do FZAP descarta esses nomes calado (PUT devolve 200
+// sem eles, medido em 07/11). O AppState cru é pouco volume; `estado-de-grupo.ts` ignora sem log o que não é grupo.
+const EVENTOS = ["Message", "AutomationMessage", "Connected", "Disconnected", "LoggedOut", "AppState"];
 
 /**
  * O header por onde o segredo do CRM viaja em cada entrega.
