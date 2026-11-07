@@ -11,6 +11,7 @@ const state = vi.hoisted(() => ({
   candidate: null as unknown,
   filters: [] as unknown[][],
   admin: vi.fn(),
+  min: null as string | null,
 }));
 vi.mock("@/lib/auth/require-role", () => ({
   // A rota exige PAPEL (`viewer`+, enriquecimento so `agent`+), e nao apenas sessao: ela devolve o
@@ -18,8 +19,9 @@ vi.mock("@/lib/auth/require-role", () => ({
   // proposito. Este mock respeita `state.user` para o caso de 401 continuar
   // sendo exercido de verdade, e fixa a organizacao ATIVA em `org-a` — que e o
   // ponto do conserto: a organizacao vem da sessao, nunca da linha do contato.
-  requireRole: async () =>
-    state.user
+  requireRole: async (min: string) => {
+    state.min = min;
+    return state.user
       ? { ok: true as const, user: { id: "user-a" }, org: { orgId: "org-a", role: state.role } }
       : {
           ok: false as const,
@@ -27,7 +29,8 @@ vi.mock("@/lib/auth/require-role", () => ({
             status: 401,
             headers: { "content-type": "application/json" },
           }),
-        },
+        };
+  },
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
@@ -121,6 +124,8 @@ describe("enriquecimento autorizado no resumo CRM", () => {
     expect(body.data.leads).toEqual([]);
     // Controle: o service role nem é aberto para quem está abaixo de `agent`.
     expect(state.admin).not.toHaveBeenCalled();
+    // A porta da rota é `viewer`: voltar para `agent` derruba o painel em modo leitura.
+    expect(state.min).toBe("viewer");
   });
   it("não recupera enriquecimento de contato anonimizado", async () => {
     state.contact!.is_anonymized = true;
