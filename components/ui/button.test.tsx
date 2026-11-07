@@ -16,10 +16,13 @@ describe("Button loading", () => {
     expect(aoClicar).not.toHaveBeenCalled();
   });
 
-  it("sem loading segue como antes", () => {
-    render(<Button>Salvar</Button>);
+  it("sem loading segue como antes", async () => {
+    const aoClicar = vi.fn();
+    render(<Button onClick={aoClicar}>Salvar</Button>);
     const botao = screen.getByRole("button", { name: "Salvar" });
     expect(botao).toBeEnabled();
     expect(botao).not.toHaveAttribute("aria-busy");
+    await userEvent.setup().click(botao);
+    expect(aoClicar).toHaveBeenCalledOnce();
   });
 });
