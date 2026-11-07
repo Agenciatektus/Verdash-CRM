@@ -9,6 +9,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Chip } from "@/components/ui/chip";
+import { CampoDeData } from "@/components/ui/campo-de-data";
+import { Label } from "@/components/ui/label";
 import { BarraDeFiltros } from "@/components/pagina";
 import { useT } from "@/hooks/i18n/useT";
 import { PONTO_POR_ID } from "@/lib/ai/pontos/registro";
@@ -52,14 +54,18 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
   const [agentId, setAgentId] = useState<string>(initial.agent_id ?? ALL_AGENTS);
   const [kind, setKind] = useState<string>(initial.invocation_kind ?? "all");
   const [from, setFrom] = useState<string>(initial.from ?? "");
-  // O período é de chip; um `to` ou `from` vindo de link antigo segue valendo, sem chip aceso.
   const [to, setTo] = useState<string>(initial.to ?? "");
-  const diasAtivos = !from && !to
-    ? PADRAO_DIAS
-    : !to
-      ? PERIODOS.find((p) => desdeDe(p.dias) === from)?.dias
-      : undefined;
+  // Link com intervalo que nenhum chip reproduz acende "Personalizado" e mostra De/Até.
+  const [personalizado, setPersonalizado] = useState<boolean>(
+    !!initial.to || (!!initial.from && !PERIODOS.some((p) => desdeDe(p.dias) === initial.from)),
+  );
+  const diasAtivos = personalizado
+    ? undefined
+    : !from
+      ? PADRAO_DIAS
+      : PERIODOS.find((p) => desdeDe(p.dias) === from)?.dias;
   const escolherPeriodo = (dias: number) => {
+    setPersonalizado(false);
     setFrom(dias === PADRAO_DIAS ? "" : desdeDe(dias));
     setTo("");
   };
@@ -110,7 +116,26 @@ export function UsageFilters({ agents, kinds, initial }: Props) {
             {t(p.rotulo)}
           </Chip>
         ))}
+        <Chip ligado={personalizado} onClick={() => setPersonalizado(true)}>
+          {t("Personalizado")}
+        </Chip>
       </div>
+      {personalizado && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="usage-from" className="text-xs text-muted-foreground">
+              {t("De")}
+            </Label>
+            <CampoDeData tipo="date" id="usage-from" value={from} onValorChange={setFrom} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="usage-to" className="text-xs text-muted-foreground">
+              {t("Até")}
+            </Label>
+            <CampoDeData tipo="date" id="usage-to" value={to} onValorChange={setTo} />
+          </div>
+        </div>
+      )}
       <BarraDeFiltros ativos={Number(agentId !== ALL_AGENTS) + Number(kind !== "all")}>
         <Select value={agentId} onValueChange={setAgentId}>
           <SelectTrigger aria-label={t("Agente")} className="sm:w-52">

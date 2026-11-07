@@ -214,7 +214,11 @@ export function BudgetCard({ initialData, isAdmin }: Props) {
       )}
 
       <div className="mt-4 space-y-2">
-        <BarraDeProgresso valor={pct} rotulo={t("Orçamento mensal de IA")} />
+        <BarraDeProgresso
+          valor={pct}
+          rotulo={t("Orçamento mensal de IA")}
+          tom={status.pct >= 100 ? "crit" : status.pct >= status.alarm_threshold_pct ? "warn" : "marca"}
+        />
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span>
             <strong>{fmtCents(consumed)}</strong>
