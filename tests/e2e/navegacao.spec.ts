@@ -386,6 +386,11 @@ test.describe("navegação agrupada", () => {
     const inicioDoDocumento = await page.evaluate(() => performance.timeOrigin);
     const erros: string[] = [];
     page.on("pageerror", (erro) => erros.push(erro.message));
+    // Cache compartilhado: depois da 1ª resposta, ninguém busca a equipe de novo.
+    let buscasDaEquipeDepois = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/api/v1/team/assignable" && r.method() === "GET") buscasDaEquipeDepois++;
+    });
 
     await expect(page.getByRole("heading", { name: "Comissão", exact: true })).toBeVisible();
     await expect(
@@ -406,8 +411,9 @@ test.describe("navegação agrupada", () => {
         r.request().method() === "GET",
     );
     await page.keyboard.press("ControlOrMeta+k");
-    await page.getByRole("combobox").fill("Faturamento");
-    await page.getByRole("option", { name: /Faturamento/ }).first().click();
+    const paleta = page.getByRole("dialog");
+    await paleta.getByRole("combobox").fill("Faturamento");
+    await paleta.getByRole("option", { name: /Faturamento/ }).first().click();
     await expect(page).toHaveURL(/\/app\/faturamento$/);
     const relatorio = await relatorioRecebido;
     expect(relatorio.ok()).toBe(true);
@@ -417,6 +423,7 @@ test.describe("navegação agrupada", () => {
     await expect(
       page.getByRole("heading", { name: "Comissão por pessoa", exact: true }),
     ).toBeVisible();
+    expect(buscasDaEquipeDepois, "Faturamento leu a equipe do cache, sem novo GET").toBe(0);
     // O período pode estar vazio. Nomes de responsáveis só são comprovados
     // aqui quando o relatório real tem essa linha; o unitário cobre os demais.
     for (const linha of totais.por_profissional) {

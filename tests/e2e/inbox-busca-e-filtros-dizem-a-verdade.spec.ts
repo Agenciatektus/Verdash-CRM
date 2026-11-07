@@ -239,7 +239,6 @@ test("número e Não lidos sobrevivem à recarga e permanecem na sua organizaç�
     await numero.click();
     await page.getByRole("option", { name: nome, exact: true }).click();
     await numeroMostra(nome);
-    await page.keyboard.press("Escape");
   };
   try {
     const canais: { org: string; id: string; nome: string }[] = [];
