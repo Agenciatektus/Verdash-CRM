@@ -58,7 +58,7 @@ interface Props {
    */
   valores?: ValoresDoPeriodo | null;
   /** Refaz a leitura quando o estado é `erro`. */
-  aoTentar?: () => void;
+  aoTentar: () => void;
 }
 
 export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores, aoTentar }: Props) {
@@ -88,7 +88,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
         {estado === "erro" ? (
           <ErroDoPainel
             mensagem="Não consegui carregar a meta do mês — isto é uma falha de leitura, não a ausência de meta."
-            aoTentar={aoTentar ?? (() => undefined)}
+            aoTentar={aoTentar}
           />
         ) : null}
 
@@ -129,7 +129,7 @@ export function MetaDoMesPanel({ estado, periodo, metas, podeConfigurar, valores
                   </span>
                 </div>
 
-                <BarraDeProgresso valor={m.percentual} rotulo={t("Meta do mês")} />
+                <BarraDeProgresso valor={m.percentual} rotulo={t("Meta do mês")} tom={m.atingida ? "ok" : "marca"} />
 
                 <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                   <span>

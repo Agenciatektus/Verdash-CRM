@@ -167,8 +167,8 @@ export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: 
   const maxCount = Math.max(1, ...metrics.funnel.map((s) => s.count));
   const ganhas = metrics.attendants.reduce((acc, a) => acc + a.won, 0);
   const perdidas = metrics.attendants.reduce((acc, a) => acc + a.lost, 0);
-  const metaDaEmpresa =
-    metasDoMes.data?.data.metas.find((m) => m.escopo === "empresa") ?? metasDoMes.data?.data.metas[0];
+  // Só a meta da EMPRESA: a de um funil com o rótulo "Meta do mês" seria lida como a da empresa.
+  const metaDaEmpresa = metasDoMes.data?.data.metas.find((m) => m.escopo === "empresa");
 
   return moldura(
     <div className="flex flex-col gap-6">
@@ -181,12 +181,20 @@ export function MetricsClient({ canCompare, currentUserId, titulo, descricao }: 
               ? metaDaEmpresa.atingida
                 ? t("Meta atingida.")
                 : `${t("Faltam")} ${metaDaEmpresa.falta} ${t("para a meta")}`
-              : estadoDaMeta === "erro"
-                ? t("Não consegui carregar a meta do mês")
-                : t("Nenhuma meta cadastrada para este mês.")
+              : estadoDaMeta === "carregando"
+                ? undefined
+                : estadoDaMeta === "erro"
+                  ? t("Não consegui carregar a meta do mês")
+                  : t("Nenhuma meta cadastrada para este mês.")
           }
         >
-          {metaDaEmpresa ? <BarraDeProgresso valor={metaDaEmpresa.percentual} rotulo={t("Meta do mês")} /> : null}
+          {metaDaEmpresa ? (
+            <BarraDeProgresso
+              valor={metaDaEmpresa.percentual}
+              rotulo={t("Meta do mês")}
+              tom={metaDaEmpresa.atingida ? "ok" : "marca"}
+            />
+          ) : null}
         </CartaoDeIndicador>
         <CartaoDeIndicador rotulo={t("Vendas ganhas")} valor={ganhas.toLocaleString("pt-BR")} explicacao={t("últimos 30 dias")} />
         <CartaoDeIndicador rotulo={t("Perdidos")} valor={perdidas.toLocaleString("pt-BR")} explicacao={t("últimos 30 dias")} />

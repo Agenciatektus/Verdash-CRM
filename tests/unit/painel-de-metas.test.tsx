@@ -14,9 +14,9 @@
  *     medição (um 0 diria "realizou nada", que é uma afirmação falsa);
  *   · o caso atingido não mostra falta negativa e a barra não passa de 100%.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
 
@@ -76,6 +76,7 @@ function renderizar(props: Partial<Parameters<typeof MetaDoMesPanel>[0]> = {}) {
       periodo: "2026-09-01",
       metas: [EMPRESA],
       podeConfigurar: true,
+      aoTentar: () => {},
       ...props,
     } as Parameters<typeof MetaDoMesPanel>[0]),
   );
@@ -138,9 +139,12 @@ describe("MetaDoMesPanel", () => {
   });
 
   it("erro de leitura: diz que é falha, não ausência de meta", () => {
-    const { container } = renderizar({ estado: "erro", metas: [], periodo: null });
+    const aoTentar = vi.fn();
+    const { container } = renderizar({ estado: "erro", metas: [], periodo: null, aoTentar });
     expect(container.textContent).toContain("falha de leitura");
     expect(container.textContent).not.toContain("Nenhuma meta cadastrada");
+    fireEvent.click(screen.getByRole("button", { name: /tentar de novo/i }));
+    expect(aoTentar).toHaveBeenCalledOnce();
   });
 
   it("meta por funil vem rotulada com o nome do funil", () => {
@@ -242,6 +246,7 @@ describe("MetaDoMesPanel", () => {
         periodo: null,
         metas: [],
         podeConfigurar: true,
+        aoTentar: () => {},
       }),
       "es",
     );

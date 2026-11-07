@@ -9,6 +9,7 @@ const TOM = {
   marca: "bg-(image:--gradient-primary)",
   warn: "bg-warning",
   crit: "bg-error",
+  ok: "bg-success",
 } as const;
 
 export function BarraDeProgresso({
