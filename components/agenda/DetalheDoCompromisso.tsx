@@ -47,13 +47,17 @@ type Detalhe = {
   evidence_messages: Array<{ id: string; body: string | null; sent_at: string }>;
 };
 /** Pendente/confirmado ou com recuperação viva: o detalhe ainda muda sem esta tela agir. */
-export function detalheAindaMuda(d: Detalhe | undefined): boolean {
+export function detalheAindaMuda(d: Detalhe | undefined, agora = Date.now()): boolean {
   if (!d) return false;
   if (d.status === "pending" || d.status === "confirmed") return true;
   // A falta marcada dispara a decisão de recuperação de forma assíncrona (o
   // drain do event_log). Até o recibo chegar não há `recovery`, e parar aqui
   // deixava o painel aberto sem nunca mostrar "Recuperação iniciada".
-  if (d.status === "no_show" && d.contact_id && !d.recovery) return true;
+  // Teto de 2 min: falta antiga ou sem recibo (drain parado) não consulta para sempre.
+  if (d.status === "no_show" && d.contact_id && !d.recovery) {
+    const marcadaEm = d.outcome_recorded_at ? Date.parse(d.outcome_recorded_at) : NaN;
+    return agora - marcadaEm < 120_000;
+  }
   const inscricao = d.recovery?.enrollment_status;
   return !!inscricao && !["cancelled", "completed", "dead"].includes(inscricao);
 }

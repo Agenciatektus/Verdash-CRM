@@ -15,8 +15,13 @@ describe("polling só enquanto há pendência", () => {
   });
 
   it("agenda: falta com contato segue atualizando até o recibo da recuperação chegar", () => {
-    const semRecibo = { status: "no_show", contact_id: "c1", recovery: null } as unknown as Detalhe;
-    expect(detalheAindaMuda(semRecibo)).toBe(true);
+    const agora = Date.parse("2026-11-06T22:00:00Z");
+    const falta = (marcadaEm: string | null) =>
+      ({ status: "no_show", contact_id: "c1", recovery: null, outcome_recorded_at: marcadaEm }) as unknown as Detalhe;
+    expect(detalheAindaMuda(falta("2026-11-06T21:59:30Z"), agora)).toBe(true);
+    // Teto: recibo que nunca chega (drain parado) não consulta para sempre.
+    expect(detalheAindaMuda(falta("2026-11-06T21:57:59Z"), agora)).toBe(false);
+    expect(detalheAindaMuda(falta(null), agora)).toBe(false);
     // Controle: sem contato não há recuperação a esperar.
     const semContato = { status: "no_show", contact_id: null, recovery: null } as unknown as Detalhe;
     expect(detalheAindaMuda(semContato)).toBe(false);
