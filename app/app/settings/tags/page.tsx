@@ -42,7 +42,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PainelDeTags } from "./_painel";
 import { TagsInternasForm } from "./_tags-internas-form";
 
-export const metadata = { title: "Tags" };
+export const metadata = { title: "Etiquetas" };
 export const dynamic = "force-dynamic";
 
 export default async function TagsPage({ searchParams }: { searchParams: Promise<{ page?: string; busca?: string }> }) {
@@ -110,7 +110,7 @@ export default async function TagsPage({ searchParams }: { searchParams: Promise
   return (
     <Pagina>
       <CabecalhoDaPagina
-        titulo={t("Tags")}
+        titulo={t("Etiquetas")}
         descricao={t(
             "As etiquetas que os agentes, o Inbox e o funil usam nesta organização. Acrescente novas, escolha quais são sugeridas para quem atende em conversas e contatos, e arrume as que existem: renomear ou juntar corrige também as regras de agente e as sugestões, na mesma operação.",
           )}
