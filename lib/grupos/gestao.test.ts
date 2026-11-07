@@ -8,10 +8,10 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const SESS = "22222222-2222-4222-8222-222222222222";
 const G = "120363025407046714@g.us";
 
-function montar(opts: { provider?: string; pertence?: boolean; ligado?: boolean } = {}) {
+function montar(opts: { gere?: boolean; pertence?: boolean; ligado?: boolean } = {}) {
   const d = {
     db: {
-      lerSessao: vi.fn(async () => ({ provider: opts.provider ?? "verdash", sessionRef: "inst", groupsCapability: "full" })),
+      lerSessao: vi.fn(async () => ({ provider: "p1", sessionRef: "inst", groupsCapability: "full" })),
       listarLinhas: vi.fn(async () => [{ group_chat_id: G, enabled: opts.ligado === true }]),
       contarLigados: vi.fn(async () => 1),
       gravarLinha: vi.fn(async () => ({ id: "l1" })),
@@ -22,6 +22,7 @@ function montar(opts: { provider?: string; pertence?: boolean; ligado?: boolean 
     grupoDaSessao: vi.fn(async () => opts.pertence !== false),
     ajustarDiretorio: vi.fn(async () => {}),
     apagarDoDiretorio: vi.fn(async () => {}),
+    podeGerir: vi.fn(() => opts.gere ?? true),
     acao: vi.fn(async (..._a: unknown[]): Promise<unknown> => ({ ok: true })),
   };
   return d as unknown as DepsDeGestao & typeof d;
@@ -40,8 +41,8 @@ describe("executarAcaoDeGrupo", () => {
     await expect(rodar(d, { acao: "nome", nome: "x" })).rejects.toMatchObject({ code: "grupo_nao_encontrado" });
     expect(d.acao).not.toHaveBeenCalled();
   });
-  it("canal que não é verdash não gere grupo", async () => {
-    await expect(rodar(montar({ provider: "waha" }), { acao: "info" })).rejects.toBeInstanceOf(GrupoError);
+  it("canal cujo adaptador não gere grupo é recusado", async () => {
+    await expect(rodar(montar({ gere: false }), { acao: "info" })).rejects.toBeInstanceOf(GrupoError);
   });
   it("info não audita nem mexe no diretório", async () => {
     const d = montar();

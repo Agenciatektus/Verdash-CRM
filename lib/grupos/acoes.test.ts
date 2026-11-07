@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { erroDoFzap, GrupoAcaoError, infoDoGrupo, montarChamada } from "./acoes";
+import { infoDoGrupo, montarChamada } from "./acoes";
 
 const G = "120363025407046714@g.us";
 
@@ -38,16 +38,5 @@ describe("infoDoGrupo", () => {
   });
   it("número fora da lista: souAdmin null", () => {
     expect(infoDoGrupo({ participants: [] }, "5521999990000").souAdmin).toBeNull();
-  });
-});
-
-describe("erroDoFzap", () => {
-  it("classifica o que o fzapRequest lança", () => {
-    expect(erroDoFzap(new Error("verdash_request_failed: 401 invalid token xyz")).code).toBe("instancia_desconectada");
-    expect(erroDoFzap(new Error("verdash_request_failed: 502 x")).code).toBe("fzap_indisponivel");
-    const r = erroDoFzap(new Error("verdash_request_failed: 400 not admin"));
-    expect([r.code, r.motivo]).toEqual(["whatsapp_recusou", "not admin"]);
-    expect(erroDoFzap(new Error("verdash_unreachable: The operation was aborted due to timeout")).code).toBe("fzap_timeout");
-    expect(erroDoFzap(new GrupoAcaoError("erro_interno")).code).toBe("erro_interno");
   });
 });

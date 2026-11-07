@@ -124,18 +124,3 @@ export class GrupoAcaoError extends Error {
   }
 }
 
-/** O texto que o fzapRequest lança (`verdash_request_failed: 422 motivo`) vira o erro tipado. */
-export function erroDoFzap(err: unknown): GrupoAcaoError {
-  if (err instanceof GrupoAcaoError) return err;
-  const msg = err instanceof Error ? err.message : String(err);
-  const m = /^verdash_request_failed: (\d{3})\s*(.*)$/s.exec(msg);
-  if (m) {
-    const status = Number(m[1]);
-    // 401/403 é o FZAP recusando o token da instância (deslogada/revogada), não regra do WhatsApp.
-    if (status === 401 || status === 403) return new GrupoAcaoError("instancia_desconectada");
-    if (status >= 500) return new GrupoAcaoError("fzap_indisponivel");
-    return new GrupoAcaoError("whatsapp_recusou", m[2]!.slice(0, 200));
-  }
-  if (/timeout|aborted/i.test(msg)) return new GrupoAcaoError("fzap_timeout");
-  return new GrupoAcaoError("erro_interno");
-}

@@ -5,8 +5,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { verdashGrupoAcao } from "@/lib/channels/verdash/client";
-import { resolveVerdashCreds } from "@/lib/channels/verdash/credentials";
+import { getAdapter } from "@/lib/channels";
+import type { ChannelProvider } from "@/lib/channels/types";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -25,8 +25,10 @@ export interface DepsDeGestao extends DepsDeGrupos {
   grupoDaSessao(org: string, sessionId: string, chatId: string): Promise<boolean>;
   ajustarDiretorio(org: string, sessionId: string, chatId: string, patch: PatchDoDiretorio): Promise<void>;
   apagarDoDiretorio(org: string, sessionId: string, chatId: string): Promise<void>;
-  /** Resolve a credencial da sessão e executa. LANÇA `GrupoAcaoError`. */
-  acao(org: string, sessionRef: string, entrada: Record<string, unknown>, chamada: PedidoAoFzap): Promise<unknown>;
+  /** O canal da sessão sabe gerir grupo (o adaptador implementa `groupAction`)? */
+  podeGerir(provider: ChannelProvider): boolean;
+  /** Executa pelo adaptador do canal. LANÇA `GrupoAcaoError`. */
+  acao(provider: ChannelProvider, org: string, sessionRef: string, entrada: Record<string, unknown>, chamada: PedidoAoFzap): Promise<unknown>;
 }
 
 interface EntradaDaAcao {
@@ -46,11 +48,10 @@ export async function executarAcaoDeGrupo(deps: DepsDeGestao, e: EntradaDaAcao):
 
   const s = await deps.db.lerSessao(org, sessionId);
   if (!s) throw new GrupoError("sessao_nao_encontrada");
-  // Só o canal pareado à Verdash sabe gerir grupo (edge `crm-grupo-acao` ou FZAP direto).
-  if (s.provider !== "verdash" || s.groupsCapability === "none") throw new GrupoError("canal_sem_grupos");
+  if (s.groupsCapability === "none" || !deps.podeGerir(s.provider)) throw new GrupoError("canal_sem_grupos");
   if (!(await deps.grupoDaSessao(org, sessionId, chatId))) throw new GrupoError("grupo_nao_encontrado");
 
-  const dados = await deps.acao(org, s.sessionRef, entrada, e.chamada);
+  const dados = await deps.acao(s.provider, org, s.sessionRef, entrada, e.chamada);
   // Daqui para baixo o WhatsApp JÁ mudou: falha local não vira erro (o retry bateria em 422 e o grupo
   // nunca seria desligado). Loga e responde ok; o próximo refresh do diretório corrige o resto.
   try {
@@ -156,10 +157,13 @@ export function criarDepsDeGestao(admin: SupabaseClient = createAdminClient()): 
         .eq("group_chat_id", chatId);
       if (error) throw error;
     },
-    async acao(org, sessionRef, entrada, chamada) {
-      const creds = await resolveVerdashCreds(admin, { organizationId: org, instanceName: sessionRef });
-      if (!creds) throw new GrupoAcaoError("instancia_desconectada");
-      return verdashGrupoAcao(creds, entrada, chamada);
+    podeGerir(provider) {
+      return typeof getAdapter(provider).groupAction === "function";
+    },
+    async acao(provider, org, sessionRef, entrada, chamada) {
+      const adapter = getAdapter(provider);
+      if (!adapter.groupAction) throw new GrupoError("canal_sem_grupos");
+      return adapter.groupAction({ organizationId: org, sessionRef, entrada, chamada });
     },
   };
 }
